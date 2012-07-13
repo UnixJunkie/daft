@@ -44,4 +44,13 @@ OCaml modules (not objects) that can talk to each other over the network.
 - the project should be actively maintained and preferably used
   in production somewhere ("je n'aime pas essuyer les platres")
 - I don't like to use huge frameworks/libraries (j'essaye d'eviter "les
-  usines a gaz") 
+  usines a gaz")
+
+### Useful links
+
+[Async from Janestree's core lib][https://bitbucket.org/yminsky/ocaml-core/wiki/DummiesGuideToAsync]
+[Async install guide][https://bitbucket.org/yminsky/ocaml-core/wiki/InstallationHints]
+[crypto lib from Xavier Leroy][http://forge.ocamlcore.org/projects/cryptokit/]
+
+
+
