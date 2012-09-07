@@ -20,13 +20,21 @@ an FTP-like command language).
 commands the system should provide:
 
 put
+
 mput
+
 get
+
 mget
+
 ls
+
 ls_nodes # data nodes
+
 ls_chunks # all of them
+
 ls_local_chunks # local ones only
+
 quit
 
 ### Performance requirements
