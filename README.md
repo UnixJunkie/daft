@@ -81,14 +81,7 @@ OCaml modules (not objects) that can talk to each other over the network.
 
 [system programming in OCaml][http://ocamlunix.forge.ocamlcore.org/]
 
-[Async from Janestree's core lib][https://bitbucket.org/yminsky/ocaml-core/wiki/DummiesGuideToAsync]
+[Async from Janestree's core lib (includes an RPC lib)][https://bitbucket.org/yminsky/ocaml-core/wiki/DummiesGuideToAsync]
 
 [Async install guide][https://bitbucket.org/yminsky/ocaml-core/wiki/InstallationHints]
 
-Async includes an RPC library.
-
-[crypto lib from Xavier Leroy][http://forge.ocamlcore.org/projects/cryptokit/]
-
-[Martin Jambon's biniou][http://mjambon.com/biniou.html]
-
-[Gerd Stolpmann's ocamlnet lib][http://projects.camlcity.org/projects/ocamlnet.html]
