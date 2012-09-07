@@ -21,19 +21,21 @@ commands the system should provide:
 
 put
 
-mput
+mput # put for a directory
+
+bcast # send a file to all data nodes
 
 get
 
-mget
+mget # get for a directory
 
 ls
 
-ls_nodes # data nodes
+ls_nodes # list data nodes
 
-ls_chunks # all of them
+ls_chunks # list all file chunks
 
-ls_local_chunks # local ones only
+ls_local_chunks # list local chunks only
 
 quit
 
