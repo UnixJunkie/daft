@@ -19,23 +19,23 @@ an FTP-like command language).
 
 commands the system should provide:
 
-put
+put # publish a file in the system
 
-mput # put for a directory
+mput # put for a directory, or put should be smarter
 
-bcast # send a file to all data nodes
+bcast # send a file to all nodes
 
-get
+get # retrieve a file from the system
 
-mget # get for a directory
+mget # get for a directory, or get should be smarter
 
-ls
+ls # list files that were published in the system
 
 ls_nodes # list data nodes
 
-ls_chunks # list all file chunks
+ls_chunks # list file chunks
 
-ls_local_chunks # list local chunks only
+ls_local_chunks # list local file chunks
 
 quit
 
