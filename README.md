@@ -8,6 +8,13 @@ dft stands for "distributed file transfer".
 The final software should provide some of the features that were available in:
 https://github.com/HappyCrow/PAR/commit/38276d34ff6fdda051fba2a02a2639f06df44187
 
+To maintain complexity low, the system will be Write Once Read Many 
+(WORM). Files put under the system's control are never deleted nor
+modified.
+There will be several data servers (one per node) and one meta-data server
+(on the node where the user is interacting with the system via
+an FTP-like command language).
+
 ### Performance requirements
 
 Performance must be better than NFS and should approach what
