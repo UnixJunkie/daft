@@ -45,7 +45,10 @@ ls_chunks # list file chunks
 
 ls_local_chunks # list local file chunks
 
-quit
+start host_file # launch via password-less ssh data_managers on all data nodes
+                # a meta_data_manager is launched locally
+
+quit # destroy all data_managers, stop the local meta_data_manager
 
 ### Performance requirements
 
