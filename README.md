@@ -19,7 +19,15 @@ an FTP-like command language).
 
 commands the system should provide:
 
+FBR: maybe I should separate commands acting on meta data from commands
+     actually moving the data and that will be used only internally
+
 put # publish a file in the system
+    # the file should go to a random data node
+    # or to the one specified by the user
+
+diffuse # randomly load balance listed files across data nodes
+        # maybe done inside put in fact
 
 mput # put for a directory, or put should be smarter
 
