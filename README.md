@@ -105,3 +105,5 @@ OCaml modules (not objects) that can talk to each other over the network.
 
 [Async install guide][https://bitbucket.org/yminsky/ocaml-core/wiki/InstallationHints]
 
+[Riak] http://basho.com/products/riak-overview/ Looks like an interesting library to transport data
+
