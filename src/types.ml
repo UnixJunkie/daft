@@ -27,4 +27,6 @@ type files = Set.Make(File).t
 
 type msg_type = Raw | Compressed | Signed | Encrypted
 
+type answer = Ok | Error of string
+
 type node = Data_node of server | Meta_data_node of server
