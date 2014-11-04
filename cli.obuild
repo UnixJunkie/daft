@@ -1,0 +1,30 @@
+Name: DFT
+Version: 0.1
+Authors: Francois Berenger
+License: BSD
+Synopsis: distributed data management
+obuild-ver: 1
+
+# Cli <--> Meta_data_node <--> Data_node
+#          ^
+#          |
+#          v
+#          Meta_data_node <--> Data_node
+
+Executable dft_cli
+  oflags: -annot -w +27 -warn-error +8 -g
+  path: src
+  build-deps: batteries, dolog
+  main-is: cli.ml
+
+Executable dft_md_node
+  oflags: -annot -w +27 -warn-error +8 -g
+  path: src
+  build-deps: batteries, dolog
+  main-is: cli.ml
+
+Executable dft_d_node
+  oflags: -annot -w +27 -warn-error +8 -g
+  path: src
+  build-deps: batteries, dolog
+  main-is: cli.ml
