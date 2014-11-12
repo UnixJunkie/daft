@@ -1,9 +1,11 @@
-dft
-===
+daft
+====
+
+DAFT Allows File Transfer
 
 ### Summary
 
-dft stands for "distributed file transfer".
+Distributed file transfer application.
 
 The final software should provide some of the features that were available in:
 https://github.com/HappyCrow/PAR/commit/38276d34ff6fdda051fba2a02a2639f06df44187
