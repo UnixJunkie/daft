@@ -59,3 +59,13 @@ quit # stop all data_managers
 
 Performance must be better than NFS and should approach what
 TakTuk can achieve when distributing data to cluster nodes.
+
+### Dependencies
+
+All deps are available in OPAM.
+
+[batteries] http://batteries.forge.ocamlcore.org/
+
+[ocamlnet] http://projects.camlcity.org/projects/ocamlnet.html
+
+[dolog] https://github.com/UnixJunkie/dolog/
