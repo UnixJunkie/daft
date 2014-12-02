@@ -10,7 +10,7 @@ Distributed file transfer application.
 The final software should provide some of the features that were available in:
 https://github.com/HappyCrow/PAR/commit/38276d34ff6fdda051fba2a02a2639f06df44187
 
-### specification
+### Specification
 
 To maintain complexity low, the system will be Write Once Read Many 
 (WORM). Files put under the system's control are never deleted nor
