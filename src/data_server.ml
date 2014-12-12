@@ -27,4 +27,4 @@ let main () =
   exit (delete_data_store data_store)
 ;;
 
-main()
+main ()
