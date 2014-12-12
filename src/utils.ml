@@ -24,7 +24,19 @@ let run_and_read cmd =
   Unix.unlink tmp_fn;
   (status, output)
 
-open Batteries
+let with_in_file fn f =
+  let input = open_in fn in
+  let res = f input in
+  close_in input;
+  res
+
+let with_out_file fn f =
+  let output = open_out fn in
+  let res = f output in
+  close_out output;
+  res
+
+open Batteries (* everything before uses Legacy IOs (fast) *)
 
 let hostname (): string =
   let stat, res = run_and_read "hostname -f" in
