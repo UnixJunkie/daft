@@ -1,6 +1,6 @@
 open Batteries
 
-let chunk_size = 64 * 1024 * 1024
+let chunk_size = ref (1 * 1024 * 1024)
 
 type server = { host: string ;
                 port: int    }
@@ -29,4 +29,4 @@ type msg_type = Raw | Compressed | Signed | Encrypted
 
 type answer = Ok | Error of string
 
-type node = Data_node of server | Meta_data_node of server
+type node = Data_server of server | Meta_data_server of server
