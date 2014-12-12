@@ -22,11 +22,19 @@ let main () =
   Log.set_output Legacy.stdout;
   Log.color_on ();
   (* setup data server *)
-  (* FBR: add options parsing *)
   let port = ref 0 in
   let host = Utils.hostname () in
-  let server_name = "" in
-  let server_port = 0 in
+  let server_name = ref "" in
+  let server_port = ref 0 in
+  (* options parsing *)
+  Arg.parse
+    [ "-p", Arg.Set_int port, "<port> where to listen";
+      "-s", Arg.Set_string server_name, "<server> hostname";
+      "-sp", Arg.Set_int server_port, "<port> server port" ]
+    (fun arg -> raise (Arg.Bad ("Bad argument: " ^ arg)))
+    (sprintf "usage: %s <options>" Sys.argv.(0))
+  ;
+  Log.info "Will connect to %s:%d" !server_name !server_port;
   let data_store = create_data_store host !port in
 (*
   let connector = Rpc_client.Inet (server_name, server_port) in
