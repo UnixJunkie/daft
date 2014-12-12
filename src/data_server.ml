@@ -2,7 +2,7 @@ open Batteries
 open Printf
 
 module Fn = Filename
-module Client = Rpc_simple_client
+(* module Client = Rpc_simple_client *)
 
 (* create local data store with unix UGO rights 700 *)
 let create_data_store (host: string) (port: int): string =
@@ -28,6 +28,7 @@ let main () =
   let server_name = "" in
   let server_port = 0 in
   let data_store = create_data_store host !port in
+(*
   let connector = Rpc_client.Inet (server_name, server_port) in
   let protocol = Rpc.Tcp in
   let program = failwith "not implemented yet" in
@@ -42,6 +43,8 @@ let main () =
       Client.shutdown client;
       exit (delete_data_store data_store)
     end
+*)
+  exit (delete_data_store data_store)
 ;;
 
 main ()
