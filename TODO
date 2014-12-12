@@ -1,0 +1,13 @@
+
+1) start
+   - the MDS
+   - then all DSs
+
+2) quit
+   - all DSs
+   - the MDS
+
+3) put
+   - a small file
+   - a big file
+   - a directory
