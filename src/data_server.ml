@@ -2,6 +2,9 @@ open Batteries
 open Printf
 
 module Fn = Filename
+module Logger = Log
+module Log = Log.Make(struct let section = "DS" end) (* prefix all logs *)
+
 (* module Client = Rpc_simple_client *)
 
 (* create local data store with unix UGO rights 700 *)
@@ -18,9 +21,11 @@ let delete_data_store (ds: string): int =
 
 let main () =
   (* setup logger *)
-  Log.set_log_level Log.DEBUG;
-  Log.set_output Legacy.stdout;
-  Log.color_on ();
+  Logger.set_log_level Logger.DEBUG;
+  Logger.set_output Legacy.stdout;
+  Logger.color_on ();
+  (* prefix all log messages *)
+
   (* setup data server *)
   let port = ref 0 in
   let host = Utils.hostname () in

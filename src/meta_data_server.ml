@@ -2,6 +2,8 @@ open Batteries
 open Printf
 
 module L = List
+module Logger = Log
+module Log = Log.Make(struct let section = "MDS" end) (* prefix all logs *)
 
 let parse_machine_line (l: string): string * int =
   let hostname, port = String.split l ":" in
@@ -21,9 +23,9 @@ let parse_machine_file (fn: string): (string * int) list =
 
 let main () =
   (* setup logger *)
-  Log.set_log_level Log.DEBUG;
-  Log.set_output Legacy.stdout;
-  Log.color_on ();
+  Logger.set_log_level Logger.DEBUG;
+  Logger.set_output Legacy.stdout;
+  Logger.color_on ();
   (* setup MDS *)
   let port = ref 0 in
   let host = Utils.hostname () in
