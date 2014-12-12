@@ -3,3 +3,6 @@ dft_cli
 dft_d_node
 dft_md_node
 *.annot
+dft_ds
+dft_cli
+dft_mds
