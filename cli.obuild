@@ -5,20 +5,23 @@ License: CeCILL-C
 Synopsis: DAFT Allows File Transfers
 obuild-ver: 1
 
+# client program
 Executable dft_cli
   oflags: -annot -w +27 -warn-error +8 -g
   path: src
   build-deps: batteries, ocamlnet, dolog
-  main-is: cli.ml
+  main-is: dft_cli.ml
 
-Executable dft_md_node
+# Meta Data Server
+Executable dft_mds
   oflags: -annot -w +27 -warn-error +8 -g
   path: src
   build-deps: batteries, ocamlnet, dolog
-  main-is: cli.ml
+  main-is: meta_data_server.ml
 
-Executable dft_d_node
+# Data Server
+Executable dft_ds
   oflags: -annot -w +27 -warn-error +8 -g
   path: src
   build-deps: batteries, ocamlnet, dolog
-  main-is: cli.ml
+  main-is: data_server.ml
