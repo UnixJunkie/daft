@@ -1,7 +1,7 @@
 daft
 ====
 
-DAFT Allows File Transfer
+DAFT Allows File Transfers
 
 ### Summary
 
