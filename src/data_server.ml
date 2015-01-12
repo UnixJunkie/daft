@@ -4,8 +4,9 @@ open Printf
 module Fn = Filename
 module Logger = Log
 module Log = Log.Make(struct let section = "DS" end) (* prefix logs *)
+module T = Types
 
-(* module Client = Rpc_simple_client *)
+module Client = Rpc_simple_client
 
 (* create local data store with unix UGO rights 700
    we take into account the port so that several DSs can be started on one
@@ -27,6 +28,7 @@ let ds_host = Utils.hostname ()
 let ds_port = ref 0
 let mds_host = ref ""
 let mds_port = ref (-1)
+let chunk_size = ref (-1) (* must be set on startup and same for all DSs *)
 
 let main () =
   (* setup logger *)
@@ -35,7 +37,8 @@ let main () =
   Logger.color_on ();
   (* options parsing *)
   Arg.parse
-    [ "-l", Arg.Set_string ds_log_fn, "<filename> where to log";
+    [ "-cs", Arg.Set_int chunk_size, "<size> file chunk size";
+      "-l", Arg.Set_string ds_log_fn, "<filename> where to log";
       "-p", Arg.Set_int ds_port, "<port> where to listen";
       "-s", Arg.Set_string mds_host, "<server> hostname";
       "-sp", Arg.Set_int mds_port, "<port> server port" ]
@@ -51,29 +54,20 @@ let main () =
     Log.fatal "-s is mandatory";
     exit 1;
   end;
+  if !chunk_size = -1 then begin
+    Log.fatal "-cs is mandatory";
+    exit 1;
+  end;
   if !mds_port = -1 then begin
     Log.fatal "-sp is mandatory";
     exit 1;
   end;
   Log.info "Will connect to %s:%d" !mds_host !mds_port;
   let data_store = create_data_store !mds_host !mds_port in
-(*
-  let connector = Rpc_client.Inet (server_name, server_port) in
-  let protocol = Rpc.Tcp in
-  let program = failwith "not implemented yet" in
-  let client = Client.create connector protocol program in
-  try
-    while true do
-      let delta = Client.call client "update_state" () in
-      failwith "not implemented yet"
-    done
-  with exn ->
-    begin
-      Client.shutdown client;
-      exit (delete_data_store data_store)
-    end
-*)
-  exit (delete_data_store data_store)
+  (* RPC setup *)
+  let _connector = Rpc_client.Inet (!mds_host, !mds_port) in
+  let _protocol = Rpc.Tcp in
+  delete_data_store data_store
 ;;
 
 main ()
