@@ -1,4 +1,5 @@
 open Batteries
+open Printf
 
 (* should be set on the MDS side and read-only for DSs *)
 let chunk_size = ref (1 * 1024 * 1024)
@@ -8,6 +9,9 @@ type node = { host: string ;
 
 let create_node host port =
   { host ; port }
+
+let string_of_node n =
+  sprintf "%s:%d" n.host n.port
 
 type chunk = { rank: int    ;
                data: string }
