@@ -23,7 +23,7 @@ let parse_machine_file (fn: string): T.node list =
     );
   L.rev !res
 
-let data_nodes_array (fn: string) =
+let data_nodes_array (fn: string): T.node array =
   let machines = parse_machine_file fn in
   let len = L.length machines in
   let res = A.create len (T.create_node "" (-1)) in
@@ -51,9 +51,14 @@ let main () =
     (fun arg -> raise (Arg.Bad ("Bad argument: " ^ arg)))
     (sprintf "usage: %s <options>" Sys.argv.(0))
   ;
+  (* check options *)
+  if !machine_file = "" then begin
+    Log.fatal "-m is mandatory";
+    exit 1;
+  end;
   Log.info "MDS: %s:%d" host !port;
-  let machines = parse_machine_file !machine_file in
-  Log.info "MDS: read %d hosts" (L.length machines);
+  let int2node = data_nodes_array !machine_file in
+  Log.info "MDS: read %d hosts" (A.length int2node);
   (* start all DSs *)
   failwith "not implemented yet"
   (* wait for commands *)
