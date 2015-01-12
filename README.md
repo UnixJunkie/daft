@@ -19,7 +19,13 @@ There will be several data servers (one per node) and at least
 one meta-data server (on the node where the user is interacting with the
 system or remote).
 
-commands the system should provide:
+The MDS knows a set of states (each state is a set of files).
+The state is associated with a number and this number is incremented each
+time a new file is added to the system.
+For performance, DS should update their state by asking just the delta
+with the last state they knew.
+
+### commands the system should provide:
 
 put list_of_files_or_dirs
     # publish files or directories into the system
