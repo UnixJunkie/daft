@@ -6,6 +6,9 @@ let chunk_size = ref (1 * 1024 * 1024)
 type node = { host: string ;
               port: int    }
 
+let create_node host port =
+  { host ; port }
+
 type chunk = { rank: int    ;
                data: string }
 
@@ -29,5 +32,3 @@ type files = Set.Make(File).t
 type msg_type = Raw | Compressed | Signed | Encrypted
 
 type answer = Ok | Error of string
-
-type node = Data_server of server | Meta_data_server of server
