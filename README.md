@@ -21,7 +21,7 @@ system or remote).
 
 The MDS knows a set of states (each state is a set of files).
 The state is associated with a number and this number is incremented each
-time a new file is added to the system.
+time a new file chunk is added to the system.
 For performance, DS should update their state by asking just the delta
 with the last state they knew.
 
