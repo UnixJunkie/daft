@@ -41,4 +41,4 @@ open Batteries (* everything before uses Legacy IOs (fast) *)
 let hostname (): string =
   let stat, res = run_and_read "hostname -f" in
   assert(stat = Unix.WEXITED 0);
-  String.strip res (* rm trailing '\n' *)
+  String.strip res (* rm trailing \n *)
