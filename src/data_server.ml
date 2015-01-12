@@ -3,7 +3,7 @@ open Printf
 
 module Fn = Filename
 module Logger = Log
-module Log = Log.Make(struct let section = "DS" end) (* prefix all logs *)
+module Log = Log.Make(struct let section = "DS" end) (* prefix logs *)
 
 (* module Client = Rpc_simple_client *)
 
@@ -24,21 +24,34 @@ let main () =
   Logger.set_log_level Logger.DEBUG;
   Logger.set_output Legacy.stdout;
   Logger.color_on ();
-  (* prefix all log messages *)
-
   (* setup data server *)
   let port = ref 0 in
   let host = Utils.hostname () in
   let server_name = ref "" in
-  let server_port = ref 0 in
+  let server_port = ref (-1) in
+  let log_fn = ref "" in
   (* options parsing *)
   Arg.parse
-    [ "-p", Arg.Set_int port, "<port> where to listen";
+    [ "-l", Arg.Set_string log_fn, "<filename> where to log";
+      "-p", Arg.Set_int port, "<port> where to listen";
       "-s", Arg.Set_string server_name, "<server> hostname";
       "-sp", Arg.Set_int server_port, "<port> server port" ]
     (fun arg -> raise (Arg.Bad ("Bad argument: " ^ arg)))
     (sprintf "usage: %s <options>" Sys.argv.(0))
   ;
+  (* check options *)
+  if !server_name = "" then begin
+    Log.fatal "-s is mandatory";
+    exit 1;
+  end;
+  if !server_port = -1 then begin
+    Log.fatal "-sp is mandatory";
+    exit 1;
+  end;
+  if !log_fn <> "" then begin
+    Log.fatal "-l unimplemented yet";
+    exit 1;
+  end;
   Log.info "Will connect to %s:%d" !server_name !server_port;
   let data_store = create_data_store host !port in
 (*
