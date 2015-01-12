@@ -1,12 +1,24 @@
 open Batteries
 open Printf
 
+module Client = Rpc_simple_client
 module Fn = Filename
+module FU = FileUtil
 module Logger = Log
 module Log = Log.Make(struct let section = "DS" end) (* prefix logs *)
 module T = Types
 
-module Client = Rpc_simple_client
+(* ALL OPERATIONS ARE SYNCHRONOUS *)
+
+(* setup data server *)
+let ds_log_fn = ref ""
+let ds_host = Utils.hostname ()
+let ds_port = ref 0
+let mds_host = ref ""
+let mds_port = ref (-1)
+let chunk_size = ref (-1) (* must be set on startup and same for all DSs *)
+let local_state = ref T.FileSet.empty
+let data_store_root = ref ""
 
 (* create local data store with unix UGO rights 700
    we take into account the port so that several DSs can be started on one
@@ -22,13 +34,27 @@ let create_data_store (host: string) (port: int): string =
 let delete_data_store (ds: string): int =
   Sys.command ("rm -rf " ^ ds)
 
-(* setup data server *)
-let ds_log_fn = ref ""
-let ds_host = Utils.hostname ()
-let ds_port = ref 0
-let mds_host = ref ""
-let mds_port = ref (-1)
-let chunk_size = ref (-1) (* must be set on startup and same for all DSs *)
+let add_file (fn: string): T.answer =
+  if T.FileSet.contains_fn fn !local_state then
+    T.Error ("already here: " ^ fn)
+  else
+    let stat = FU.stat fn in
+    let size = FU.byte_of_size stat.size in
+    (* FBR: fail if it is a directory, for the moment *)
+    (* FBR: create all necessary dirs in the local data store *)
+    (* FBR: strip leading '/' if any *)
+    let dest_fn = !data_store_root ^ "/" ^ fn in
+    FU.cp ~follow:FU.Follow ~force:FU.Force ~recurse:false [fn] dest_fn;
+    (* check cp succeeded *)
+    let stat' = FU.stat dest_fn in
+    if stat'.size <> stat.size then
+      T.Error ("cp failed: " ^ fn)
+    else begin (* update local state *)
+      (* n.b. we keep the stat from the original file *)
+      let new_file = T.create_managed_file fn size stat in
+      local_state := T.FileSet.add new_file !local_state;
+      T.Ok
+    end
 
 let main () =
   (* setup logger *)
@@ -63,11 +89,11 @@ let main () =
     exit 1;
   end;
   Log.info "Will connect to %s:%d" !mds_host !mds_port;
-  let data_store = create_data_store !mds_host !mds_port in
+  data_store_root := create_data_store !mds_host !mds_port;
   (* RPC setup *)
   let _connector = Rpc_client.Inet (!mds_host, !mds_port) in
   let _protocol = Rpc.Tcp in
-  delete_data_store data_store
+  delete_data_store !data_store_root
 ;;
 
 main ()
