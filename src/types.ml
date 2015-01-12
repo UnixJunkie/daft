@@ -3,8 +3,8 @@ open Batteries
 (* should be set on the MDS side and read-only for DSs *)
 let chunk_size = ref (1 * 1024 * 1024)
 
-type server = { host: string ;
-                port: int    }
+type node = { host: string ;
+              port: int    }
 
 type chunk = { rank: int    ;
                data: string }
