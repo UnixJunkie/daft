@@ -7,6 +7,7 @@ License:     CeCILL-C
 Plugins:     META (0.4)
 
 Executable daft_mds
-  Path:       src
-  BuildTools: ocamlbuild
-  MainIs:     meta_data_server.ml
+  Path:         src
+  BuildTools:   ocamlbuild
+  MainIs:       meta_data_server.ml
+  BuildDepends: batteries, dolog, rpc
