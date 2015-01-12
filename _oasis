@@ -1,0 +1,13 @@
+OASISFormat: 0.4
+Name:        DAFT
+Version:     0.1
+Synopsis:    DAFT Allows File Transfers
+Authors:     Francois Berenger and Camille Coti
+License:     CeCILL-C
+Plugins:     META (0.4)
+
+Executable daft_mds
+  Path:       src
+  BuildTools: ocamlbuild
+  MainIs:     meta_data_server.ml
+  
