@@ -1,15 +1,17 @@
 open Batteries
 open Printf
 
+module A = Array
 module L = List
 module Logger = Log
-module Log = Log.Make(struct let section = "MDS" end) (* prefix all logs *)
+module Log = Log.Make(struct let section = "MDS" end) (* prefix logs *)
+module T = Types
 
-let parse_machine_line (l: string): string * int =
+let parse_machine_line (l: string): T.node =
   let hostname, port = String.split l ":" in
-  (hostname, int_of_string port)
+  T.create_node hostname (int_of_string port)
 
-let parse_machine_file (fn: string): (string * int) list =
+let parse_machine_file (fn: string): T.node list =
   let res = ref [] in
   Utils.with_in_file fn
     (fun input ->
@@ -20,6 +22,18 @@ let parse_machine_file (fn: string): (string * int) list =
        with End_of_file -> ()
     );
   L.rev !res
+
+let data_nodes_array (fn: string) =
+  let machines = parse_machine_file fn in
+  let len = L.length machines in
+  let res = A.create len (T.create_node "" (-1)) in
+  L.iteri
+    (fun i node -> A.set res i node)
+    machines;
+  res
+
+let start_data_nodes () =
+  failwith "not implemented yet"
 
 let main () =
   (* setup logger *)
@@ -33,7 +47,7 @@ let main () =
   Arg.parse
     [ "-p", Arg.Set_int port, "port where to listen";
       "-m", Arg.Set_string machine_file,
-      "machine_file list of host:port (one per line)" ]
+      "machine_file list of [user@]host:port (one per line)" ]
     (fun arg -> raise (Arg.Bad ("Bad argument: " ^ arg)))
     (sprintf "usage: %s <options>" Sys.argv.(0))
   ;
