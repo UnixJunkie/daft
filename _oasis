@@ -10,12 +10,12 @@ Executable daft_mds
   Path:           src
   BuildTools:     ocamlbuild
   MainIs:         meta_data_server.ml
-  BuildDepends:   batteries, dolog, rpc, fileutils
+  BuildDepends:   batteries, dolog, fileutils
   CompiledObject: best
 
 Executable daft_ds
   Path:           src
   BuildTools:     ocamlbuild
   MainIs:         data_server.ml
-  BuildDepends:   batteries, dolog, rpc, fileutils
+  BuildDepends:   batteries, dolog, fileutils
   CompiledObject: best
