@@ -1,7 +1,6 @@
 open Batteries
 open Printf
 
-module Client = Rpc_simple_client
 module Fn = Filename
 module FU = FileUtil
 module Logger = Log
@@ -34,27 +33,31 @@ let create_data_store (host: string) (port: int): string =
 let delete_data_store (ds: string): int =
   Sys.command ("rm -rf " ^ ds)
 
+(* FBR: maybe I should really create a type to take into account all
+        possible errors instead of different strings in Error *)
 let add_file (fn: string): T.answer =
-  if T.FileSet.contains_fn fn !local_state then
-    T.Error ("already here: " ^ fn)
+  if T.FileSet.contains_fn fn !local_state
+  then T.Error ("already here: " ^ fn)
   else
     let stat = FU.stat fn in
     let size = FU.byte_of_size stat.size in
-    (* FBR: fail if it is a directory, for the moment *)
-    (* FBR: create all necessary dirs in the local data store *)
-    (* FBR: strip leading '/' if any *)
-    let dest_fn = !data_store_root ^ "/" ^ fn in
-    FU.cp ~follow:FU.Follow ~force:FU.Force ~recurse:false [fn] dest_fn;
-    (* check cp succeeded *)
-    let stat' = FU.stat dest_fn in
-    if stat'.size <> stat.size then
-      T.Error ("cp failed: " ^ fn)
-    else begin (* update local state *)
-      (* n.b. we keep the stat from the original file *)
-      let new_file = T.create_managed_file fn size stat in
-      local_state := T.FileSet.add new_file !local_state;
-      T.Ok
-    end
+    if Sys.is_directory fn
+    then T.Error ("directory: " ^ fn)
+    else
+      (* FBR: create all necessary dirs in the local data store *)
+      (* FBR: strip leading '/' if any *)
+      let dest_fn = !data_store_root ^ "/" ^ fn in
+      FU.cp ~follow:FU.Follow ~force:FU.Force ~recurse:false [fn] dest_fn;
+      (* check cp succeeded *)
+      let stat' = FU.stat dest_fn in
+      if stat'.size <> stat.size
+      then T.Error ("cp failed: " ^ fn)
+      else begin (* update local state *)
+        (* n.b. we keep the stat from the original file *)
+        let new_file = T.create_managed_file fn size stat in
+        local_state := T.FileSet.add new_file !local_state;
+        T.Ok
+       end
 
 let main () =
   (* setup logger *)
@@ -90,9 +93,6 @@ let main () =
   end;
   Log.info "Will connect to %s:%d" !mds_host !mds_port;
   data_store_root := create_data_store !mds_host !mds_port;
-  (* RPC setup *)
-  let _connector = Rpc_client.Inet (!mds_host, !mds_port) in
-  let _protocol = Rpc.Tcp in
   delete_data_store !data_store_root
 ;;
 
