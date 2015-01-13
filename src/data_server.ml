@@ -49,19 +49,22 @@ let add_file (fn: string): T.answer =
                then S.lchop ~n:1 fn
                else fn
       in
-      (* FBR: create all necessary dirs in the local data store *)
       let dest_fn = !data_store_root ^ "/" ^ fn in
+      let dest_dir = Fn.dirname dest_fn in
+      (* mkdir create all necessary parent dirs *)
+      FU.mkdir ~parent:true ~mode:0o700 dest_dir;
       FU.cp ~follow:FU.Follow ~force:FU.Force ~recurse:false [fn] dest_fn;
-      (* check cp succeeded *)
+      (* check cp succeeded based on new file's size *)
       let stat' = FU.stat dest_fn in
       if stat'.size <> stat.size
       then T.Error ("cp failed: " ^ fn)
       else begin (* update local state *)
-        (* n.b. we keep the stat from the original file *)
+        (* FBR: compute how many chunks there are and size of the last one *)
+        (* n.b. we keep the stat struct from the original file *)
         let new_file = T.create_managed_file fn size stat in
         local_state := T.FileSet.add new_file !local_state;
         T.Ok
-       end
+      end
 
 let main () =
   (* setup logger *)
