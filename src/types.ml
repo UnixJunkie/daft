@@ -47,7 +47,7 @@ let dummy_stat = FU.stat "/dev/null"
 module FileSet = struct (* extend type with more operations *)
   include Set.Make(File)
   let contains_fn fn s =
-    let dummy = { name = fn ; size = Int64.zero ; stat = dummy_stat } in
+    let dummy = create_managed_file fn Int64.zero dummy_stat 0 None in
     mem dummy s
 end
 
