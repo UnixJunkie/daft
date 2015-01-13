@@ -5,6 +5,7 @@ module Fn = Filename
 module FU = FileUtil
 module Logger = Log
 module Log = Log.Make(struct let section = "DS" end) (* prefix logs *)
+module S = String
 module T = Types
 
 (* ALL OPERATIONS ARE SYNCHRONOUS *)
@@ -44,8 +45,11 @@ let add_file (fn: string): T.answer =
     if Sys.is_directory fn
     then T.Error ("directory: " ^ fn)
     else
+      let fn = if S.starts_with fn "/" (* chop leading '/' if any *)
+               then S.lchop ~n:1 fn
+               else fn
+      in
       (* FBR: create all necessary dirs in the local data store *)
-      (* FBR: strip leading '/' if any *)
       let dest_fn = !data_store_root ^ "/" ^ fn in
       FU.cp ~follow:FU.Follow ~force:FU.Force ~recurse:false [fn] dest_fn;
       (* check cp succeeded *)
