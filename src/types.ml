@@ -3,6 +3,8 @@ open Printf
 
 module FU = FileUtil
 
+(* FBR: encapsulate those into separate modules *)
+
 (* should be set on the MDS side and read-only for DSs *)
 let chunk_size = ref (1 * 1024 * 1024)
 
@@ -24,12 +26,15 @@ module Chunk = struct
     BatInt.compare c1.rank c2.rank
 end
 
-type managed_file = { name: string  ;
-                      size: int64   ;
-                      stat: FU.stat }
+type managed_file = { name: string ;
+                      size: int64 ;
+                      stat: FU.stat ;
+                      nb_chunks: int ;
+                      (* (Some x) if x < chunk_size *)
+                      last_chunk_size: int64 option }
 
-let create_managed_file name size stat =
-  { name; size; stat }
+let create_managed_file name size stat nb_chunks last_chunk_size =
+  { name; size; stat; nb_chunks; last_chunk_size }
 
 module File = struct
   type t = managed_file
