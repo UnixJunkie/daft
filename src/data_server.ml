@@ -34,6 +34,21 @@ let create_data_store (host: string) (port: int): string =
 let delete_data_store (ds: string): int =
   Sys.command ("rm -rf " ^ ds)
 
+(* how many there are and size of the last one if < chunk_size *)
+let compute_chunks (size: int64) =
+  let ratio = (Int64.to_float size) /. (float_of_int !T.chunk_size) in
+  (* total number of chunks *)
+  let nb_chunks = int_of_float (ceil ratio) in
+  (* number of full chunks *)
+  let nb_chunks_i64 = Int64.of_int (int_of_float ratio) in
+  let chunk_size_i64 = Int64.of_int !T.chunk_size in
+  let last_chunk_size_i64 = Int64.(size - (nb_chunks_i64 * chunk_size_i64)) in
+  let last_chunk_size_opt = if last_chunk_size_i64 <> Int64.zero
+                            then Some last_chunk_size_i64
+                            else None
+  in
+  (nb_chunks, last_chunk_size_opt)
+
 (* FBR: maybe I should really create a type to take into account all
         possible errors instead of different strings in Error *)
 let add_file (fn: string): T.answer =
@@ -61,7 +76,10 @@ let add_file (fn: string): T.answer =
       else begin (* update local state *)
         (* FBR: compute how many chunks there are and size of the last one *)
         (* n.b. we keep the stat struct from the original file *)
-        let new_file = T.create_managed_file fn size stat in
+        let nb_chunks, last_size = compute_chunks size in
+        let new_file =
+          T.create_managed_file fn size stat nb_chunks last_size
+        in
         local_state := T.FileSet.add new_file !local_state;
         T.Ok
       end
