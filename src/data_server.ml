@@ -78,7 +78,7 @@ let add_file (fn: string): T.answer =
         (* n.b. we keep the stat struct from the original file *)
         let nb_chunks, last_size = compute_chunks size in
         let new_file =
-          T.create_managed_file fn size stat nb_chunks last_size
+          T.File.create fn size stat nb_chunks last_size
         in
         local_state := T.FileSet.add new_file !local_state;
         T.Ok

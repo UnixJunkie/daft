@@ -27,28 +27,26 @@ end
   status: set of files
   file: set of chunks *)
 
-type managed_file = { name: string ;
-                      size: int64 ;
-                      stat: FU.stat ;
-                      nb_chunks: int ;
-                      (* (Some x) if x < chunk_size *)
-                      last_chunk_size: int64 option }
-
-let create_managed_file name size stat nb_chunks last_chunk_size =
-  { name; size; stat; nb_chunks; last_chunk_size }
-
 module File = struct
-  type t = managed_file
+  type t = { name: string ;
+             size: int64 ;
+             stat: FU.stat ;
+             nb_chunks: int ;
+             (* (Some x) if x < chunk_size *)
+             last_chunk_size: int64 option } (* FBR: remove this *)
+  let create name size stat nb_chunks last_chunk_size =
+    { name; size; stat; nb_chunks; last_chunk_size }
   let compare f1 f2 =
     String.compare f1.name f2.name
 end
 
+(* FBR: make this private to the FileSet module *)
 let dummy_stat = FU.stat "/dev/null"
 
 module FileSet = struct (* extend type with more operations *)
   include Set.Make(File)
   let contains_fn fn s =
-    let dummy = create_managed_file fn Int64.zero dummy_stat 0 None in
+    let dummy = File.create fn Int64.zero dummy_stat 0 None in
     mem dummy s
 end
 
