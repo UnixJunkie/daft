@@ -17,36 +17,32 @@ end
 module Chunk = struct
   let default_size = 1024 * 1024
   type t = { rank: int ;
-             (* None if default_size, else (Some x) *)
-             size: int option }
+             (* None if default_size; (Some x) else *)
+             size: int64 option }
   let compare c1 c2 =
     BatInt.compare c1.rank c2.rank
 end
 
-(* FBR: 
-  status: set of files
-  file: set of chunks *)
+(* FBR: status: set of files
+        file: set of chunks *)
 
 module File = struct
   type t = { name: string ;
              size: int64 ;
              stat: FU.stat ;
-             nb_chunks: int ;
-             (* (Some x) if x < chunk_size *)
-             last_chunk_size: int64 option } (* FBR: remove this *)
-  let create name size stat nb_chunks last_chunk_size =
-    { name; size; stat; nb_chunks; last_chunk_size }
+             nb_chunks: int }
+  let create name size stat nb_chunks =
+    { name; size; stat; nb_chunks }
   let compare f1 f2 =
     String.compare f1.name f2.name
 end
 
-(* FBR: make this private to the FileSet module *)
-let dummy_stat = FU.stat "/dev/null"
-
 module FileSet = struct (* extend type with more operations *)
   include Set.Make(File)
+  (* FBR: should be private *)
+  let dummy_stat = FU.stat "/dev/null"
   let contains_fn fn s =
-    let dummy = File.create fn Int64.zero dummy_stat 0 None in
+    let dummy = File.create fn Int64.zero dummy_stat 0 in
     mem dummy s
 end
 

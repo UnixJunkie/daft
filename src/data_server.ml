@@ -76,10 +76,8 @@ let add_file (fn: string): T.answer =
       else begin (* update local state *)
         (* FBR: compute how many chunks there are and size of the last one *)
         (* n.b. we keep the stat struct from the original file *)
-        let nb_chunks, last_size = compute_chunks size in
-        let new_file =
-          T.File.create fn size stat nb_chunks last_size
-        in
+        let nb_chunks, _last_size = compute_chunks size in
+        let new_file = T.File.create fn size stat nb_chunks in
         local_state := T.FileSet.add new_file !local_state;
         T.Ok
       end
