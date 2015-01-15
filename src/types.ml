@@ -13,7 +13,7 @@ module Node = struct
   let dummy () =
     { rank = -1; host = "localhost"; port = -1 }
   let to_string n =
-    sprintf "%d|%s:%d" n.rank n.host n.port
+    sprintf "%d.%s:%d" n.rank n.host n.port
   let compare n1 n2 =
     BatInt.compare n1.rank n2.rank
 end
