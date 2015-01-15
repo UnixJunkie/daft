@@ -50,8 +50,6 @@ module FileSet = struct (* extend type with more operations *)
     mem dummy s
 end
 
-type files = Set.Make(File).t
-
-type msg_type = Raw | Compressed | Signed | Encrypted
+type storage_mode = Raw | Compressed | Signed | Encrypted
 
 type answer = Ok | Error of string
