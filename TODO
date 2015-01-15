@@ -1,9 +1,7 @@
 
-- refactor heavily into src/types.ml
 - do a simple example using zeromq
-- think seriously about the state module and delta of states
-  - do ocaml sets remember the size of the set at anytime
-    or is it computed on the fly?
+
+- think about the state module and delta of states
 
 1) start
    - the MDS
@@ -11,7 +9,7 @@
 
 2) quit
    - all DSs
-   - the MDS
+   - then the MDS
 
 3) put
    - a small file
