@@ -79,10 +79,9 @@ let add_file (fn: string): T.answer =
       if stat'.size <> stat.size
       then T.Error ("cp failed: " ^ fn)
       else begin (* update local state *)
-        (* FBR: compute how many chunks there are and size of the last one *)
+        let nb_chunks, last_chunk_size = compute_chunks size in
         (* n.b. we keep the stat struct from the original file *)
-        let nb_chunks, _last_size = compute_chunks size in
-        let new_file = File.create fn size stat nb_chunks in
+        let new_file = File.create fn size stat nb_chunks last_chunk_size in
         local_state := FileSet.add new_file !local_state;
         T.Ok
       end
