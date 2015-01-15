@@ -15,8 +15,7 @@ module Node = struct
 end
 
 module Chunk = struct
-  type t = { rank: int    ;
-             data: string }
+  type t = { rank: int }
   let size = 1024 * 1024
   let compare c1 c2 =
     BatInt.compare c1.rank c2.rank
