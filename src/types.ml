@@ -15,11 +15,17 @@ module Node = struct
 end
 
 module Chunk = struct
-  type t = { rank: int }
-  let size = 1024 * 1024
+  let default_size = 1024 * 1024
+  type t = { rank: int ;
+             (* None if default_size, else (Some x) *)
+             size: int option }
   let compare c1 c2 =
     BatInt.compare c1.rank c2.rank
 end
+
+(* FBR: 
+  status: set of files
+  file: set of chunks *)
 
 type managed_file = { name: string ;
                       size: int64 ;
