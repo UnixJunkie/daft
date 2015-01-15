@@ -9,19 +9,19 @@ obuild-ver: 1
 Executable dft_cli
   oflags: -annot -w +27 -warn-error +8 -g
   path: src
-  build-deps: dolog, batteries, fileutils
+  build-deps: dolog, batteries, fileutils, ZMQ
   main-is: dft_cli.ml
 
 # Meta Data Server
 Executable dft_mds
   oflags: -annot -w +27 -warn-error +8 -g
   path: src
-  build-deps: dolog, batteries, fileutils
+  build-deps: dolog, batteries, fileutils, ZMQ
   main-is: meta_data_server.ml
 
 # Data Server
 Executable dft_ds
   oflags: -annot -w +27 -warn-error +8 -g
   path: src
-  build-deps: dolog, batteries, fileutils
+  build-deps: dolog, batteries, fileutils, ZMQ
   main-is: data_server.ml
