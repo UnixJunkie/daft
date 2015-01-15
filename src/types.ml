@@ -5,9 +5,6 @@ module FU = FileUtil
 
 (* FBR: encapsulate those into separate modules *)
 
-(* should be set on the MDS side and read-only for DSs *)
-let chunk_size = ref (1 * 1024 * 1024)
-
 type node = { host: string ;
               port: int    }
 
@@ -22,6 +19,7 @@ type chunk = { rank: int    ;
 
 module Chunk = struct
   type t = chunk
+  let size = 1024 * 1024
   let compare c1 c2 =
     BatInt.compare c1.rank c2.rank
 end

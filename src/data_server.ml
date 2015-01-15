@@ -36,12 +36,12 @@ let delete_data_store (ds: string): int =
 
 (* how many there are and size of the last one if < chunk_size *)
 let compute_chunks (size: int64) =
-  let ratio = (Int64.to_float size) /. (float_of_int !T.chunk_size) in
+  let ratio = (Int64.to_float size) /. (float_of_int T.Chunk.size) in
   (* total number of chunks *)
   let nb_chunks = int_of_float (ceil ratio) in
   (* number of full chunks *)
   let nb_chunks_i64 = Int64.of_int (int_of_float ratio) in
-  let chunk_size_i64 = Int64.of_int !T.chunk_size in
+  let chunk_size_i64 = Int64.of_int T.Chunk.size in
   let last_chunk_size_i64 = Int64.(size - (nb_chunks_i64 * chunk_size_i64)) in
   let last_chunk_size_opt = if last_chunk_size_i64 <> Int64.zero
                             then Some last_chunk_size_i64
