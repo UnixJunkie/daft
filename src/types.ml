@@ -28,7 +28,8 @@ module File = struct
     let default_size = 1024 * 1024
     type t = { rank:  int          ;
                size:  int64 option ; (* None if default_size; (Some x) else *)
-               nodes: NodeSet.t    } (* which nodes have this chunk *)
+               nodes: NodeSet.t    } (* which nodes have this chunk
+                                        in their datastore *)
     let create rank size node =
       let nodes = NodeSet.singleton node in
       { rank; size; nodes }
