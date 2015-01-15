@@ -14,11 +14,9 @@ module Node = struct
     sprintf "%s:%d" n.host n.port
 end
 
-type chunk = { rank: int    ;
-               data: string }
-
 module Chunk = struct
-  type t = chunk
+  type t = { rank: int    ;
+             data: string }
   let size = 1024 * 1024
   let compare c1 c2 =
     BatInt.compare c1.rank c2.rank
