@@ -5,14 +5,14 @@ module FU = FileUtil
 
 (* FBR: encapsulate those into separate modules *)
 
-type node = { host: string ;
-              port: int    }
-
-let create_node host port =
-  { host ; port }
-
-let string_of_node n =
-  sprintf "%s:%d" n.host n.port
+module Node = struct
+  type t = { host: string ;
+             port: int    }
+  let create host port =
+    { host ; port }
+  let to_string n =
+    sprintf "%s:%d" n.host n.port
+end
 
 type chunk = { rank: int    ;
                data: string }

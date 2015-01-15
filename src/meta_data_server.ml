@@ -5,13 +5,13 @@ module A = Array
 module L = List
 module Logger = Log
 module Log = Log.Make(struct let section = "MDS" end) (* prefix logs *)
-module T = Types
+module T = Types (* FBR: maybe open it after its refactoring *)
 
-let parse_machine_line (l: string): T.node =
+let parse_machine_line (l: string): T.Node.t =
   let hostname, port = String.split l ":" in
-  T.create_node hostname (int_of_string port)
+  T.Node.create hostname (int_of_string port)
 
-let parse_machine_file (fn: string): T.node list =
+let parse_machine_file (fn: string): T.Node.t list =
   let res = ref [] in
   Utils.with_in_file fn
     (fun input ->
@@ -23,10 +23,10 @@ let parse_machine_file (fn: string): T.node list =
     );
   L.rev !res
 
-let data_nodes_array (fn: string): T.node array =
+let data_nodes_array (fn: string): T.Node.t array =
   let machines = parse_machine_file fn in
   let len = L.length machines in
-  let res = A.create len (T.create_node "" (-1)) in
+  let res = A.create len (T.Node.create "" (-1)) in
   L.iteri
     (fun i node -> A.set res i node)
     machines;
