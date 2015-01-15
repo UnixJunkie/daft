@@ -34,10 +34,12 @@ module File = struct
     { name; size; stat; nb_chunks }
   let compare f1 f2 =
     String.compare f1.name f2.name
+
 end
 
-module FileSet = struct (* extend type with more operations *)
+module FileSet = struct
   include Set.Make(File)
+  (* extend module with more operations *)
   let dummy_stat = FU.stat "/dev/null" (* FBR: should be private *)
   let contains_fn fn s =
     let dummy = File.create fn Int64.zero dummy_stat 0 in
