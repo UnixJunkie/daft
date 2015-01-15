@@ -6,8 +6,7 @@ module FU = FileUtil
 (* FBR: encapsulate those into separate modules *)
 
 module Node = struct
-  type t = { host: string ;
-             port: int    }
+  type t = { host: string ; port: int }
   let create host port =
     { host ; port }
   let to_string n =
@@ -17,8 +16,7 @@ end
 module Chunk = struct
   let default_size = 1024 * 1024
   type t = { rank: int ;
-             (* None if default_size; (Some x) else *)
-             size: int64 option }
+             size: int64 option } (* None if default_size; (Some x) else *)
   let compare c1 c2 =
     BatInt.compare c1.rank c2.rank
 end
@@ -39,8 +37,7 @@ end
 
 module FileSet = struct (* extend type with more operations *)
   include Set.Make(File)
-  (* FBR: should be private *)
-  let dummy_stat = FU.stat "/dev/null"
+  let dummy_stat = FU.stat "/dev/null" (* FBR: should be private *)
   let contains_fn fn s =
     let dummy = File.create fn Int64.zero dummy_stat 0 in
     mem dummy s
