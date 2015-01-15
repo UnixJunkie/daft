@@ -5,7 +5,6 @@ module A = Array
 module L = List
 module Logger = Log
 module Log = Log.Make(struct let section = "MDS" end) (* prefix logs *)
-module T = Types (* FBR: maybe open it after its refactoring *)
 module Node = Types.Node
 
 let parse_machine_line (rank: int) (l: string): Node.t =
