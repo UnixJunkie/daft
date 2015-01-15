@@ -13,18 +13,19 @@ module Node = struct
     sprintf "%s:%d" n.host n.port
 end
 
-module Chunk = struct
-  let default_size = 1024 * 1024
-  type t = { rank: int ;
-             size: int64 option } (* None if default_size; (Some x) else *)
-  let compare c1 c2 =
-    BatInt.compare c1.rank c2.rank
-end
-
 (* FBR: status: set of files
         file: set of chunks *)
 
 module File = struct
+
+  module Chunk = struct
+    let default_size = 1024 * 1024
+    type t = { rank: int ;
+               size: int64 option } (* None if default_size; (Some x) else *)
+    let compare c1 c2 =
+      BatInt.compare c1.rank c2.rank
+  end
+
   type t = { name: string ;
              size: int64 ;
              stat: FU.stat ;
