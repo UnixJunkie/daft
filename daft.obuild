@@ -9,24 +9,19 @@ obuild-ver: 1
 Executable dft_cli
   oflags: -annot -w +27 -warn-error +8 -g
   path: src
-  build-deps: dolog, batteries
-# build-deps: dolog, batteries, rpc
+  build-deps: dolog, batteries, fileutils
   main-is: dft_cli.ml
-# rpc is the lib. we need from ocamlnet but there is maybe a bug in obuild's
-# parser of META files so commented out for the moment
 
 # Meta Data Server
 Executable dft_mds
   oflags: -annot -w +27 -warn-error +8 -g
   path: src
-  build-deps: dolog, batteries
-# build-deps: dolog, batteries, rpc
+  build-deps: dolog, batteries, fileutils
   main-is: meta_data_server.ml
 
 # Data Server
 Executable dft_ds
   oflags: -annot -w +27 -warn-error +8 -g
   path: src
-  build-deps: dolog, batteries
-# build-deps: dolog, batteries, rpc
+  build-deps: dolog, batteries, fileutils
   main-is: data_server.ml
