@@ -3,8 +3,6 @@ open Printf
 
 module FU = FileUtil
 
-(* FBR: encapsulate those into separate modules *)
-
 module Node = struct
   type t = { host: string ; port: int }
   let create host port =

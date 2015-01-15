@@ -7,6 +7,9 @@ module Logger = Log
 module Log = Log.Make(struct let section = "DS" end) (* prefix logs *)
 module S = String
 module T = Types
+module Node = Types.Node
+module File = Types.File
+module FileSet = Types.FileSet
 
 (* ALL OPERATIONS ARE SYNCHRONOUS *)
 
@@ -17,7 +20,7 @@ let ds_port = ref 0
 let mds_host = ref ""
 let mds_port = ref (-1)
 let chunk_size = ref (-1) (* must be set on startup and same for all DSs *)
-let local_state = ref T.FileSet.empty
+let local_state = ref FileSet.empty
 let data_store_root = ref ""
 
 (* create local data store with unix UGO rights 700
@@ -37,13 +40,13 @@ let delete_data_store (ds: string): int =
 (* how many there are and size of the last one if < chunk_size *)
 let compute_chunks (size: int64) =
   let ratio =
-    (Int64.to_float size) /. (float_of_int T.File.Chunk.default_size)
+    (Int64.to_float size) /. (float_of_int File.Chunk.default_size)
   in
   (* total number of chunks *)
   let nb_chunks = int_of_float (ceil ratio) in
   (* number of full chunks *)
   let nb_chunks_i64 = Int64.of_int (int_of_float ratio) in
-  let chunk_size_i64 = Int64.of_int T.File.Chunk.default_size in
+  let chunk_size_i64 = Int64.of_int File.Chunk.default_size in
   let last_chunk_size_i64 = Int64.(size - (nb_chunks_i64 * chunk_size_i64)) in
   let last_chunk_size_opt = if last_chunk_size_i64 <> Int64.zero
                             then Some last_chunk_size_i64
@@ -54,7 +57,7 @@ let compute_chunks (size: int64) =
 (* FBR: maybe I should really create a type to take into account all
         possible errors instead of different strings in Error *)
 let add_file (fn: string): T.answer =
-  if T.FileSet.contains_fn fn !local_state
+  if FileSet.contains_fn fn !local_state
   then T.Error ("already here: " ^ fn)
   else
     let stat = FU.stat fn in
@@ -79,8 +82,8 @@ let add_file (fn: string): T.answer =
         (* FBR: compute how many chunks there are and size of the last one *)
         (* n.b. we keep the stat struct from the original file *)
         let nb_chunks, _last_size = compute_chunks size in
-        let new_file = T.File.create fn size stat nb_chunks in
-        local_state := T.FileSet.add new_file !local_state;
+        let new_file = File.create fn size stat nb_chunks in
+        local_state := FileSet.add new_file !local_state;
         T.Ok
       end
 
