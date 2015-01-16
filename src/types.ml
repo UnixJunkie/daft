@@ -81,4 +81,43 @@ end
 
 type storage_mode = Raw | Compressed | Signed | Encrypted
 
+(* FBR: delete this one *)
 type answer = Ok | Error of string
+
+(* FBR: organize this into modules?
+        - add encode/decode for string conversion *)
+
+(* the MDS is a master, DSs are its slaves *)
+
+type ds_to_mds_message =
+  | Join of Node.t (* a DS registering itself with the MDS *)
+  | Got_chunk of string * int (* ACK a chunk (filename, chunk_number) *)
+
+type mds_to_ds_message =
+  | Send_to of int * string * int (* send order (receiver_ds_rank, filename, chunk_number) *)
+  | Quit (* DS should exit *)
+
+type ds_to_ds_message =
+  | Chunk of string * int * string (* file chunk (filename, chunk_number, string) *)
+
+type cli_to_mds_message =
+  | Add_file of File.t
+  | Quit (* MDS must send Quit to all DSs then exit itself *)
+
+type cli_to_ds_message =
+  | Add_file of File.t
+
+type mds_to_cli_message =
+  | Already_there of string (* filename *)
+
+type for_MDS_message =
+  | From_DS of ds_to_mds_message
+  | From_CLI of cli_to_mds_message
+
+type for_DS_message =
+  | From_DS of ds_to_ds_message
+  | From_CLI of cli_to_ds_message
+
+type for_CLI_message =
+  | From_MDS of mds_to_cli_message
+
