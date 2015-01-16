@@ -1,4 +1,8 @@
 
+let sleep_ms ms =
+  let (_, _, _) = Unix.select [] [] [] (float_of_int ms /. 1000.) in
+  ()
+
 (* like `cmd` in shell
    FBR: use the one in batteries upon next release *)
 let run_and_read cmd =
