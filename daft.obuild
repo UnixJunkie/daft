@@ -25,3 +25,15 @@ Executable dft_ds
   path: src
   build-deps: dolog, batteries, fileutils, ZMQ
   main-is: data_server.ml
+
+Executable zmq_client
+  oflags: -annot -w +27 -warn-error +8 -g
+  path: src
+  build-deps: dolog, batteries, fileutils, ZMQ
+  main-is: zmq_client.ml
+
+Executable zmq_server
+  oflags: -annot -w +27 -warn-error +8 -g
+  path: src
+  build-deps: dolog, batteries, fileutils, ZMQ
+  main-is: zmq_server.ml
