@@ -11,8 +11,6 @@ module Node = Types.Node
 module File = Types.File
 module FileSet = Types.FileSet
 
-(* ALL OPERATIONS ARE SYNCHRONOUS *)
-
 let uninitialized = -1
 
 (* setup data server *)
