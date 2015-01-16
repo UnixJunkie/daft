@@ -122,6 +122,8 @@ let main () =
   local_node := Node.create !ds_rank ds_host !ds_port;
   Log.info "Will connect to %s:%d" !mds_host !mds_port;
   data_store_root := create_data_store ();
+  (* start server *)
+  (* loop on messages until quit command *)
   delete_data_store !data_store_root
 ;;
 
