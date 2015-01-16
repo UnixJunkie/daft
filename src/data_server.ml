@@ -123,8 +123,25 @@ let main () =
   Log.info "Will connect to %s:%d" !mds_host !mds_port;
   data_store_root := create_data_store ();
   (* start server *)
+  let context = ZMQ.Context.create () in
+  let socket = ZMQ.Socket.create context ZMQ.Socket.req in
+  let mds_port_str = string_of_int !mds_port in
+  ZMQ.Socket.connect socket ("tcp://" ^ !mds_host ^ ":" ^ mds_port_str);
   (* loop on messages until quit command *)
-  delete_data_store !data_store_root
+  (* FBR: join MDS *)
+  try
+    while true do
+      printf "Sending Hello ...\n";
+      ZMQ.Socket.send socket "Hello";
+      let _answer = ZMQ.Socket.recv socket in
+      printf "Received answer\n"
+    done;
+  with exn -> begin
+      let (_: int) = delete_data_store !data_store_root in
+      ZMQ.Socket.close socket;
+      ZMQ.Context.terminate context;
+      raise exn;
+    end
 ;;
 
 main ()
