@@ -35,6 +35,9 @@ let data_nodes_array (fn: string): Node.t array =
   res
 
 let start_data_nodes () =
+  (* FBR: scp exe to each node *)
+  (* FBR: ssh node to start it *)
+  (* FBR: create a list of sockets for sending; one for each DS *)
   failwith "not implemented yet"
 
 let main () =
@@ -61,9 +64,28 @@ let main () =
   Log.info "MDS: %s:%d" host !port;
   let int2node = data_nodes_array !machine_file in
   Log.info "MDS: read %d hosts" (A.length int2node);
-  (* start all DSs *)
-  failwith "not implemented yet"
-  (* wait for commands *)
+  (* start all DSs *) (* FBR: later maybe, we can do this by hand for the moment *)
+  (* start server *)
+  let context = ZMQ.Context.create () in
+  let socket = ZMQ.Socket.create context ZMQ.Socket.rep in
+  let port_str = string_of_int !port in
+  ZMQ.Socket.bind socket ("tcp://*:" ^ port_str);
+  (* loop on messages until quit command *)
+  try
+    while true do
+      let _s = ZMQ.Socket.recv socket in
+      printf "got one message\n";
+      (* FBR: decode message *)
+      (* FBR: pattern match on its type to process it *)
+      Utils.sleep_ms 500; (* fake some work *)
+      (* FBR: create a list of sockets for sending; one for each DS *)
+      (* ZMQ.Socket.send socket "World"; *)
+    done;
+  with exn -> begin
+      ZMQ.Socket.close socket;
+      ZMQ.Context.terminate context;
+      raise exn;
+    end
 ;;
 
 main ()
