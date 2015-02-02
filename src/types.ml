@@ -4,16 +4,18 @@ open Printf
 module FU = FileUtil
 
 module Node = struct
-  (* the rank allows to uniquely identify nodes; a la MPI *)
+  (* the rank allows to uniquely identify a node; a la MPI *)
   type t = { rank: int    ;
              host: string ;
              port: int    }
   let create rank host port =
     { rank; host; port }
   let dummy () =
-    { rank = -1; host = "localhost"; port = -1 }
+    { rank = -1; host = "dummy_hostname"; port = -1 }
   let to_string n =
     sprintf "%d.%s:%d" n.rank n.host n.port
+  let of_string s =
+    Scanf.sscanf s "%d.%s:%d" create
   let compare n1 n2 =
     BatInt.compare n1.rank n2.rank
 end
