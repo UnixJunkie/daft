@@ -59,9 +59,6 @@ let compute_chunks (size: int64) =
   in
   (nb_chunks, last_chunk_size_opt)
 
-(* FBR: maybe I should really create a type to take into account all
-        possible errors instead of different strings in Error *)
-
 type add_result = Ok | Already_here | Is_directory | Copy_failed
 
 let add_file (fn: string): add_result =
