@@ -59,17 +59,17 @@ let compute_chunks (size: int64) =
   in
   (nb_chunks, last_chunk_size_opt)
 
-type add_result = Ok | Already_here | Is_directory | Copy_failed
-
-let add_file (fn: string): add_result =
-  if FileSet.contains_fn fn !local_state then Already_here
-  else if Sys.is_directory fn then Is_directory
+let add_file (fn: string): T.ds_to_cli_message =
+  if FileSet.contains_fn fn !local_state then T.Already_here
+  else if Sys.is_directory fn then T.Is_directory
   else
-    let stat = FU.stat fn in
-    let size = FU.byte_of_size stat.size in
-      let fn = if S.starts_with fn "/" (* chop leading '/' if any *)
-               then S.lchop ~n:1 fn
-               else fn
+    FU.( (* opened FU to get rid of warning 40 *)
+      let stat = FU.stat fn in
+      let size = FU.byte_of_size stat.size in
+      let fn =
+        if S.starts_with fn "/" (* chop leading '/' if any *)
+        then S.lchop ~n:1 fn
+        else fn
       in
       let dest_fn = !data_store_root ^ "/" ^ fn in
       let dest_dir = Fn.dirname dest_fn in
@@ -78,7 +78,7 @@ let add_file (fn: string): add_result =
       FU.cp ~follow:FU.Follow ~force:FU.Force ~recurse:false [fn] dest_fn;
       (* check cp succeeded based on new file's size *)
       let stat' = FU.stat dest_fn in
-      if stat'.size <> stat.size then Copy_failed
+      if stat'.size <> stat.size then T.Copy_failed
       else begin (* update local state *)
         let nb_chunks, last_chunk_size = compute_chunks size in
         (* n.b. we keep the stat struct from the original file *)
@@ -86,8 +86,9 @@ let add_file (fn: string): add_result =
           File.create fn size stat nb_chunks last_chunk_size !local_node
         in
         local_state := FileSet.add new_file !local_state;
-        Ok
+        T.Ok
       end
+    )
 
 let main () =
   (* setup logger *)
