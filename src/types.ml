@@ -25,7 +25,6 @@ module NodeSet = struct
 end
 
 module File = struct
-
   module Chunk = struct
     let default_size = 1024 * 1024
     type t = { rank:  int          ;
@@ -42,7 +41,6 @@ module File = struct
   module ChunkSet = struct
     include Set.Make(Chunk)
     let create nb_chunks last_chunk_size node =
-      assert(nb_chunks > 0); (* DAFT is not for files of null size *)
       let rec loop acc i =
         if i = nb_chunks - 1 then
           add (Chunk.create i last_chunk_size node) acc
@@ -50,7 +48,8 @@ module File = struct
           let new_acc = add (Chunk.create i None node) acc in
           loop new_acc (i + 1)
       in
-      loop empty 0
+      if nb_chunks <= 0 then empty
+      else loop empty 0
   end
 
   type t = { name:      string     ;
@@ -63,7 +62,6 @@ module File = struct
     { name; size; stat; nb_chunks ; chunks }
   let compare f1 f2 =
     String.compare f1.name f2.name
-
 end
 
 (* the status of the "filesystem" is just a set of files *)
@@ -81,10 +79,9 @@ module FileSet = struct
     mem dummy_file s
 end
 
+(* only support Raw mode until all commands are properly working
+   Compressed mode will be the next priority *)
 type storage_mode = Raw | Compressed | Signed | Encrypted
-
-(* FBR: organize this into modules?
-        - add encode/decode for string conversion *)
 
 (* the MDS is a master, DSs are its slaves *)
 
