@@ -81,9 +81,6 @@ end
 
 type storage_mode = Raw | Compressed | Signed | Encrypted
 
-(* FBR: delete this one *)
-type answer = Ok | Error of string
-
 (* FBR: organize this into modules?
         - add encode/decode for string conversion *)
 
