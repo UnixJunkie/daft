@@ -90,15 +90,15 @@ module Protocol = struct
   (* message types *)
   type ds_to_mds =
     | Join of Node.t (* a DS registering itself with the MDS *)
-    | Ack of string * int (* ACK a chunk (filename, chunk_number) *)
-    | Nack of string * int (* NAK of a chunk (filename, chunk_number)
-                              the DS sending this should become permanently
-                              marked as in failure mode and not be sent
-                              any more chunks (probably its disk is full) *)
-
+    | Ack of string * int (* chunk ACK (filename, chunk_number) *)
+    | Nack of string * int (* chunk NAK (filename, chunk_number)
+                              the DS sending this should become
+                              permanently marked as in failure
+                              mode and not be sent any more chunks
+                              (probably its disk is full) *)
   type mds_to_ds =
     (* send order (receiver_ds_rank, filename, chunk_number) *)
-    | Send_to of int * string * int
+    |  Send_to of int * string * int
     | Quit (* DS must exit *)
 
   type ds_to_ds =
@@ -122,16 +122,31 @@ module Protocol = struct
 
   type ds_to_cli = Ok | Already_here | Is_directory | Copy_failed
 
-  type for_MDS =
-    | From_DS of ds_to_mds
-    | From_CLI of cli_to_mds
+  module For_MDS = struct
+    type t = From_DS  of ds_to_mds
+           | From_CLI of cli_to_mds
+    let to_string (m: t): string =
+      Marshal.to_string m [Marshal.No_sharing]
+    let of_string (s: string): t =
+      (Marshal.from_string s 0: t)
+  end
 
-  type for_DS =
-    | From_DS of ds_to_ds
-    | From_CLI of cli_to_ds
-    | From_MDS of mds_to_ds
+  module For_DS = struct
+    type t = From_DS  of ds_to_ds
+           | From_CLI of cli_to_ds
+           | From_MDS of mds_to_ds
+    let to_string (m: t): string =
+      Marshal.to_string m [Marshal.No_sharing]
+    let of_string (s: string): t =
+      (Marshal.from_string s 0: t)
+  end
 
-  type for_CLI =
-    | From_MDS of mds_to_cli
-    | From_DS of ds_to_cli
+  module For_CLI = struct
+    type t = From_MDS of mds_to_cli
+           | From_DS  of ds_to_cli
+    let to_string (m: t): string =
+      Marshal.to_string m [Marshal.No_sharing]
+    let of_string (s: string): t =
+      (Marshal.from_string s 0: t)
+  end
 end
