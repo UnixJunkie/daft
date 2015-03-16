@@ -46,7 +46,7 @@ let main () =
   Logger.set_output Legacy.stdout;
   Logger.color_on ();
   (* setup MDS *)
-  let port = ref 0 in
+  let port = ref Utils.default_mds_port in
   let host = Utils.hostname () in
   let machine_file = ref "" in
   Arg.parse
@@ -69,12 +69,17 @@ let main () =
   let context = ZMQ.Context.create () in
   let socket = ZMQ.Socket.create context ZMQ.Socket.rep in
   let port_str = string_of_int !port in
-  ZMQ.Socket.bind socket ("tcp://*:" ^ port_str);
+  (* let host_and_port = "tcp://" ^ host ^ ":" ^ port_str in *)
+  let host_and_port = "tcp://*:" ^ port_str in
+  (* let host_and_port = "tcp://*:8082" in *)
+  Log.info "binding to %s" host_and_port;
+  ZMQ.Socket.bind socket host_and_port;
   (* loop on messages until quit command *)
   try
-    while true do
+    let not_finished = ref true in
+    while !not_finished do
       let _s = ZMQ.Socket.recv socket in
-      printf "got one message\n";
+      Log.info "got one message";
       (* FBR: decode message *)
       (* FBR: pattern match on its type to process it *)
       Utils.sleep_ms 500; (* fake some work *)
@@ -82,6 +87,7 @@ let main () =
       (* ZMQ.Socket.send socket "World"; *)
     done;
   with exn -> begin
+      Log.error "exception";
       ZMQ.Socket.close socket;
       ZMQ.Context.terminate context;
       raise exn;

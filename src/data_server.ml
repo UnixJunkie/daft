@@ -16,11 +16,11 @@ let uninitialized = -1
 (* setup data server *)
 let ds_log_fn = ref ""
 let ds_host = Utils.hostname ()
-let ds_port = ref uninitialized
+let ds_port = ref Utils.default_ds_port
 let ds_rank = ref uninitialized
-let mds_host = ref ""
-let mds_port = ref uninitialized
-let chunk_size = ref uninitialized (* DAFT global constant *)
+let mds_host = ref "localhost"
+let mds_port = ref Utils.default_mds_port
+let chunk_size = ref Utils.default_chunk_size (* DAFT global constant *)
 let local_state = ref FileSet.empty
 let data_store_root = ref ""
 let local_node = ref (Node.dummy ()) (* this node *)
@@ -112,7 +112,7 @@ let main () =
     Logger.set_output log_out
   end;
   if !chunk_size = uninitialized then (Log.fatal "-cs is mandatory"; exit 1);
-  if !mds_host = "" then (Log.fatal "-s is mandatory"; exit 1);
+  if !mds_host = "" then (Log.fatal "-mds is mandatory"; exit 1);
   if !mds_port = uninitialized then (Log.fatal "-sp is mandatory"; exit 1);
   if !ds_rank = uninitialized then (Log.fatal "-r is mandatory"; exit 1);
   if !ds_port = uninitialized then (Log.fatal "-p is mandatory"; exit 1);
@@ -123,20 +123,23 @@ let main () =
   let context = ZMQ.Context.create () in
   let socket = ZMQ.Socket.create context ZMQ.Socket.req in
   let mds_port_str = string_of_int !mds_port in
-  ZMQ.Socket.connect socket ("tcp://" ^ !mds_host ^ ":" ^ mds_port_str);
+  let host_and_port = "tcp://" ^ !mds_host ^ ":" ^ mds_port_str in
+  Log.info "binding to %s" host_and_port;
+  ZMQ.Socket.connect socket host_and_port;
   (* loop on messages until quit command *)
   (* FBR: join MDS *)
   try
-    while true do
-      printf "Sending Hello ...\n";
+    let not_finished = ref true in
+    while !not_finished do
+      Log.info "Sending Hello ...";
       ZMQ.Socket.send socket "Hello";
-      let _answer = ZMQ.Socket.recv socket in
-      printf "Received answer\n"
+      Utils.sleep_ms 500 (* fake some work *)
     done;
   with exn -> begin
+      Log.info "got exn";
       let (_: int) = delete_data_store !data_store_root in
-      ZMQ.Socket.close socket;
-      ZMQ.Context.terminate context;
+      (* ZMQ.Socket.close socket; *)
+      (* ZMQ.Context.terminate context; *)
       raise exn;
     end
 ;;
