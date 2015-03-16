@@ -1,7 +1,8 @@
 
+let default_mds_host = "*" (* all interfaces (I guess) on the host where the MDS is launched *)
 let default_ds_port = 8081
 let default_mds_port = 8082
-let default_chunk_size = 1_000_000
+let default_chunk_size = 1_000_000 (* bytes *)
 
 let sleep_ms ms =
   let (_, _, _) = Unix.select [] [] [] (float_of_int ms /. 1000.) in
@@ -43,6 +44,10 @@ let with_out_file fn f =
   let res = f output in
   close_out output;
   res
+
+let zmq_cleanup socket context =
+  ZMQ.Socket.close socket;
+  ZMQ.Context.terminate context
 
 open Batteries (* everything before uses Legacy IOs (fast) *)
 
