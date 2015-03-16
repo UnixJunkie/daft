@@ -126,6 +126,8 @@ let main () =
   (* register at the MDS *)
   Log.info "connecting to MDS %s:%d" !mds_host !mds_port;
   let client_context, client_socket = Utils.zmq_client_setup !mds_host !mds_port in
+  let join_request = Proto.For_MDS.to_string (Proto.For_MDS.From_DS (Proto.Join !local_node)) in
+  Sock.send client_socket join_request;
   (* loop on messages until quit command *)
   try
     let not_finished = ref true in
