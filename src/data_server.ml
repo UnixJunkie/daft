@@ -10,6 +10,7 @@ module T = Types
 module Node = Types.Node
 module File = Types.File
 module FileSet = Types.FileSet
+module Proto = T.Protocol
 module Sock = ZMQ.Socket
 
 
@@ -61,9 +62,9 @@ let compute_chunks (size: int64) =
   in
   (nb_chunks, last_chunk_size_opt)
 
-let add_file (fn: string): T.Protocol.ds_to_cli =
-  if FileSet.contains_fn fn !local_state then T.Protocol.Already_here
-  else if Sys.is_directory fn then T.Protocol.Is_directory
+let add_file (fn: string): Proto.ds_to_cli =
+  if FileSet.contains_fn fn !local_state then Proto.Already_here
+  else if Sys.is_directory fn then Proto.Is_directory
   else
     FU.( (* opened FU to get rid of warning 40 *)
       let stat = FU.stat fn in
@@ -80,7 +81,7 @@ let add_file (fn: string): T.Protocol.ds_to_cli =
       FU.cp ~follow:FU.Follow ~force:FU.Force ~recurse:false [fn] dest_fn;
       (* check cp succeeded based on new file's size *)
       let stat' = FU.stat dest_fn in
-      if stat'.size <> stat.size then T.Protocol.Copy_failed
+      if stat'.size <> stat.size then Proto.Copy_failed
       else begin (* update local state *)
         let nb_chunks, last_chunk_size = compute_chunks size in
         (* n.b. we keep the stat struct from the original file *)
@@ -88,7 +89,7 @@ let add_file (fn: string): T.Protocol.ds_to_cli =
           File.create fn size stat nb_chunks last_chunk_size !local_node
         in
         local_state := FileSet.add new_file !local_state;
-        T.Protocol.Ok
+        Proto.Ok
       end
     )
 
