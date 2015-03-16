@@ -1,11 +1,14 @@
 open Batteries
 open Printf
 
+let ds_in_yellow = Utils.fg_yellow ^ "DS" ^ Utils.fg_reset
+
 module Fn = Filename
 module For_MDS = Types.Protocol.For_MDS
 module FU = FileUtil
 module Logger = Log
-module Log = Log.Make(struct let section = "DS" end) (* prefix logs *)
+(* prefix all logs *)
+module Log = Log.Make (struct let section = ds_in_yellow end)
 module S = String
 module Node = Types.Node
 module File = Types.File

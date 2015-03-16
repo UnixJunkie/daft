@@ -1,12 +1,15 @@
 open Batteries
 open Printf
 
+let mds_in_blue = Utils.fg_blue ^ "MDS" ^ Utils.fg_reset
+
 module A = Array
 module For_MDS = Types.Protocol.For_MDS
 module Ht = Hashtbl
 module L = List
 module Logger = Log (* !!! keep this one before Log alias !!! *)
-module Log = Log.Make(struct let section = "MDS" end) (* prefix logs *)
+(* prefix all logs *)
+module Log = Log.Make (struct let section = mds_in_blue end)
 module Node = Types.Node
 module Proto = Types.Protocol
 module Sock = ZMQ.Socket
@@ -29,13 +32,13 @@ let parse_machine_file (fn: string): Node.t list =
     );
   L.rev !res
 
-let data_nodes_array (fn: string): Node.t array =
+let data_nodes_array (fn: string) =
   let machines = parse_machine_file fn in
   let len = L.length machines in
-  let res = A.create len (Node.dummy ()) in
-  L.iter
-    Node.(fun node -> A.set res node.rank node)
-    machines;
+  let dummy_ctx, dummy_sock = Utils.zmq_dummy_client_setup () in
+  let res = A.create len (Node.dummy (), dummy_ctx, dummy_sock) in
+  L.iter (fun node -> A.set res Node.(node.rank) (node, dummy_ctx, dummy_sock)
+         ) machines;
   res
 
 let start_data_nodes () =
@@ -65,14 +68,12 @@ let main () =
   );
   Log.info "MDS: %s:%d" host !port;
   let int2node = data_nodes_array !machine_file in
-  Log.info "MDS: read %d hosts" (A.length int2node);
+  Log.info "MDS: read %d host(s)" (A.length int2node);
   (* start all DSs *) (* FBR: later maybe, we can do this by hand for the moment *)
   (* start server *)
   Log.info "binding server to %s:%d" "*" !port;
   let server_context, server_socket = Utils.zmq_server_setup "*" !port in
-  (* loop on messages until quit command *)
-  let data_nodes = Ht.create 113 in (* rank to ZMQ context and socket *)
-  try
+  try (* loop on messages until quit command *)
     let not_finished = ref true in
     while !not_finished do
       let encoded_request = Sock.recv server_socket in
@@ -82,12 +83,13 @@ let main () =
       (match request with
        | For_MDS.From_DS (Join ds) ->
          (Log.info "DS %s joined" (Node.to_string ds);
-          (* check it is one we expect *)
-          assert(ds = int2node.(Node.(ds.rank)));
-          let ctx_and_sock = Utils.zmq_client_setup Node.(ds.host) Node.(ds.port) in
-          Ht.add data_nodes Node.(ds.rank) ctx_and_sock;
+          (* check it is the one we expect at that rank *)
+          let expected_ds, _, _ = int2node.(Node.(ds.rank)) in
+          assert(ds = expected_ds); (* FBR: should just log error then ignore it *)
+          let ctx, sock = Utils.zmq_client_setup Node.(ds.host) Node.(ds.port) in
+          A.set int2node Node.(ds.rank) (ds, ctx, sock);
           Sock.send server_socket "Join_OK")
-       | _ ->
+       | _ -> (* FBR: match all possible messages explicitely *)
          Log.warn "unmanaged"
       );
       (* FBR: create a HT of sockets for DSs *)
