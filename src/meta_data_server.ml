@@ -67,18 +67,15 @@ let main () =
   Log.info "MDS: read %d hosts" (A.length int2node);
   (* start all DSs *) (* FBR: later maybe, we can do this by hand for the moment *)
   (* start server *)
-  let context = ZMQ.Context.create () in
-  let socket = Sock.create context Sock.rep in
-  let host_and_port = sprintf "tcp://%s:%d" Utils.default_mds_host !port in
-  Log.info "binding to %s" host_and_port;
-  Sock.bind socket host_and_port;
+  Log.info "binding server to %s:%d" "*" !port;
+  let server_context, server_socket = Utils.zmq_server_setup "*" !port in
   (* loop on messages until quit command *)
   try
     let not_finished = ref true in
     while !not_finished do
-      let _s = Sock.recv socket in
+      let _s = Sock.recv server_socket in
       Log.info "got message";
-      Sock.send socket "OK";
+      Sock.send server_socket "OK";
       Log.info "sent answer";
       (* FBR: decode message *)
       (* FBR: pattern match on its type to process it *)
@@ -88,7 +85,7 @@ let main () =
     done;
   with exn -> begin
       Log.error "exception";
-      Utils.zmq_cleanup socket context;
+      Utils.zmq_cleanup server_socket server_context;
       raise exn;
     end
 ;;
