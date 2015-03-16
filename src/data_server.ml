@@ -2,6 +2,7 @@ open Batteries
 open Printf
 
 module Fn = Filename
+module For_MDS = Types.Protocol.For_MDS
 module FU = FileUtil
 module Logger = Log
 module Log = Log.Make(struct let section = "DS" end) (* prefix logs *)
@@ -126,8 +127,10 @@ let main () =
   (* register at the MDS *)
   Log.info "connecting to MDS %s:%d" !mds_host !mds_port;
   let client_context, client_socket = Utils.zmq_client_setup !mds_host !mds_port in
-  let join_request = Proto.For_MDS.to_string (Proto.For_MDS.From_DS (Proto.Join !local_node)) in
+  let join_request = For_MDS.to_string (For_MDS.From_DS (Proto.Join !local_node)) in
   Sock.send client_socket join_request;
+  let join_answer = Sock.recv client_socket in
+  assert(join_answer = "Join_OK");
   (* loop on messages until quit command *)
   try
     let not_finished = ref true in

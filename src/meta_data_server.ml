@@ -2,8 +2,9 @@ open Batteries
 open Printf
 
 module A = Array
+module For_MDS = Types.Protocol.For_MDS
 module L = List
-module Logger = Log
+module Logger = Log (* !!! keep this one before Log alias !!! *)
 module Log = Log.Make(struct let section = "MDS" end) (* prefix logs *)
 module Node = Types.Node
 module Proto = Types.Protocol
@@ -77,9 +78,14 @@ let main () =
       let encoded_request = Sock.recv server_socket in
       let request = Proto.For_MDS.of_string encoded_request in
       Log.info "got message";
-      Sock.send server_socket "OK";
-      Log.info "sent answer";
-      (* FBR: pattern match on its type to process it *)
+      let open Proto in
+      (match request with
+       | For_MDS.From_DS (Join ds) ->
+         (Log.info "DS %s joined" (Node.to_string ds);
+          Sock.send server_socket "Join_OK")
+       | _ ->
+         Log.warn "unmanaged"
+      );
       (* FBR: create a HT of sockets for DSs *)
     done;
   with exn ->
