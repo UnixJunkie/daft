@@ -4,7 +4,7 @@ pkill dft_mds # kill any MDS
 
 pkill dft_ds # kill any DS
 
-./dft_mds -m /dev/null & # one local MDS in background
+./dft_mds -m machines & # one local MDS in background
 
 rm -rf /tmp/*.ds # clean previous datastore
 
