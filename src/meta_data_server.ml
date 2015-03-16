@@ -3,6 +3,7 @@ open Printf
 
 module A = Array
 module For_MDS = Types.Protocol.For_MDS
+module Ht = Hashtbl
 module L = List
 module Logger = Log (* !!! keep this one before Log alias !!! *)
 module Log = Log.Make(struct let section = "MDS" end) (* prefix logs *)
@@ -40,7 +41,6 @@ let data_nodes_array (fn: string): Node.t array =
 let start_data_nodes () =
   (* FBR: scp exe to each node *)
   (* FBR: ssh node to start it *)
-  (* FBR: create a list of sockets for sending; one for each DS *)
   failwith "not implemented yet"
 
 let main () =
@@ -57,13 +57,12 @@ let main () =
       "-m", Arg.Set_string machine_file,
       "machine_file list of [user@]host:port (one per line)" ]
     (fun arg -> raise (Arg.Bad ("Bad argument: " ^ arg)))
-    (sprintf "usage: %s <options>" Sys.argv.(0))
-  ;
+    (sprintf "usage: %s <options>" Sys.argv.(0));
   (* check options *)
-  if !machine_file = "" then begin
+  if !machine_file = "" then (
     Log.fatal "-m is mandatory";
-    exit 1;
-  end;
+    exit 1
+  );
   Log.info "MDS: %s:%d" host !port;
   let int2node = data_nodes_array !machine_file in
   Log.info "MDS: read %d hosts" (A.length int2node);
@@ -72,6 +71,7 @@ let main () =
   Log.info "binding server to %s:%d" "*" !port;
   let server_context, server_socket = Utils.zmq_server_setup "*" !port in
   (* loop on messages until quit command *)
+  let data_nodes = Ht.create 113 in (* rank to ZMQ context and socket *)
   try
     let not_finished = ref true in
     while !not_finished do
@@ -82,6 +82,10 @@ let main () =
       (match request with
        | For_MDS.From_DS (Join ds) ->
          (Log.info "DS %s joined" (Node.to_string ds);
+          (* check it is one we expect *)
+          assert(ds = int2node.(Node.(ds.rank)));
+          let ctx_and_sock = Utils.zmq_client_setup Node.(ds.host) Node.(ds.port) in
+          Ht.add data_nodes Node.(ds.rank) ctx_and_sock;
           Sock.send server_socket "Join_OK")
        | _ ->
          Log.warn "unmanaged"
