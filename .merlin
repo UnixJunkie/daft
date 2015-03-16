@@ -4,4 +4,4 @@ S src
 B dist/build/dft_ds
 B dist/build/dft_mds
 B dist/build/dft_cli
-PKG batteries dolog zmq
+PKG batteries dolog ZMQ
