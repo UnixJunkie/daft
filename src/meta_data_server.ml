@@ -6,6 +6,7 @@ module L = List
 module Logger = Log
 module Log = Log.Make(struct let section = "MDS" end) (* prefix logs *)
 module Node = Types.Node
+module Proto = Types.Protocol
 module Sock = ZMQ.Socket
 
 let parse_machine_line (rank: int) (l: string): Node.t =
@@ -73,21 +74,18 @@ let main () =
   try
     let not_finished = ref true in
     while !not_finished do
-      let _s = Sock.recv server_socket in
+      let encoded_request = Sock.recv server_socket in
+      let request = Proto.For_MDS.of_string encoded_request in
       Log.info "got message";
       Sock.send server_socket "OK";
       Log.info "sent answer";
-      (* FBR: decode message *)
       (* FBR: pattern match on its type to process it *)
-      (* Utils.sleep_ms 500; (\* fake some work *\) *)
-      (* FBR: create a list of sockets for sending; one for each DS;
-              put them in a HT for later reuse *)
+      (* FBR: create a HT of sockets for DSs *)
     done;
-  with exn -> begin
-      Log.error "exception";
-      Utils.zmq_cleanup server_socket server_context;
-      raise exn;
-    end
+  with exn ->
+    (Log.error "exception";
+     Utils.zmq_cleanup server_socket server_context;
+     raise exn)
 ;;
 
 main ()
