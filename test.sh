@@ -1,2 +1,11 @@
-./dft_mds -m /dev/null &
-rm -rf /tmp/0.meleze.ens.fr:8081.ds ; ./dft_ds -r 0 -mds meleze.ens.fr
+# to run local tests
+
+pkill dft_mds # kill any MDS
+
+pkill dft_ds # kill any DS
+
+./dft_mds -m /dev/null & # one local MDS in background
+
+rm -rf /tmp/*.ds # clean previous datastore
+
+./dft_ds -r 0 -mds `hostname -f` # one local DS
