@@ -6,6 +6,7 @@ module L = List
 module Logger = Log
 module Log = Log.Make(struct let section = "MDS" end) (* prefix logs *)
 module Node = Types.Node
+module Sock = ZMQ.Socket
 
 let parse_machine_line (rank: int) (l: string): Node.t =
   let hostname, port = String.split l ":" in
@@ -67,28 +68,27 @@ let main () =
   (* start all DSs *) (* FBR: later maybe, we can do this by hand for the moment *)
   (* start server *)
   let context = ZMQ.Context.create () in
-  let socket = ZMQ.Socket.create context ZMQ.Socket.rep in
+  let socket = Sock.create context Sock.rep in
   let port_str = string_of_int !port in
-  (* let host_and_port = "tcp://" ^ host ^ ":" ^ port_str in *)
-  let host_and_port = "tcp://*:" ^ port_str in
-  (* let host_and_port = "tcp://*:8082" in *)
+  let host_and_port = "tcp://*:" ^ port_str in (* FBR: something else than * doesn't work *)
   Log.info "binding to %s" host_and_port;
-  ZMQ.Socket.bind socket host_and_port;
+  Sock.bind socket host_and_port;
   (* loop on messages until quit command *)
   try
     let not_finished = ref true in
     while !not_finished do
-      let _s = ZMQ.Socket.recv socket in
-      Log.info "got one message";
+      let _s = Sock.recv socket in
+      Log.info "got message";
+      Sock.send socket "OK";
+      Log.info "sent answer";
       (* FBR: decode message *)
       (* FBR: pattern match on its type to process it *)
       Utils.sleep_ms 500; (* fake some work *)
       (* FBR: create a list of sockets for sending; one for each DS *)
-      (* ZMQ.Socket.send socket "World"; *)
     done;
   with exn -> begin
       Log.error "exception";
-      ZMQ.Socket.close socket;
+      Sock.close socket;
       ZMQ.Context.terminate context;
       raise exn;
     end

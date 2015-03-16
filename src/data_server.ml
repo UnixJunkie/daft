@@ -10,6 +10,8 @@ module T = Types
 module Node = Types.Node
 module File = Types.File
 module FileSet = Types.FileSet
+module Sock = ZMQ.Socket
+
 
 let uninitialized = -1
 
@@ -121,24 +123,26 @@ let main () =
   data_store_root := create_data_store ();
   (* start server *)
   let context = ZMQ.Context.create () in
-  let socket = ZMQ.Socket.create context ZMQ.Socket.req in
+  let socket = Sock.create context Sock.req in
   let mds_port_str = string_of_int !mds_port in
   let host_and_port = "tcp://" ^ !mds_host ^ ":" ^ mds_port_str in
   Log.info "binding to %s" host_and_port;
-  ZMQ.Socket.connect socket host_and_port;
+  Sock.connect socket host_and_port;
   (* loop on messages until quit command *)
   (* FBR: join MDS *)
   try
     let not_finished = ref true in
     while !not_finished do
-      Log.info "Sending Hello ...";
-      ZMQ.Socket.send socket "Hello";
+      Sock.send socket "Hello";
+      Log.info "Sent Hello ...";
+      let answer = Sock.recv socket in
+      assert(answer = "OK");
       Utils.sleep_ms 500 (* fake some work *)
     done;
   with exn -> begin
       Log.info "got exn";
       let (_: int) = delete_data_store !data_store_root in
-      (* ZMQ.Socket.close socket; *)
+      (* Sock.close socket; *)
       (* ZMQ.Context.terminate context; *)
       raise exn;
     end
