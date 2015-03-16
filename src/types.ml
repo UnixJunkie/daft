@@ -83,14 +83,14 @@ end
    Compressed mode will be the next priority
    Compressed, Signed and Encrypted can be combined so there is
    a total of eight modes *)
-type storage_mode = Raw | Compressed | Signed | Encrypted
+type storage_mode = Raw | Compressed | Encrypted | Signed
 
 (* the MDS is a master, DSs are its slaves *)
 
 type ds_to_mds_message =
   | Join of Node.t (* a DS registering itself with the MDS *)
   | Ack of string * int (* ACK a chunk (filename, chunk_number) *)
-  | Nack of string * int (* NAK of a chunk (filename, chunk_number) 
+  | Nack of string * int (* NAK of a chunk (filename, chunk_number)
                             the DS sending this should become permanently
                             marked as in failure mode and not be sent
                             any more chunks (probably its disk is full) *)
