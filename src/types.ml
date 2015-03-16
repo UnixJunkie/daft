@@ -85,51 +85,53 @@ end
    a total of eight modes *)
 type storage_mode = Raw | Compressed | Encrypted | Signed
 
-(* the MDS is a master, DSs are its slaves *)
+module Protocol = struct
+  (* the MDS is a master, DSs are its slaves *)
+  (* message types *)
+  type ds_to_mds =
+    | Join of Node.t (* a DS registering itself with the MDS *)
+    | Ack of string * int (* ACK a chunk (filename, chunk_number) *)
+    | Nack of string * int (* NAK of a chunk (filename, chunk_number)
+                              the DS sending this should become permanently
+                              marked as in failure mode and not be sent
+                              any more chunks (probably its disk is full) *)
 
-type ds_to_mds_message =
-  | Join of Node.t (* a DS registering itself with the MDS *)
-  | Ack of string * int (* ACK a chunk (filename, chunk_number) *)
-  | Nack of string * int (* NAK of a chunk (filename, chunk_number)
-                            the DS sending this should become permanently
-                            marked as in failure mode and not be sent
-                            any more chunks (probably its disk is full) *)
+  type mds_to_ds =
+    (* send order (receiver_ds_rank, filename, chunk_number) *)
+    | Send_to of int * string * int
+    | Quit (* DS must exit *)
 
-type mds_to_ds_message =
-  (* send order (receiver_ds_rank, filename, chunk_number) *)
-  | Send_to of int * string * int
-  | Quit (* DS must exit *)
+  type ds_to_ds =
+    (* file chunk (filename, chunk_number, chunk_data) *)
+    | Chunk of string * int * string
 
-type ds_to_ds_message =
-  (* file chunk (filename, chunk_number, chunk_data) *)
-  | Chunk of string * int * string
+  type cli_to_mds =
+    | Add_file of File.t
+    | Ls
+    | Quit (* MDS must then send Quit to all DSs then exit itself *)
 
-type cli_to_mds_message =
-  | Add_file of File.t
-  | Ls
-  | Quit (* MDS must then send Quit to all DSs then exit itself *)
+  type mds_to_cli =
+    | Ls of FileSet.t
 
-type mds_to_cli_message =
-  | Ls of FileSet.t
+  type cli_to_ds =
+    | Add_file of File.t (* if op. is successful,
+                            it will be followed by a
+                            cli_to_mds.Add_file message.
+                            If the Add_file fails, we'll have
+                            to rollback the local datastore *)
 
-type cli_to_ds_message =
-  | Add_file of File.t (* if op. is successful,
-                          it will be followed by a
-                          cli_to_mds.Add_file message.
-                          If the Add_file fails, we'll have
-                          to rollback the local datastore *)
+  type ds_to_cli = Ok | Already_here | Is_directory | Copy_failed
 
-type ds_to_cli_message = Ok | Already_here | Is_directory | Copy_failed
+  type for_MDS =
+    | From_DS of ds_to_mds
+    | From_CLI of cli_to_mds
 
-type for_MDS_message =
-  | From_DS of ds_to_mds_message
-  | From_CLI of cli_to_mds_message
+  type for_DS =
+    | From_DS of ds_to_ds
+    | From_CLI of cli_to_ds
+    | From_MDS of mds_to_ds
 
-type for_DS_message =
-  | From_DS of ds_to_ds_message
-  | From_CLI of cli_to_ds_message
-  | From_MDS of mds_to_ds_message
-
-type for_CLI_message =
-  | From_MDS of mds_to_cli_message
-  | From_DS of ds_to_cli_message
+  type for_CLI =
+    | From_MDS of mds_to_cli
+    | From_DS of ds_to_cli
+end
