@@ -118,14 +118,15 @@ let main () =
   if !ds_rank = uninitialized then (Log.fatal "-r is mandatory"; exit 1);
   if !ds_port = uninitialized then (Log.fatal "-p is mandatory"; exit 1);
   local_node := Node.create !ds_rank ds_host !ds_port;
-  Log.info "Will connect to %s:%d" !mds_host !mds_port;
+  Log.info "Client of MDS %s:%d" !mds_host !mds_port;
   data_store_root := create_data_store ();
   (* start server *)
   let context = ZMQ.Context.create () in
   let socket = Sock.create context Sock.rep in
-  let host_and_port = sprintf "tcp://%s:%d" !mds_host !mds_port in
-  Log.info "binding to %s" host_and_port;
+  let host_and_port = sprintf "tcp://*:%d" !ds_port in
+  Log.info "binding server to %s" host_and_port;
   Sock.bind socket host_and_port;
+  (* register at the MDS with a specific req socket for it *)
   (* loop on messages until quit command *)
   try
     let not_finished = ref true in
