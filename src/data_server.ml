@@ -6,13 +6,11 @@ module FU = FileUtil
 module Logger = Log
 module Log = Log.Make(struct let section = "DS" end) (* prefix logs *)
 module S = String
-module T = Types
 module Node = Types.Node
 module File = Types.File
 module FileSet = Types.FileSet
-module Proto = T.Protocol
+module Proto = Types.Protocol
 module Sock = ZMQ.Socket
-
 
 let uninitialized = -1
 
@@ -124,27 +122,28 @@ let main () =
   data_store_root := create_data_store ();
   (* start server *)
   let context = ZMQ.Context.create () in
-  let socket = Sock.create context Sock.req in
-  let mds_port_str = string_of_int !mds_port in
-  let host_and_port = "tcp://" ^ !mds_host ^ ":" ^ mds_port_str in
+  let socket = Sock.create context Sock.rep in
+  let host_and_port = sprintf "tcp://%s:%d" !mds_host !mds_port in
   Log.info "binding to %s" host_and_port;
-  Sock.connect socket host_and_port;
+  Sock.bind socket host_and_port;
   (* loop on messages until quit command *)
-  (* FBR: join MDS *)
   try
     let not_finished = ref true in
     while !not_finished do
-      Sock.send socket "Hello";
-      Log.info "Sent Hello ...";
-      let answer = Sock.recv socket in
-      assert(answer = "OK");
-      Utils.sleep_ms 500 (* fake some work *)
+      let _s = Sock.recv socket in
+      Log.info "got message";
+      Sock.send socket "OK";
+      Log.info "sent answer";
+      (* FBR: decode message *)
+      (* FBR: pattern match on its type to process it *)
+      (* Utils.sleep_ms 500; (\* fake some work *\) *)
+      (* FBR: create a list of sockets for sending; one for each DS;
+              put them in a HT for later reuse *)
     done;
   with exn -> begin
-      Log.info "got exn";
+      Log.info "exception";
       let (_: int) = delete_data_store !data_store_root in
-      (* Sock.close socket; *)
-      (* ZMQ.Context.terminate context; *)
+      Utils.zmq_cleanup socket context;
       raise exn;
     end
 ;;

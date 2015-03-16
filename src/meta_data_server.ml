@@ -69,8 +69,7 @@ let main () =
   (* start server *)
   let context = ZMQ.Context.create () in
   let socket = Sock.create context Sock.rep in
-  let port_str = string_of_int !port in
-  let host_and_port = "tcp://*:" ^ port_str in (* FBR: something else than * doesn't work *)
+  let host_and_port = sprintf "tcp://%s:%d" Utils.default_mds_host !port in
   Log.info "binding to %s" host_and_port;
   Sock.bind socket host_and_port;
   (* loop on messages until quit command *)
@@ -83,13 +82,13 @@ let main () =
       Log.info "sent answer";
       (* FBR: decode message *)
       (* FBR: pattern match on its type to process it *)
-      Utils.sleep_ms 500; (* fake some work *)
-      (* FBR: create a list of sockets for sending; one for each DS *)
+      (* Utils.sleep_ms 500; (\* fake some work *\) *)
+      (* FBR: create a list of sockets for sending; one for each DS;
+              put them in a HT for later reuse *)
     done;
   with exn -> begin
       Log.error "exception";
-      Sock.close socket;
-      ZMQ.Context.terminate context;
+      Utils.zmq_cleanup socket context;
       raise exn;
     end
 ;;
