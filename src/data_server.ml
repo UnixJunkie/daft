@@ -120,20 +120,17 @@ let main () =
   local_node := Node.create !ds_rank ds_host !ds_port;
   Log.info "Client of MDS %s:%d" !mds_host !mds_port;
   data_store_root := create_data_store ();
-  (* start server *)
-  let context = ZMQ.Context.create () in
-  let socket = Sock.create context Sock.rep in
-  let host_and_port = sprintf "tcp://*:%d" !ds_port in
-  Log.info "binding server to %s" host_and_port;
-  Sock.bind socket host_and_port;
+  (* setup server *)
+  Log.info "binding server to %s:%d" "*" !ds_port;
+  let server_context, server_socket = Utils.zmq_server_setup "*" !ds_port in
   (* register at the MDS with a specific req socket for it *)
   (* loop on messages until quit command *)
   try
     let not_finished = ref true in
     while !not_finished do
-      let _s = Sock.recv socket in
+      let _s = Sock.recv server_socket in
       Log.info "got message";
-      Sock.send socket "OK";
+      Sock.send server_socket "OK";
       Log.info "sent answer";
       (* FBR: decode message *)
       (* FBR: pattern match on its type to process it *)
@@ -144,7 +141,7 @@ let main () =
   with exn -> begin
       Log.info "exception";
       let (_: int) = delete_data_store !data_store_root in
-      Utils.zmq_cleanup socket context;
+      Utils.zmq_cleanup server_socket server_context;
       raise exn;
     end
 ;;
