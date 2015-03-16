@@ -1,4 +1,8 @@
 
+let default_ds_port = 8081
+let default_mds_port = 8082
+let default_chunk_size = 1_000_000
+
 let sleep_ms ms =
   let (_, _, _) = Unix.select [] [] [] (float_of_int ms /. 1000.) in
   ()
