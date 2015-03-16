@@ -1,4 +1,6 @@
 
+open Printf
+
 let default_mds_host = "*" (* all interfaces (I guess) on the host where the MDS is launched *)
 let default_ds_port = 8081
 let default_mds_port = 8082
@@ -44,6 +46,13 @@ let with_out_file fn f =
   let res = f output in
   close_out output;
   res
+
+let zmq_server_setup (hostname: string) (port: int) =
+  let context = ZMQ.Context.create () in
+  let socket = ZMQ.Socket.create context ZMQ.Socket.rep in
+  let host_and_port = sprintf "tcp://%s:%d" hostname port in
+  let () = ZMQ.Socket.bind socket host_and_port in
+  (context, socket)
 
 let zmq_cleanup socket context =
   ZMQ.Socket.close socket;
