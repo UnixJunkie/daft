@@ -123,7 +123,9 @@ let main () =
   (* setup server *)
   Log.info "binding server to %s:%d" "*" !ds_port;
   let server_context, server_socket = Utils.zmq_server_setup "*" !ds_port in
-  (* register at the MDS with a specific req socket for it *)
+  (* register at the MDS *)
+  Log.info "connecting to MDS %s:%d" !mds_host !mds_port;
+  let client_context, client_socket = Utils.zmq_client_setup !mds_host !mds_port in
   (* loop on messages until quit command *)
   try
     let not_finished = ref true in
@@ -142,6 +144,7 @@ let main () =
       Log.info "exception";
       let (_: int) = delete_data_store !data_store_root in
       Utils.zmq_cleanup server_socket server_context;
+      Utils.zmq_cleanup client_socket client_context;
       raise exn;
     end
 ;;
