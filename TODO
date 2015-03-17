@@ -1,3 +1,10 @@
+- add the CLI and send the Quit command to everybody
+
+- before executing a command from the CLI, a DS or MDS
+  should verify the signature of the command.
+  only commands signed with the private key of the user
+  who started DAFT should be executed
+
 - think about the state module and delta of states
   - the MDS will do queries based on filenames
 
