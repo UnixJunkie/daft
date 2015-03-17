@@ -1,3 +1,6 @@
+- complete the listening loop in data_server.ml
+  - pattern match decoded messages, etc.
+
 - add the CLI and send the Quit command to everybody
 
 - before executing a command from the CLI, a DS or MDS
