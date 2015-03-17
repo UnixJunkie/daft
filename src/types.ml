@@ -98,8 +98,9 @@ module Protocol = struct
                               (probably its disk is full) *)
   type mds_to_ds =
     (* send order (receiver_ds_rank, filename, chunk_number) *)
-    |  Send_to of int * string * int
+    | Send_to of int * string * int
     | Quit (* DS must exit *)
+    | Join_Ack (* once a Join was received *)
 
   type ds_to_ds =
     (* file chunk (filename, chunk_number, chunk_data) *)
@@ -124,6 +125,8 @@ module Protocol = struct
 
  (* FBR: create send_request and send_answer to encapsulate communications
          and prevent people from sending raw strings on the ZMQ sockets *)
+
+  (* modules useful when sending a message *)
 
   module From_MDS = struct
     type t = To_DS  of mds_to_ds
@@ -152,4 +155,35 @@ module Protocol = struct
     let decode (s: string): t =
       (Marshal.from_string s 0: t)
   end
+
+  (* modules useful when receiving a message *)
+
+  module For_MDS = struct
+    type t = From_DS  of ds_to_mds
+           | From_CLI of cli_to_mds
+    let encode (m: t): string =
+      Marshal.to_string m [Marshal.No_sharing]
+    let decode (s: string): t =
+      (Marshal.from_string s 0: t)
+  end
+
+  module For_DS = struct
+    type t = From_MDS of mds_to_ds
+           | From_DS  of ds_to_ds
+           | From_CLI of cli_to_ds
+    let encode (m: t): string =
+      Marshal.to_string m [Marshal.No_sharing]
+    let decode (s: string): t =
+      (Marshal.from_string s 0: t)
+  end
+
+  module For_CLI = struct
+    type t = From_MDS of mds_to_cli
+           | From_DS  of ds_to_cli
+    let encode (m: t): string =
+      Marshal.to_string m [Marshal.No_sharing]
+    let decode (s: string): t =
+      (Marshal.from_string s 0: t)
+  end
+
 end

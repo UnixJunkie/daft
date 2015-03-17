@@ -5,6 +5,7 @@ let ds_in_yellow = Utils.fg_yellow ^ "DS" ^ Utils.fg_reset
 
 module Fn = Filename
 module From_DS = Types.Protocol.From_DS
+module From_MDS = Types.Protocol.From_MDS
 module FU = FileUtil
 module Logger = Log
 (* prefix all logs *)
@@ -133,7 +134,7 @@ let main () =
   let join_request = From_DS.encode (From_DS.To_MDS (Proto.Join !local_node)) in
   Sock.send client_socket join_request;
   let join_answer = Sock.recv client_socket in
-  assert(join_answer = "Join_OK");
+  assert(From_MDS.decode join_answer = Proto.From_MDS.To_DS Proto.Join_Ack);
   (* loop on messages until quit command *)
   try
     let not_finished = ref true in

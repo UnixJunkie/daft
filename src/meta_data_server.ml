@@ -89,7 +89,8 @@ let main () =
           assert(ds = expected_ds); (* FBR: should just log error then ignore it *)
           let ctx, sock = Utils.zmq_client_setup Node.(ds.host) Node.(ds.port) in
           A.set int2node Node.(ds.rank) (ds, ctx, sock);
-          Sock.send server_socket "Join_OK")
+          let join_answer = From_MDS.(encode (To_DS Proto.Join_Ack)) in
+          Sock.send server_socket join_answer)
        | _ -> (* FBR: match all possible messages explicitely *)
          Log.warn "unmanaged"
       );
