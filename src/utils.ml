@@ -59,8 +59,9 @@ let with_out_file fn f =
   close_out output;
   res
 
-(* ZMQ.Socket.rep server setup *)
-let zmq_server_setup (host: string) (port: int) =
+let zmq_server_setup (host: string) (port: int):
+  ZMQ.Context.t * ([`Rep] ZMQ.Socket.t)
+  =
   try
     let context = ZMQ.Context.create () in
     let socket = ZMQ.Socket.create context ZMQ.Socket.rep in
@@ -71,15 +72,16 @@ let zmq_server_setup (host: string) (port: int) =
     (Log.fatal "(%s, %s, %s)" (Unix.error_message err) fun_name fun_param;
      exit 1)
 
-(* ZMQ.Socket.req socket setup; for any client of a rep server *)
-let zmq_client_setup (host: string) (port: int) =
+let zmq_client_setup (host: string) (port: int):
+  ZMQ.Context.t * ([`Req] ZMQ.Socket.t)
+  =
   let context = ZMQ.Context.create () in
   let socket = ZMQ.Socket.create context ZMQ.Socket.req in
   let host_and_port = sprintf "tcp://%s:%d" host port in
   let () = ZMQ.Socket.connect socket host_and_port in
   (context, socket)
 
-let zmq_dummy_client_setup () =
+let zmq_dummy_client_setup (): ZMQ.Context.t * ([`Req] ZMQ.Socket.t) =
   let context = ZMQ.Context.create () in
   let socket = ZMQ.Socket.create context ZMQ.Socket.req in
   (context, socket)
