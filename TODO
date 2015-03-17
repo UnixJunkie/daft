@@ -1,6 +1,3 @@
-
-- do a simple example using zeromq
-
 - think about the state module and delta of states
   - the MDS will do queries based on filenames
 
