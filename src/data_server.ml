@@ -145,9 +145,7 @@ let main () =
       Log.info "sent answer";
       (* FBR: decode message *)
       (* FBR: pattern match on its type to process it *)
-      (* Utils.sleep_ms 500; (\* fake some work *\) *)
-      (* FBR: create a list of sockets for sending; one for each DS;
-              put them in a HT for later reuse *)
+      (* FBR: create a table of DS sockets for sending *)
     done;
   with exn -> begin
       Log.info "exception";
