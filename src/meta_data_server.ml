@@ -81,16 +81,19 @@ let main () =
       Log.debug "got request";
       (match request with
        | For_MDS.From_DS (Join ds) ->
-         (Log.info "DS %s joined" (Node.to_string ds);
-          let ds_rank, ds_host, ds_port = Node.to_triplet ds in
-          (* check it is the one we expect at that rank *)
-          let expected_ds, _, _ = int2node.(ds_rank) in
-          assert(ds = expected_ds); (* FBR: just log error then ignore it *)
-          (* remember him for the future in case that was not yet done *)
-          let ctx, sock = Utils.zmq_client_setup ds_host ds_port in
-          A.set int2node ds_rank (ds, ctx, sock);
-          let join_answer = From_MDS.(encode (To_DS Join_Ack)) in
-          Sock.send server_socket join_answer)
+         let ds_as_string = Node.to_string ds in
+         Log.info "DS %s Join request" ds_as_string;
+         let ds_rank, ds_host, ds_port = Node.to_triplet ds in
+         (* check it is the one we expect at that rank *)
+         let expected_ds, _, _ = int2node.(ds_rank) in
+         if ds = expected_ds then
+           (* remember him for the future in case it was not yet done *)
+           let ctx, sock = Utils.zmq_client_setup ds_host ds_port in
+           A.set int2node ds_rank (ds, ctx, sock);
+           let join_answer = From_MDS.(encode (To_DS Join_Ack)) in
+           Sock.send server_socket join_answer
+         else
+           Log.warn "suspicious Join request from %s" ds_as_string
        | For_MDS.From_DS (Ack (_fn, _chunk)) -> abort "Ack"
        | For_MDS.From_DS (Nack (_fn, _chunk)) -> abort "Nack"
        | For_MDS.From_CLI Add_file _f -> abort "Add_file"
