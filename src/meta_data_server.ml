@@ -2,7 +2,7 @@ open Batteries
 open Printf
 open Types.Protocol
 
-let mds_in_blue = Utils.fg_blue ^ "MDS" ^ Utils.fg_reset
+let mds_in_blue = Utils.fg_cyan ^ "MDS" ^ Utils.fg_reset
 
 module A = Array
 module Ht = Hashtbl
@@ -34,9 +34,8 @@ let parse_machine_file (fn: string): Node.t list =
 let data_nodes_array (fn: string) =
   let machines = parse_machine_file fn in
   let len = L.length machines in
-  let dummy_ctx, dummy_sock = Utils.zmq_dummy_client_setup () in
-  let res = A.create len (Node.dummy (), dummy_ctx, dummy_sock) in
-  L.iter (fun node -> A.set res Node.(node.rank) (node, dummy_ctx, dummy_sock)
+  let res = A.create len (Node.dummy (), None) in
+  L.iter (fun node -> A.set res (Node.get_rank node) (node, None)
          ) machines;
   res
 
@@ -78,29 +77,35 @@ let main () =
     while !not_finished do
       let encoded_request = Sock.recv server_socket in
       let request = For_MDS.decode encoded_request in
-      Log.debug "got request";
-      (match request with
+      Log.debug "got req";
+      begin match request with
        | For_MDS.From_DS (Join ds) ->
          let ds_as_string = Node.to_string ds in
-         Log.info "DS %s Join request" ds_as_string;
+         Log.info "DS %s Join req" ds_as_string;
          let ds_rank, ds_host, ds_port = Node.to_triplet ds in
          (* check it is the one we expect at that rank *)
-         let expected_ds, _, _ = int2node.(ds_rank) in
-         if ds = expected_ds then
-           (* remember him for the future in case it was not yet done *)
-           let ctx, sock = Utils.zmq_client_setup ds_host ds_port in
-           A.set int2node ds_rank (ds, ctx, sock);
-           let join_answer = From_MDS.(encode (To_DS Join_Ack)) in
-           Sock.send server_socket join_answer
-         else
-           Log.warn "suspicious Join request from %s" ds_as_string
+         let expected_ds, prev_ctx_sock = int2node.(ds_rank) in
+         begin match prev_ctx_sock with
+         | Some _ -> Log.warn "%s already joined" ds_as_string
+         | None -> (* remember him for the future *)
+           if ds = expected_ds then
+             let ctx, sock = Utils.zmq_client_setup ds_host ds_port in
+             A.set int2node ds_rank (ds, Some (ctx, sock));
+             let join_answer = From_MDS.(encode (To_DS Join_Ack)) in
+             Sock.send server_socket join_answer
+           else
+             let join_answer = From_MDS.(encode (To_DS Join_Nack)) in
+             Log.warn "suspicious Join req from %s" ds_as_string;
+             Sock.send server_socket join_answer
+         end
        | For_MDS.From_DS (Ack (_fn, _chunk)) -> abort "Ack"
        | For_MDS.From_DS (Nack (_fn, _chunk)) -> abort "Nack"
        | For_MDS.From_CLI Add_file _f -> abort "Add_file"
        | For_MDS.From_CLI Ls -> abort "Ls"
-       | For_MDS.From_CLI Quit -> not_finished := true
-      );
-    done;
+       | For_MDS.From_CLI Quit ->
+         not_finished := true
+      end
+    done
   with exn ->
     (Log.error "exception";
      Utils.zmq_cleanup server_socket server_context;
