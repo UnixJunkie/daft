@@ -145,7 +145,8 @@ let main () =
       Log.info "sent answer";
       (* FBR: decode message *)
       (* FBR: pattern match on its type to process it *)
-      (* FBR: create a table of DS sockets for sending *)
+      (* FBR: create a table of DS sockets for sending
+              --> we must know at startup time the max number of DSs that will join *)
     done;
   with exn -> begin
       Log.info "exception";
