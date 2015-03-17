@@ -1,18 +1,16 @@
 open Batteries
 open Printf
+open Types.Protocol
 
 let mds_in_blue = Utils.fg_blue ^ "MDS" ^ Utils.fg_reset
 
 module A = Array
-module From_MDS = Types.Protocol.From_MDS
-module From_DS = Types.Protocol.From_DS
 module Ht = Hashtbl
 module L = List
 module Logger = Log (* !!! keep this one before Log alias !!! *)
 (* prefix all logs *)
 module Log = Log.Make (struct let section = mds_in_blue end)
 module Node = Types.Node
-module Proto = Types.Protocol
 module Sock = ZMQ.Socket
 
 let parse_machine_line (rank: int) (l: string): Node.t =
@@ -47,6 +45,10 @@ let start_data_nodes () =
   (* FBR: ssh node to start it *)
   failwith "not implemented yet"
 
+let abort msg =
+  Log.fatal msg;
+  exit 1
+
 let main () =
   (* setup logger *)
   Logger.set_log_level Logger.DEBUG;
@@ -63,10 +65,7 @@ let main () =
     (fun arg -> raise (Arg.Bad ("Bad argument: " ^ arg)))
     (sprintf "usage: %s <options>" Sys.argv.(0));
   (* check options *)
-  if !machine_file = "" then (
-    Log.fatal "-m is mandatory";
-    exit 1
-  );
+  if !machine_file = "" then abort "-m is mandatory";
   Log.info "MDS: %s:%d" host !port;
   let int2node = data_nodes_array !machine_file in
   Log.info "MDS: read %d host(s)" (A.length int2node);
@@ -78,21 +77,25 @@ let main () =
     let not_finished = ref true in
     while !not_finished do
       let encoded_request = Sock.recv server_socket in
-      let request = From_DS.decode encoded_request in
-      Log.info "got message";
-      let open Proto in
+      let request = For_MDS.decode encoded_request in
+      Log.debug "got request";
       (match request with
-       | From_DS.To_MDS (Join ds) ->
+       | For_MDS.From_DS (Join ds) ->
          (Log.info "DS %s joined" (Node.to_string ds);
+          let ds_rank, ds_host, ds_port = Node.to_triplet ds in
           (* check it is the one we expect at that rank *)
-          let expected_ds, _, _ = int2node.(Node.(ds.rank)) in
-          assert(ds = expected_ds); (* FBR: should just log error then ignore it *)
-          let ctx, sock = Utils.zmq_client_setup Node.(ds.host) Node.(ds.port) in
-          A.set int2node Node.(ds.rank) (ds, ctx, sock);
-          let join_answer = From_MDS.(encode (To_DS Proto.Join_Ack)) in
+          let expected_ds, _, _ = int2node.(ds_rank) in
+          assert(ds = expected_ds); (* FBR: just log error then ignore it *)
+          (* remember him for the future in case that was not yet done *)
+          let ctx, sock = Utils.zmq_client_setup ds_host ds_port in
+          A.set int2node ds_rank (ds, ctx, sock);
+          let join_answer = From_MDS.(encode (To_DS Join_Ack)) in
           Sock.send server_socket join_answer)
-       | _ -> (* FBR: match all possible messages explicitely *)
-         Log.warn "unmanaged"
+       | For_MDS.From_DS (Ack (_fn, _chunk)) -> abort "Ack"
+       | For_MDS.From_DS (Nack (_fn, _chunk)) -> abort "Nack"
+       | For_MDS.From_CLI Add_file _f -> abort "Add_file"
+       | For_MDS.From_CLI Ls -> abort "Ls"
+       | For_MDS.From_CLI Quit -> not_finished := true
       );
     done;
   with exn ->
