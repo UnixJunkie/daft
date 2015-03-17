@@ -78,7 +78,7 @@ let main () =
     let not_finished = ref true in
     while !not_finished do
       let encoded_request = Sock.recv server_socket in
-      let request = From_DS.of_string encoded_request in
+      let request = From_DS.decode encoded_request in
       Log.info "got message";
       let open Proto in
       (match request with

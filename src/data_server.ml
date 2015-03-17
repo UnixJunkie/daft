@@ -130,7 +130,7 @@ let main () =
   (* register at the MDS *)
   Log.info "connecting to MDS %s:%d" !mds_host !mds_port;
   let client_context, client_socket = Utils.zmq_client_setup !mds_host !mds_port in
-  let join_request = From_DS.to_string (From_DS.To_MDS (Proto.Join !local_node)) in
+  let join_request = From_DS.encode (From_DS.To_MDS (Proto.Join !local_node)) in
   Sock.send client_socket join_request;
   let join_answer = Sock.recv client_socket in
   assert(join_answer = "Join_OK");
