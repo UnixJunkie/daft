@@ -122,28 +122,31 @@ module Protocol = struct
 
   type ds_to_cli = Ok | Already_here | Is_directory | Copy_failed
 
-  module For_MDS = struct
-    type t = From_DS  of ds_to_mds
-           | From_CLI of cli_to_mds
+ (* FBR: create send_request and send_answer to encapsulate communications
+         and prevent people from sending raw strings on the ZMQ sockets *)
+
+  module From_MDS = struct
+    type t = To_DS  of mds_to_ds
+           | To_CLI of mds_to_cli
     let to_string (m: t): string =
       Marshal.to_string m [Marshal.No_sharing]
     let of_string (s: string): t =
       (Marshal.from_string s 0: t)
   end
 
-  module For_DS = struct
-    type t = From_DS  of ds_to_ds
-           | From_CLI of cli_to_ds
-           | From_MDS of mds_to_ds
+  module From_DS = struct
+    type t = To_MDS of ds_to_mds
+           | To_DS  of ds_to_ds
+           | To_CLI of ds_to_cli
     let to_string (m: t): string =
       Marshal.to_string m [Marshal.No_sharing]
     let of_string (s: string): t =
       (Marshal.from_string s 0: t)
   end
 
-  module For_CLI = struct
-    type t = From_MDS of mds_to_cli
-           | From_DS  of ds_to_cli
+  module From_CLI = struct
+    type t = To_MDS of cli_to_mds
+           | To_DS  of cli_to_ds
     let to_string (m: t): string =
       Marshal.to_string m [Marshal.No_sharing]
     let of_string (s: string): t =

@@ -4,7 +4,8 @@ open Printf
 let mds_in_blue = Utils.fg_blue ^ "MDS" ^ Utils.fg_reset
 
 module A = Array
-module For_MDS = Types.Protocol.For_MDS
+module From_MDS = Types.Protocol.From_MDS
+module From_DS = Types.Protocol.From_DS
 module Ht = Hashtbl
 module L = List
 module Logger = Log (* !!! keep this one before Log alias !!! *)
@@ -77,11 +78,11 @@ let main () =
     let not_finished = ref true in
     while !not_finished do
       let encoded_request = Sock.recv server_socket in
-      let request = Proto.For_MDS.of_string encoded_request in
+      let request = From_DS.of_string encoded_request in
       Log.info "got message";
       let open Proto in
       (match request with
-       | For_MDS.From_DS (Join ds) ->
+       | From_DS.To_MDS (Join ds) ->
          (Log.info "DS %s joined" (Node.to_string ds);
           (* check it is the one we expect at that rank *)
           let expected_ds, _, _ = int2node.(Node.(ds.rank)) in
@@ -92,7 +93,6 @@ let main () =
        | _ -> (* FBR: match all possible messages explicitely *)
          Log.warn "unmanaged"
       );
-      (* FBR: create a HT of sockets for DSs *)
     done;
   with exn ->
     (Log.error "exception";
