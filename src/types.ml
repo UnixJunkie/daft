@@ -12,8 +12,16 @@ module Node = struct
     { rank; host; port }
   let dummy () =
     { rank = -1; host = "dummy_hostname"; port = -1 }
+  let get_rank n =
+    n.rank
+  let get_host n =
+    n.host
+  let get_port n =
+    n.port
   let to_string n =
     sprintf "%d.%s:%d" n.rank n.host n.port
+  let to_triplet n =
+    (n.rank, n.host, n.port)
   let of_string s =
     Scanf.sscanf s "%d.%s:%d" create
   let compare n1 n2 =
