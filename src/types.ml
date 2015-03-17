@@ -108,7 +108,8 @@ module Protocol = struct
     (* send order (receiver_ds_rank, filename, chunk_number) *)
     | Send_to of int * string * int
     | Quit (* DS must exit *)
-    | Join_Ack (* once a Join was received *)
+    | Join_Ack (* Join was received *)
+    | Join_Nack (* Join was received from an unexpected DS *)
 
   type ds_to_ds =
     (* file chunk (filename, chunk_number, chunk_data) *)
