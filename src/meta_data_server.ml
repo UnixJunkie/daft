@@ -103,7 +103,9 @@ let main () =
        | For_MDS.From_CLI Add_file _f -> abort "Add_file"
        | For_MDS.From_CLI Ls -> abort "Ls"
        | For_MDS.From_CLI Quit ->
-         not_finished := true
+         let _ = Log.info "got Quit" in
+         (* FBR: send Quit_Ack *)
+         not_finished := false
       end
     done
   with exn ->
