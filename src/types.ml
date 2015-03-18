@@ -90,7 +90,11 @@ end
 (* only support Raw mode until all commands are properly working
    Compressed mode will be the next priority
    Compressed, Signed and Encrypted can be combined so there is
-   a total of eight modes *)
+   a total of eight modes
+   signing alone could provide some sort of authentication for
+   commands which allow to control the state of the system; an
+   attacker could observe the system if he is on the same network
+   but not control it *)
 type storage_mode = Raw | Compressed | Encrypted | Signed
 
 module Protocol = struct
