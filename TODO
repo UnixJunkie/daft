@@ -1,23 +1,47 @@
+TODO
+====
 
-- add the CLI and send the Quit command to everybody
+- create CLI and send the Quit command to everybody
 
-- before executing a command from the CLI, a DS or MDS
-  should verify the signature of the command.
-  only commands signed with the private key of the user
-  who started DAFT should be executed
+- MDS should know the DSs' pull sockets and have a corresponding
+  push socket for each of them
+- the DS should know the MDS' pull socket and have a corresponding
+  push socket
+  - it should also know the pull socket of all other DSs and have
+    a corresponding push socket for each of them
 
-- think about the state module and delta of states
-  - the MDS will do queries based on filenames
+(* Socket to receive messages on *)
+let receiver = Socket.create context Socket.pull in
+Socket.connect receiver "tcp://localhost:5557";
+
+(* Socket to send messages to *)
+let sender = Socket.create context Socket.push in
+Socket.connect sender "tcp://localhost:5558";
+
+COMMANDS SEMANTICS
+==================
 
 1) start
    - the MDS
-   - then all DSs
+   - then the MDS starts all DSs
 
 2) quit
-   - all DSs
-   - then the MDS
+   - the MDS receives a quit command from the CLI
+   - it send the quit command to all DSs
+   - each DS quit upon reception of the quit command
 
-3) put
-   - a small file
-   - a big file
-   - a directory
+3) put a file
+
+4) put a directory
+   TODO: recursive put file on all the content of the dir
+
+SECURITY
+========
+
+- before executing a command from the CLI, a DS or MDS
+  could verify the signature of the command.
+  only commands signed with the private key of the user
+  who started DAFT should be executed
+
+- the MDS will do queries based on filenames
+  - chunks should be stored in a data structure that is cheap to randomize
