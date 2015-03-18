@@ -1,5 +1,6 @@
 open Batteries
 open Printf
+open Types.Protocol
 
 let ds_in_yellow = Utils.fg_yellow ^ "DS" ^ Utils.fg_reset
 
@@ -14,7 +15,6 @@ module S = String
 module Node = Types.Node
 module File = Types.File
 module FileSet = Types.FileSet
-module Proto = Types.Protocol
 module Sock = ZMQ.Socket
 
 let uninitialized = -1
@@ -30,6 +30,10 @@ let chunk_size = ref Utils.default_chunk_size (* DAFT global constant *)
 let local_state = ref FileSet.empty
 let data_store_root = ref ""
 let local_node = ref (Node.dummy ()) (* this node *)
+
+let abort msg =
+  Log.fatal msg;
+  exit 1
 
 (* create local data store with unix UGO rights 700
    we take into account the port so that several DSs can be started on one
@@ -65,9 +69,9 @@ let compute_chunks (size: int64) =
   in
   (nb_chunks, last_chunk_size_opt)
 
-let add_file (fn: string): Proto.ds_to_cli =
-  if FileSet.contains_fn fn !local_state then Proto.Already_here
-  else if Sys.is_directory fn then Proto.Is_directory
+let add_file (fn: string): ds_to_cli =
+  if FileSet.contains_fn fn !local_state then Already_here
+  else if Sys.is_directory fn then Is_directory
   else
     FU.( (* opened FU to get rid of warning 40 *)
       let stat = FU.stat fn in
@@ -84,7 +88,7 @@ let add_file (fn: string): Proto.ds_to_cli =
       FU.cp ~follow:FU.Follow ~force:FU.Force ~recurse:false [fn] dest_fn;
       (* check cp succeeded based on new file's size *)
       let stat' = FU.stat dest_fn in
-      if stat'.size <> stat.size then Proto.Copy_failed
+      if stat'.size <> stat.size then Copy_failed
       else begin (* update local state *)
         let nb_chunks, last_chunk_size = compute_chunks size in
         (* n.b. we keep the stat struct from the original file *)
@@ -92,7 +96,7 @@ let add_file (fn: string): Proto.ds_to_cli =
           File.create fn size stat nb_chunks last_chunk_size !local_node
         in
         local_state := FileSet.add new_file !local_state;
-        Proto.Ok
+        Ok
       end
     )
 
@@ -131,22 +135,32 @@ let main () =
   (* register at the MDS *)
   Log.info "connecting to MDS %s:%d" !mds_host !mds_port;
   let client_context, client_socket = Utils.zmq_client_setup !mds_host !mds_port in
-  let join_request = From_DS.encode (From_DS.To_MDS (Proto.Join !local_node)) in
+  let join_request = From_DS.encode (From_DS.To_MDS (Join !local_node)) in
   Sock.send client_socket join_request;
   let join_answer = Sock.recv client_socket in
-  assert(From_MDS.decode join_answer = Proto.From_MDS.To_DS Proto.Join_Ack);
+  assert(From_MDS.decode join_answer = From_MDS.To_DS Join_Ack);
   (* loop on messages until quit command *)
+  (* FBR: create an array of DS sockets for sending
+          --> we must know at startup time the max number of DSs that will join *)
   try
     let not_finished = ref true in
     while !not_finished do
-      let _s = Sock.recv server_socket in
-      Log.info "got message";
-      Sock.send server_socket "OK";
-      Log.info "sent answer";
-      (* FBR: decode message *)
-      (* FBR: pattern match on its type to process it *)
-      (* FBR: create a table of DS sockets for sending
-              --> we must know at startup time the max number of DSs that will join *)
+      let encoded_request = Sock.recv server_socket in
+      let request = For_DS.decode encoded_request in
+      Log.debug "got req";
+      begin match request with
+        | For_DS.From_MDS (Send_to (_ds_rank, _fn, _chunk)) ->
+          failwith "not implemented yet"
+        | For_DS.From_MDS Quit ->
+          let _ = Log.info "got Quit" in
+          (* FBR: send Quit_Ack *)
+          not_finished := false
+        | For_DS.From_MDS Join_Ack -> failwith "not implemented yet"
+        | For_DS.From_MDS Join_Nack ->
+          abort "got Join_Nack"
+        | For_DS.From_DS  _ (* ds_to_ds *) -> failwith "not implemented yet"
+        | For_DS.From_CLI _ (* cli_to_ds *) -> failwith "not implemented yet"
+      end
     done;
   with exn -> begin
       Log.info "exception";
