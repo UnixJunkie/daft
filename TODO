@@ -1,5 +1,3 @@
-- complete the listening loop in data_server.ml
-  - pattern match decoded messages, etc.
 
 - add the CLI and send the Quit command to everybody
 
