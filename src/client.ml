@@ -21,17 +21,10 @@ let ds_host = ref (Utils.hostname ())
 let ds_port = ref Utils.default_ds_port
 let mds_host = ref "localhost"
 let mds_port = ref Utils.default_mds_port
-let cli_port = ref Utils.default_cli_port
 
 let abort msg =
   Log.fatal msg;
   exit 1
-
-(* FBR: put this in Utils *)
-let set_host_port (host_ref: string ref) (port_ref: int ref) (s: string) =
-  let host, port = Utils.string_to_host_port s in
-  host_ref := host;
-  port_ref := port
 
 let main () =
   (* setup logger *)
@@ -40,9 +33,9 @@ let main () =
   Logger.color_on ();
   (* options parsing *)
   Arg.parse
-    [ "-mds", Arg.String (set_host_port mds_host mds_port),
+    [ "-mds", Arg.String (Utils.set_host_port mds_host mds_port),
       "<host:port> MDS";
-      "-ds", Arg.String (set_host_port ds_host ds_port),
+      "-ds", Arg.String (Utils.set_host_port ds_host ds_port),
       "<host:port> local DS" ]
     (fun arg -> raise (Arg.Bad ("Bad argument: " ^ arg)))
     (sprintf "usage: %s <options>" Sys.argv.(0));
