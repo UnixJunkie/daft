@@ -165,8 +165,8 @@ let main () =
   with exn -> begin
       Log.info "exception";
       let (_: int) = delete_data_store !data_store_root in
-      Utils.zmq_cleanup server_socket server_context;
-      Utils.zmq_cleanup client_socket client_context;
+      Utils.zmq_cleanup server_context server_socket;
+      Utils.zmq_cleanup client_context client_socket;
       raise exn;
     end
 ;;
