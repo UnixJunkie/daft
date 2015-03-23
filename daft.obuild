@@ -5,22 +5,22 @@ License: CeCILL-C
 Synopsis: DAFT Allows File Transfers
 obuild-ver: 1
 
-# Command Line Interface
-Executable dft_cli
+# Command Line Interface (CLI)
+Executable daft_cli
   oflags: -bin-annot -w +27 -warn-error +8 -g
   path: src
   build-deps: dolog, batteries, fileutils, ZMQ
-  main-is: dft_cli.ml
+  main-is: client.ml
 
-# Meta Data Server
-Executable dft_mds
+# Meta Data Server (MDS)
+Executable daft_mds
   oflags: -bin-annot -w +27 -warn-error +8 -g
   path: src
   build-deps: dolog, batteries, fileutils, ZMQ
   main-is: meta_data_server.ml
 
-# Data Server
-Executable dft_ds
+# Data Server (DS)
+Executable daft_ds
   oflags: -bin-annot -w +27 -warn-error +8 -g
   path: src
   build-deps: dolog, batteries, fileutils, ZMQ
