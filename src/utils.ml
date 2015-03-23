@@ -86,7 +86,7 @@ let zmq_dummy_client_setup (): ZMQ.Context.t * ([`Req] ZMQ.Socket.t) =
   let socket = ZMQ.Socket.create context ZMQ.Socket.req in
   (context, socket)
 
-let zmq_cleanup socket context =
+let zmq_cleanup context socket =
   ZMQ.Socket.close socket;
   ZMQ.Context.terminate context
 
@@ -96,3 +96,12 @@ let hostname (): string =
   let stat, res = run_and_read "hostname -f" in
   assert(stat = Unix.WEXITED 0);
   String.strip res (* rm trailing \n *)
+
+let string_to_host_port (s: string): string * int =
+  let host, port_str = BatString.split ~by:":" s in
+  (host, int_of_string port_str)
+
+let set_host_port (host_ref: string ref) (port_ref: int ref) (s: string) =
+  let host, port = string_to_host_port s in
+  host_ref := host;
+  port_ref := port
