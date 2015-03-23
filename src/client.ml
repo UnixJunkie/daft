@@ -6,12 +6,9 @@ open Printf
 open Types.Protocol
 
 module Fn = Filename
-module From_DS = Types.Protocol.From_DS
-module From_MDS = Types.Protocol.From_MDS
 module FU = FileUtil
 module Logger = Log
-(* prefix all logs *)
-module Log = Log.Make (struct let section = "CLI" end)
+module Log = Log.Make (struct let section = "CLI" end) (* prefix all logs *)
 module S = String
 module Node = Types.Node
 module File = Types.File
@@ -20,15 +17,21 @@ module Sock = ZMQ.Socket
 
 let uninitialized = -1
 
-let ds_host = Utils.hostname ()
+let ds_host = ref (Utils.hostname ())
 let ds_port = ref Utils.default_ds_port
-let cli_port = ref Utils.default_cli_port
 let mds_host = ref "localhost"
 let mds_port = ref Utils.default_mds_port
+let cli_port = ref Utils.default_cli_port
 
 let abort msg =
   Log.fatal msg;
   exit 1
+
+(* FBR: put this in Utils *)
+let set_host_port (host_ref: string ref) (port_ref: int ref) (s: string) =
+  let host, port = Utils.string_to_host_port s in
+  host_ref := host;
+  port_ref := port
 
 let main () =
   (* setup logger *)
@@ -37,45 +40,46 @@ let main () =
   Logger.color_on ();
   (* options parsing *)
   Arg.parse
-    [ "-mds", Arg.Set_string mds_host, "<server:port> MDS host";
-      "-ds", Arg.Set_int mds_port, "<port> local DS port" ]
+    [ "-mds", Arg.String (set_host_port mds_host mds_port),
+      "<host:port> MDS";
+      "-ds", Arg.String (set_host_port ds_host ds_port),
+      "<host:port> local DS" ]
     (fun arg -> raise (Arg.Bad ("Bad argument: " ^ arg)))
-    (sprintf "usage: %s <options>" Sys.argv.(0))
-  ;
+    (sprintf "usage: %s <options>" Sys.argv.(0));
   (* check options *)
   if !mds_host = "" || !mds_port = uninitialized then abort "-mds is mandatory";
-  if !ds_port = uninitialized then abort "-ds is mandatory";
+  if !ds_host = "" || !ds_port = uninitialized then abort "-ds is mandatory";
   Log.info "Client of MDS %s:%d" !mds_host !mds_port;
-  Log.info "binding server to %s:%d" "*" !ds_port;
-  let mds_client_context, mds_client_socket = Utils.zmq_client_setup !mds_host !mds_port in
-  let ds_client_context, ds_client_socket = Utils.zmq_client_setup "*" !ds_port in
-  (* loop on user commands until quit command *)
+  let mds_client_context, mds_client_socket =
+    Utils.zmq_client_setup !mds_host !mds_port
+  in
+  (* let ds_client_context, ds_client_socket = *)
+  (*   Utils.zmq_client_setup (Utils.hostname ()) !ds_port *)
+  (* in *)
+  (* the CLI execute just one command then exit *)
+  (* we could have a batch mode, executing several commands from a file *)
   try
-    let not_finished = ref true in
-    while !not_finished do
-      let command_str = read_line () in
-      let parsed_command = BatString.nsplit ~by:" " command_str in
-      Log.debug "got cmd";
-      begin match parsed_command with
-        | [] -> abort "parsed_command = []"
-        | cmd :: _args ->
-          begin match cmd with
-            | "" -> Log.error "empty cmd"
-            | "quit" ->
-              let quit_cmd_req = For_MDS.encode (For_MDS.From_CLI (Quit_cmd_req)) in
-              Sock.send mds_client_socket quit_cmd_req;
-              let encoded_answer = Sock.recv mds_client_socket in
-              let answer = From_MDS.decode encoded_answer in
-              assert(answer = From_MDS.To_CLI Quit_cmd_ack);
-              Log.info "quit ack";
-            | _ -> Log.error "unhandled: %s" cmd
-          end
-      end
-    done;
+    let command_str = read_line () in
+    let parsed_command = BatString.nsplit ~by:" " command_str in
+    begin match parsed_command with
+      | [] -> abort "parsed_command = []"
+      | cmd :: _args ->
+        begin match cmd with
+          | "" -> Log.error "cmd = \"\""
+          | "quit" ->
+            let quit_cmd_req = For_MDS.encode (For_MDS.From_CLI (Quit_cmd_req)) in
+            Sock.send mds_client_socket quit_cmd_req;
+            let encoded_answer = Sock.recv mds_client_socket in
+            let answer = From_MDS.decode encoded_answer in
+            assert(answer = From_MDS.To_CLI Quit_cmd_ack);
+            Log.info "quit ack";
+          | _ -> Log.error "unhandled: %s" cmd
+        end
+    end
   with exn -> begin
       Log.info "exception";
       Utils.zmq_cleanup mds_client_context mds_client_socket;
-      Utils.zmq_cleanup ds_client_context ds_client_socket;
+      (* Utils.zmq_cleanup ds_client_context ds_client_socket; *)
       raise exn;
     end
 ;;
