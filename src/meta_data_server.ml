@@ -14,8 +14,8 @@ module Node = Types.Node
 module Sock = ZMQ.Socket
 
 let parse_machine_line (rank: int) (l: string): Node.t =
-  let hostname, port = String.split l ":" in
-  Node.create rank hostname (int_of_string port)
+  let host, port = Utils.string_to_host_port l in
+  Node.create rank host port
 
 let parse_machine_file (fn: string): Node.t list =
   let res = ref [] in
@@ -98,18 +98,21 @@ let main () =
              Log.warn "suspicious Join req from %s" ds_as_string;
              Sock.send server_socket join_answer
          end
-       | For_MDS.From_DS (Chunk_ack (_fn, _chunk)) -> abort "Ack"
-       | For_MDS.From_CLI Add_file _f -> abort "Add_file"
-       | For_MDS.From_CLI Ls -> abort "Ls"
-       | For_MDS.From_CLI Quit ->
+       | For_MDS.From_DS (Chunk_ack (_fn, _chunk)) -> abort "Chunk_ack"
+       | For_MDS.From_CLI Add_file_cmd_req _f -> abort "Add_file_cmd_req"
+       | For_MDS.From_CLI Ls_cmd_req -> abort "Ls_cmd_req"
+       | For_MDS.From_CLI Quit_cmd_req ->
          let _ = Log.info "got Quit" in
-         (* FBR: send Quit_Ack *)
-         not_finished := false
+         abort "Quit_cmd_req"
+         (* FBR: send Quit to all DSs then Quit_Ack to the CLI
+            FBR: this requires a push socket in the MDS and a pull docket
+                 on each DS *)
+         (* not_finished := false *)
       end
     done
   with exn ->
     (Log.error "exception";
-     Utils.zmq_cleanup server_socket server_context;
+     Utils.zmq_cleanup server_context server_socket;
      raise exn)
 ;;
 
