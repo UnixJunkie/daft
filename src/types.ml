@@ -98,6 +98,15 @@ end
 type storage_mode = Raw | Compressed | Encrypted | Signed
 
 module Protocol = struct
+
+  (* naming of messages
+     ------------------
+     *_req: request that will need an answer
+     *_ack: positive answer to a request
+     *_nack: negative answer to a request
+     *_push: message that doesn't need answer
+     *_cmd_*: related to a command from the CLI *)
+
   (* the MDS is a master, DSs are its slaves *)
   (* message types *)
   type ds_to_mds =
@@ -124,12 +133,13 @@ module Protocol = struct
     | Chunk_ack of string * int
 
   type cli_to_mds =
-    | Add_file of File.t
-    | Ls
-    | Quit (* MDS must then send Quit to all DSs then exit itself *)
+    | Add_file_cmd_req of File.t
+    | Ls_cmd_req
+    | Quit_cmd_req (* MDS must then send Quit to all DSs then exit itself *)
 
   type mds_to_cli =
-    | Ls of FileSet.t
+    | Ls_cmd_ack of FileSet.t
+    | Quit_cmd_ack
 
   type cli_to_ds =
     | Add_file of File.t (* if op. is successful,
