@@ -79,7 +79,7 @@ let main () =
       let request = For_MDS.decode encoded_request in
       Log.debug "got req";
       begin match request with
-       | For_MDS.From_DS (Join ds) ->
+       | For_MDS.From_DS (Join_req ds) ->
          let ds_as_string = Node.to_string ds in
          Log.info "DS %s Join req" ds_as_string;
          let ds_rank, ds_host, ds_port = Node.to_triplet ds in
@@ -91,15 +91,14 @@ let main () =
            if ds = expected_ds then
              let ctx, sock = Utils.zmq_client_setup ds_host ds_port in
              A.set int2node ds_rank (ds, Some (ctx, sock));
-             let join_answer = From_MDS.(encode (To_DS Join_Ack)) in
+             let join_answer = From_MDS.(encode (To_DS Join_ack)) in
              Sock.send server_socket join_answer
            else
-             let join_answer = From_MDS.(encode (To_DS Join_Nack)) in
+             let join_answer = From_MDS.(encode (To_DS Join_nack)) in
              Log.warn "suspicious Join req from %s" ds_as_string;
              Sock.send server_socket join_answer
          end
-       | For_MDS.From_DS (Ack (_fn, _chunk)) -> abort "Ack"
-       | For_MDS.From_DS (Nack (_fn, _chunk)) -> abort "Nack"
+       | For_MDS.From_DS (Chunk_ack (_fn, _chunk)) -> abort "Ack"
        | For_MDS.From_CLI Add_file _f -> abort "Add_file"
        | For_MDS.From_CLI Ls -> abort "Ls"
        | For_MDS.From_CLI Quit ->

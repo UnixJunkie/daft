@@ -135,10 +135,10 @@ let main () =
   (* register at the MDS *)
   Log.info "connecting to MDS %s:%d" !mds_host !mds_port;
   let client_context, client_socket = Utils.zmq_client_setup !mds_host !mds_port in
-  let join_request = From_DS.encode (From_DS.To_MDS (Join !local_node)) in
+  let join_request = From_DS.encode (From_DS.To_MDS (Join_req !local_node)) in
   Sock.send client_socket join_request;
   let join_answer = Sock.recv client_socket in
-  assert(From_MDS.decode join_answer = From_MDS.To_DS Join_Ack);
+  assert(From_MDS.decode join_answer = From_MDS.To_DS Join_ack);
   (* loop on messages until quit command *)
   (* FBR: create an array of DS sockets for sending
           --> we must know at startup time the max number of DSs that will join *)
@@ -155,11 +155,11 @@ let main () =
           let _ = Log.info "got Quit" in
           (* FBR: send Quit_Ack *)
           not_finished := false
-        | For_DS.From_MDS Join_Ack -> failwith "not implemented yet"
-        | For_DS.From_MDS Join_Nack ->
-          abort "got Join_Nack"
-        | For_DS.From_DS  _ (* ds_to_ds *) -> failwith "not implemented yet"
-        | For_DS.From_CLI _ (* cli_to_ds *) -> failwith "not implemented yet"
+        | For_DS.From_MDS Join_ack  -> Log.error "got Join_Ack"
+        | For_DS.From_MDS Join_nack -> Log.error "got Join_Nack"
+        | For_DS.From_DS  Chunk (_fn, _chunk, _data) -> abort "got Chunk"
+        | For_DS.From_DS  (Chunk_ack (_fn, _chunk)) -> abort "got Chunk_Ack"
+        | For_DS.From_CLI Add_file _f -> abort "Add_file"
       end
     done;
   with exn -> begin

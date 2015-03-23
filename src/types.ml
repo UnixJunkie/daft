@@ -101,23 +101,27 @@ module Protocol = struct
   (* the MDS is a master, DSs are its slaves *)
   (* message types *)
   type ds_to_mds =
-    | Join of Node.t (* a DS registering itself with the MDS *)
-    | Ack of string * int (* chunk ACK (filename, chunk_number) *)
-    | Nack of string * int (* chunk NAK (filename, chunk_number)
-                              the DS sending this should become
-                              permanently marked as in failure
-                              mode and not be sent any more chunks
-                              (probably its disk is full) *)
+    (* message m needs an answer --> m_req *)
+    | Join_req of Node.t (* a DS registering itself with the MDS *)
+    (* no answer *)
+    | Chunk_ack of string * int (* chunk ACK (filename, chunk_number) *)
+
   type mds_to_ds =
     (* send order (receiver_ds_rank, filename, chunk_number) *)
     | Send_to of int * string * int
     | Quit (* DS must exit *)
-    | Join_Ack (* Join was received *)
-    | Join_Nack (* Join was received from an unexpected DS *)
+    (* FBR: get rid of that when pull and push sockets are in use *)
+    | Join_ack (* Join was received *)
+    (* FBR: get rid of that when pull and push sockets are in use *)
+    | Join_nack (* Join was received from an unexpected DS *)
 
   type ds_to_ds =
     (* file chunk (filename, chunk_number, chunk_data) *)
     | Chunk of string * int * string
+    (* FBR: get rid of that when pull and push sockets are in use
+            the only chunk ack that should be sent is to the MDS so
+            that is can update its state *)
+    | Chunk_ack of string * int
 
   type cli_to_mds =
     | Add_file of File.t
