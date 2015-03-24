@@ -85,13 +85,13 @@ let main () =
          Log.info "DS %s Join req" ds_as_string;
          let ds_rank, ds_host, ds_port = Node.to_triplet ds in
          (* check it is the one we expect at that rank *)
-         let expected_ds, prev_ctx_sock = int2node.(ds_rank) in
-         begin match prev_ctx_sock with
+         let expected_ds, prev_sock = int2node.(ds_rank) in
+         begin match prev_sock with
          | Some _ -> Log.warn "%s already joined" ds_as_string
          | None -> (* remember him for the future *)
            if ds = expected_ds then
              let sock = Utils.zmq_client_setup ctx ds_host ds_port in
-             A.set int2node ds_rank (ds, Some (ctx, sock));
+             A.set int2node ds_rank (ds, Some sock);
              let join_answer = From_MDS.(encode (To_DS Join_ack)) in
              Sock.send server_socket join_answer
            else
@@ -114,7 +114,10 @@ let main () =
   with exn ->
     (Log.error "exception";
      ZMQ.Socket.close server_socket;
-     (* FBR: close all other sockets *)
+     A.iteri (fun i (_ds, maybe_sock) -> match maybe_sock with
+         | Some s -> ZMQ.Socket.close s
+         | None -> Log.warn "DS %d missing" i
+       ) int2node;
      ZMQ.Context.terminate ctx;
      raise exn)
 ;;
