@@ -131,10 +131,11 @@ let main () =
   data_store_root := create_data_store ();
   (* setup server *)
   Log.info "binding server to %s:%d" "*" !ds_port;
-  let server_context, server_socket = Utils.zmq_server_setup "*" !ds_port in
+  let ctx = ZMQ.Context.create () in
+  let server_socket = Utils.zmq_server_setup ctx "*" !ds_port in
   (* register at the MDS *)
   Log.info "connecting to MDS %s:%d" !mds_host !mds_port;
-  let client_context, client_socket = Utils.zmq_client_setup !mds_host !mds_port in
+  let client_socket = Utils.zmq_client_setup ctx !mds_host !mds_port in
   let join_request = From_DS.encode (From_DS.To_MDS (Join_req !local_node)) in
   Sock.send client_socket join_request;
   let join_answer = Sock.recv client_socket in
@@ -165,9 +166,10 @@ let main () =
   with exn -> begin
       Log.info "exception";
       let (_: int) = delete_data_store !data_store_root in
-      Utils.zmq_cleanup server_context server_socket;
-      Utils.zmq_cleanup client_context client_socket;
-      raise exn;
+      ZMQ.Socket.close server_socket;
+      ZMQ.Socket.close client_socket;
+      ZMQ.Context.terminate ctx;
+      raise exn
     end
 ;;
 

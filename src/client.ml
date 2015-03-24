@@ -43,9 +43,8 @@ let main () =
   if !mds_host = "" || !mds_port = uninitialized then abort "-mds is mandatory";
   if !ds_host = "" || !ds_port = uninitialized then abort "-ds is mandatory";
   Log.info "Client of MDS %s:%d" !mds_host !mds_port;
-  let mds_client_context, mds_client_socket =
-    Utils.zmq_client_setup !mds_host !mds_port
-  in
+  let ctx = ZMQ.Context.create () in
+  let mds_client_socket = Utils.zmq_client_setup ctx !mds_host !mds_port in
   (* let ds_client_context, ds_client_socket = *)
   (*   Utils.zmq_client_setup (Utils.hostname ()) !ds_port *)
   (* in *)
@@ -71,9 +70,9 @@ let main () =
     end
   with exn -> begin
       Log.info "exception";
-      Utils.zmq_cleanup mds_client_context mds_client_socket;
-      (* Utils.zmq_cleanup ds_client_context ds_client_socket; *)
-      raise exn;
+      ZMQ.Socket.close mds_client_socket;
+      ZMQ.Context.terminate ctx;
+      raise exn
     end
 ;;
 

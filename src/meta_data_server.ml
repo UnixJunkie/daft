@@ -71,7 +71,8 @@ let main () =
   (* start all DSs *) (* FBR: later maybe, we can do this by hand for the moment *)
   (* start server *)
   Log.info "binding server to %s:%d" "*" !port;
-  let server_context, server_socket = Utils.zmq_server_setup "*" !port in
+  let ctx = ZMQ.Context.create () in
+  let server_socket = Utils.zmq_server_setup ctx "*" !port in
   try (* loop on messages until quit command *)
     let not_finished = ref true in
     while !not_finished do
@@ -89,7 +90,7 @@ let main () =
          | Some _ -> Log.warn "%s already joined" ds_as_string
          | None -> (* remember him for the future *)
            if ds = expected_ds then
-             let ctx, sock = Utils.zmq_client_setup ds_host ds_port in
+             let sock = Utils.zmq_client_setup ctx ds_host ds_port in
              A.set int2node ds_rank (ds, Some (ctx, sock));
              let join_answer = From_MDS.(encode (To_DS Join_ack)) in
              Sock.send server_socket join_answer
@@ -112,7 +113,9 @@ let main () =
     done
   with exn ->
     (Log.error "exception";
-     Utils.zmq_cleanup server_context server_socket;
+     ZMQ.Socket.close server_socket;
+     (* FBR: close all other sockets *)
+     ZMQ.Context.terminate ctx;
      raise exn)
 ;;
 
