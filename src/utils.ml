@@ -77,11 +77,6 @@ let zmq_client_setup (context: ZMQ.Context.t) (host: string) (port: int)
   let () = ZMQ.Socket.connect socket host_and_port in
   socket
 
-let zmq_dummy_client_setup (): ZMQ.Context.t * ([`Req] ZMQ.Socket.t) =
-  let context = ZMQ.Context.create () in
-  let socket = ZMQ.Socket.create context ZMQ.Socket.req in
-  (context, socket)
-
 open Batteries (* everything before uses Legacy IOs (fast) *)
 
 let hostname (): string =
