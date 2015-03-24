@@ -1,9 +1,6 @@
 TODO
 ====
 
-- create CLI and send the Quit command to everybody
-  - CLI has a single req socket
-
 - MDS should know the DSs' pull sockets and have a corresponding
   push socket for each of them
 - the DS should know the MDS' pull socket and have a corresponding
@@ -38,6 +35,8 @@ COMMANDS SEMANTICS
 
 PERFORMANCE
 ===========
+
+- use LZ4 for on-the-fly compression
 
 maybe there should be a priority queue to sort incoming packets
 (commands, state update, data transfers).
