@@ -1,6 +1,9 @@
 TODO
 ====
 
+- I need to find out how to connect a local push socket
+  to a remote pull socket ...
+
 - MDS should know the DSs' pull sockets and have a corresponding
   push socket for each of them
 - the DS should know the MDS' pull socket and have a corresponding
@@ -35,6 +38,10 @@ COMMANDS SEMANTICS
 
 PERFORMANCE
 ===========
+
+- it will be cheap to encode/decode on the fly
+- it may be cheap to implement a chunk-level binary cache on DSs
+  - just check the checksum of incoming packets
 
 - use LZ4 for on-the-fly compression
 

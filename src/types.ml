@@ -107,39 +107,31 @@ module Protocol = struct
      *_push: message that doesn't need answer
      *_cmd_*: related to a command from the CLI *)
 
+  type ds_rank = int
+  type filename = string
+  type chunk_id = int
+  type chunk_data = string
+
   (* the MDS is a master, DSs are its slaves *)
   (* message types *)
   type ds_to_mds =
-    (* message m needs an answer --> m_req *)
-    | Join_req of Node.t (* a DS registering itself with the MDS *)
-    (* no answer *)
-    | Chunk_ack of string * int (* chunk ACK (filename, chunk_number) *)
+    | Join_push of Node.t (* a DS registering itself with the MDS *)
+    | Chunk_ack of filename * chunk_id
 
   type mds_to_ds =
-    (* send order (receiver_ds_rank, filename, chunk_number) *)
-    | Send_to of int * string * int
-    | Quit (* DS must exit *)
-    (* FBR: get rid of that when pull and push sockets are in use *)
-    | Join_ack (* Join was received *)
-    (* FBR: get rid of that when pull and push sockets are in use *)
-    | Join_nack (* Join was received from an unexpected DS *)
+    | Send_to_req of ds_rank * filename * chunk_id
+    | Quit_cmd
 
   type ds_to_ds =
-    (* file chunk (filename, chunk_number, chunk_data) *)
-    | Chunk of string * int * string
-    (* FBR: get rid of that when pull and push sockets are in use
-            the only chunk ack that should be sent is to the MDS so
-            that is can update its state *)
-    | Chunk_ack of string * int
+    | Chunk of filename * chunk_id * chunk_data
 
   type cli_to_mds =
     | Add_file_cmd_req of File.t
     | Ls_cmd_req
-    | Quit_cmd_req (* MDS must then send Quit to all DSs then exit itself *)
+    | Quit_cmd (* MDS must then send Quit to all DSs then exit itself *)
 
   type mds_to_cli =
     | Ls_cmd_ack of FileSet.t
-    | Quit_cmd_ack
 
   type cli_to_ds =
     | Add_file of File.t (* if op. is successful,
@@ -149,9 +141,6 @@ module Protocol = struct
                             to rollback the local datastore *)
 
   type ds_to_cli = Ok | Already_here | Is_directory | Copy_failed
-
- (* FBR: create send_request and send_answer to encapsulate communications
-         and prevent people from sending raw strings on the ZMQ sockets *)
 
   (* modules useful when sending a message *)
 

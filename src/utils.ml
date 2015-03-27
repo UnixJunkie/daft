@@ -2,8 +2,8 @@
 open Printf
 
 let default_mds_host = "*" (* all interfaces (I guess) on the host where the MDS is launched *)
-let default_ds_port = 8081
-let default_mds_port = 8082
+let default_ds_port_in  = 8081
+let default_mds_port_in = 8082
 let default_chunk_size = 1_000_000 (* bytes *)
 
 (* ANSI terminal colors for UNIX: *)
@@ -59,20 +59,14 @@ let with_out_file fn f =
   close_out output;
   res
 
-let zmq_server_setup (context: ZMQ.Context.t) (host: string) (port: int)
-  : [`Rep] ZMQ.Socket.t =
-  try
-    let socket = ZMQ.Socket.create context ZMQ.Socket.rep in
-    let host_and_port = sprintf "tcp://%s:%d" host port in
-    let () = ZMQ.Socket.bind socket host_and_port in
-    socket
-  with Unix.Unix_error(err, fun_name, fun_param) ->
-    (Log.fatal "(%s, %s, %s)" (Unix.error_message err) fun_name fun_param;
-     exit 1)
+type socket_type = Push | Pull
 
-let zmq_client_setup (context: ZMQ.Context.t) (host: string) (port: int)
-  : [`Req] ZMQ.Socket.t =
-  let socket = ZMQ.Socket.create context ZMQ.Socket.req in
+let zmq_socket (t: socket_type) (context: ZMQ.Context.t) (host: string) (port: int) =
+  let translate = function
+    | Push -> ZMQ.Socket.push
+    | Pull -> ZMQ.Socket.pull
+  in
+  let socket = ZMQ.Socket.create context (translate t) in
   let host_and_port = sprintf "tcp://%s:%d" host port in
   let () = ZMQ.Socket.connect socket host_and_port in
   socket

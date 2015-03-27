@@ -54,55 +54,51 @@ let main () =
   Logger.set_output Legacy.stdout;
   Logger.color_on ();
   (* setup MDS *)
-  let port = ref Utils.default_mds_port in
+  let port_in = ref Utils.default_mds_port_in in
   let host = Utils.hostname () in
   let machine_file = ref "" in
   Arg.parse
-    [ "-p", Arg.Set_int port, "port where to listen";
+    [ "-p", Arg.Set_int port_in, "port where to listen";
       "-m", Arg.Set_string machine_file,
       "machine_file list of [user@]host:port (one per line)" ]
     (fun arg -> raise (Arg.Bad ("Bad argument: " ^ arg)))
     (sprintf "usage: %s <options>" Sys.argv.(0));
   (* check options *)
   if !machine_file = "" then abort "-m is mandatory";
-  Log.info "MDS: %s:%d" host !port;
+  Log.info "MDS: %s:%d" host !port_in;
   let int2node = data_nodes_array !machine_file in
   Log.info "MDS: read %d host(s)" (A.length int2node);
   (* start all DSs *) (* FBR: later maybe, we can do this by hand for the moment *)
   (* start server *)
-  Log.info "binding server to %s:%d" "*" !port;
+  Log.info "binding server to %s:%d" "*" !port_in;
   let ctx = ZMQ.Context.create () in
-  let server_socket = Utils.zmq_server_setup ctx "*" !port in
+  let incoming = Utils.(zmq_socket Pull ctx "*" !port_in ) in
   try (* loop on messages until quit command *)
     let not_finished = ref true in
     while !not_finished do
-      let encoded_request = Sock.recv server_socket in
-      let request = For_MDS.decode encoded_request in
+      let encoded = Sock.recv incoming in
+      let message = For_MDS.decode encoded in
       Log.debug "got req";
-      begin match request with
-       | For_MDS.From_DS (Join_req ds) ->
+      begin match message with
+       | For_MDS.From_DS (Join_push ds) ->
          let ds_as_string = Node.to_string ds in
          Log.info "DS %s Join req" ds_as_string;
-         let ds_rank, ds_host, ds_port = Node.to_triplet ds in
+         let ds_rank, ds_host, ds_port_in = Node.to_triplet ds in
          (* check it is the one we expect at that rank *)
          let expected_ds, prev_sock = int2node.(ds_rank) in
          begin match prev_sock with
          | Some _ -> Log.warn "%s already joined" ds_as_string
          | None -> (* remember him for the future *)
            if ds = expected_ds then
-             let sock = Utils.zmq_client_setup ctx ds_host ds_port in
-             A.set int2node ds_rank (ds, Some sock);
-             let join_answer = From_MDS.(encode (To_DS Join_ack)) in
-             Sock.send server_socket join_answer
+             let sock = Utils.(zmq_socket Push ctx ds_host ds_port_in) in
+             A.set int2node ds_rank (ds, Some sock)
            else
-             let join_answer = From_MDS.(encode (To_DS Join_nack)) in
              Log.warn "suspicious Join req from %s" ds_as_string;
-             Sock.send server_socket join_answer
          end
        | For_MDS.From_DS (Chunk_ack (_fn, _chunk)) -> abort "Chunk_ack"
        | For_MDS.From_CLI Add_file_cmd_req _f -> abort "Add_file_cmd_req"
        | For_MDS.From_CLI Ls_cmd_req -> abort "Ls_cmd_req"
-       | For_MDS.From_CLI Quit_cmd_req ->
+       | For_MDS.From_CLI Quit_cmd ->
          let _ = Log.info "got Quit" in
          abort "Quit_cmd_req"
          (* FBR: send Quit to all DSs then Quit_Ack to the CLI
@@ -113,7 +109,7 @@ let main () =
     done
   with exn ->
     (Log.error "exception";
-     ZMQ.Socket.close server_socket;
+     ZMQ.Socket.close incoming;
      A.iteri (fun i (_ds, maybe_sock) -> match maybe_sock with
          | Some s -> ZMQ.Socket.close s
          | None -> Log.warn "DS %d missing" i
