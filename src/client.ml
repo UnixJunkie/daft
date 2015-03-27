@@ -18,9 +18,9 @@ module Sock = ZMQ.Socket
 let uninitialized = -1
 
 let ds_host = ref (Utils.hostname ())
-let ds_port = ref Utils.default_ds_port
+let ds_port_in = ref Utils.default_ds_port_in
 let mds_host = ref "localhost"
-let mds_port = ref Utils.default_mds_port
+let mds_port_in = ref Utils.default_mds_port_in
 
 let abort msg =
   Log.fatal msg;
@@ -33,18 +33,18 @@ let main () =
   Logger.color_on ();
   (* options parsing *)
   Arg.parse
-    [ "-mds", Arg.String (Utils.set_host_port mds_host mds_port),
+    [ "-mds", Arg.String (Utils.set_host_port mds_host mds_port_in),
       "<host:port> MDS";
-      "-ds", Arg.String (Utils.set_host_port ds_host ds_port),
+      "-ds", Arg.String (Utils.set_host_port ds_host ds_port_in),
       "<host:port> local DS" ]
     (fun arg -> raise (Arg.Bad ("Bad argument: " ^ arg)))
     (sprintf "usage: %s <options>" Sys.argv.(0));
   (* check options *)
-  if !mds_host = "" || !mds_port = uninitialized then abort "-mds is mandatory";
-  if !ds_host = "" || !ds_port = uninitialized then abort "-ds is mandatory";
-  Log.info "Client of MDS %s:%d" !mds_host !mds_port;
+  if !mds_host = "" || !mds_port_in = uninitialized then abort "-mds is mandatory";
+  if !ds_host = "" || !ds_port_in = uninitialized then abort "-ds is mandatory";
+  Log.info "Client of MDS %s:%d" !mds_host !mds_port_in;
   let ctx = ZMQ.Context.create () in
-  let mds_client_socket = Utils.zmq_client_setup ctx !mds_host !mds_port in
+  let for_MDS = Utils.(zmq_socket Push ctx !mds_host !mds_port_in) in
   (* let ds_client_context, ds_client_socket = *)
   (*   Utils.zmq_client_setup (Utils.hostname ()) !ds_port *)
   (* in *)
@@ -59,18 +59,14 @@ let main () =
         begin match cmd with
           | "" -> Log.error "cmd = \"\""
           | "quit" ->
-            let quit_cmd_req = For_MDS.encode (For_MDS.From_CLI (Quit_cmd_req)) in
-            Sock.send mds_client_socket quit_cmd_req;
-            let encoded_answer = Sock.recv mds_client_socket in
-            let answer = From_MDS.decode encoded_answer in
-            assert(answer = From_MDS.To_CLI Quit_cmd_ack);
-            Log.info "quit ack";
+            let quit_cmd = For_MDS.encode (For_MDS.From_CLI (Quit_cmd)) in
+            Sock.send for_MDS quit_cmd;
           | _ -> Log.error "unhandled: %s" cmd
         end
     end
   with exn -> begin
       Log.info "exception";
-      ZMQ.Socket.close mds_client_socket;
+      ZMQ.Socket.close for_MDS;
       ZMQ.Context.terminate ctx;
       raise exn
     end
