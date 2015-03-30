@@ -1,23 +1,12 @@
 TODO
 ====
 
-- I need to find out how to connect a local push socket
-  to a remote pull socket ...
-
 - MDS should know the DSs' pull sockets and have a corresponding
   push socket for each of them
 - the DS should know the MDS' pull socket and have a corresponding
   push socket
   - it should also know the pull socket of all other DSs and have
     a corresponding push socket for each of them
-
-(* Socket to receive messages on *)
-let receiver = Socket.create context Socket.pull in
-Socket.connect receiver "tcp://localhost:5557";
-
-(* Socket to send messages to *)
-let sender = Socket.create context Socket.push in
-Socket.connect sender "tcp://localhost:5558";
 
 COMMANDS SEMANTICS
 ==================
