@@ -41,32 +41,36 @@ let main () =
     (sprintf "usage: %s <options>" Sys.argv.(0));
   (* check options *)
   if !mds_host = "" || !mds_port_in = uninitialized then abort "-mds is mandatory";
-  if !ds_host = "" || !ds_port_in = uninitialized then abort "-ds is mandatory";
-  Log.info "Client of MDS %s:%d" !mds_host !mds_port_in;
+  if !ds_host  = "" || !ds_port_in  = uninitialized then abort "-ds is mandatory";
   let ctx = ZMQ.Context.create () in
   let for_MDS = Utils.(zmq_socket Push ctx !mds_host !mds_port_in) in
-  (* let ds_client_context, ds_client_socket = *)
-  (*   Utils.zmq_client_setup (Utils.hostname ()) !ds_port *)
-  (* in *)
+  Log.info "Client of MDS %s:%d" !mds_host !mds_port_in;
+  let for_DS  = Utils.(zmq_socket Push ctx !ds_host  !ds_port_in ) in
+  Log.info "Client of DS %s:%d" !ds_host !ds_port_in;
   (* the CLI execute just one command then exit *)
   (* we could have a batch mode, executing several commands from a file *)
+  let not_finished = ref true in
   try
-    let command_str = read_line () in
-    let parsed_command = BatString.nsplit ~by:" " command_str in
-    begin match parsed_command with
-      | [] -> abort "parsed_command = []"
-      | cmd :: _args ->
-        begin match cmd with
-          | "" -> Log.error "cmd = \"\""
-          | "quit" ->
-            let quit_cmd = For_MDS.encode (For_MDS.From_CLI (Quit_cmd)) in
-            Sock.send for_MDS quit_cmd;
-          | _ -> Log.error "unhandled: %s" cmd
-        end
-    end
+    while !not_finished do
+      let command_str = read_line () in
+      let parsed_command = BatString.nsplit ~by:" " command_str in
+      begin match parsed_command with
+        | [] -> abort "parsed_command = []"
+        | cmd :: _args ->
+          begin match cmd with
+            | "" -> Log.error "cmd = \"\""
+            | "quit" ->
+              let quit_cmd = For_MDS.encode (For_MDS.From_CLI (Quit_cmd)) in
+              Sock.send for_MDS quit_cmd;
+              not_finished := false;
+            | _ -> Log.error "unhandled: %s" cmd
+          end
+      end
+    done
   with exn -> begin
       Log.info "exception";
       ZMQ.Socket.close for_MDS;
+      ZMQ.Socket.close for_DS;
       ZMQ.Context.terminate ctx;
       raise exn
     end
