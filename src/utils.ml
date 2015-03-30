@@ -62,14 +62,14 @@ let with_out_file fn f =
 type socket_type = Push | Pull
 
 let zmq_socket (t: socket_type) (context: ZMQ.Context.t) (host: string) (port: int) =
-  let translate = function
-    | Push -> ZMQ.Socket.push
-    | Pull -> ZMQ.Socket.pull
+  let sock_type, bind_or_connect = match t with
+    | Push -> ZMQ.Socket.push, ZMQ.Socket.connect
+    | Pull -> ZMQ.Socket.pull, ZMQ.Socket.bind
   in
-  let socket = ZMQ.Socket.create context (translate t) in
+  let sock = ZMQ.Socket.create context sock_type in
   let host_and_port = sprintf "tcp://%s:%d" host port in
-  let () = ZMQ.Socket.connect socket host_and_port in
-  socket
+  bind_or_connect sock host_and_port;
+  sock
 
 open Batteries (* everything before uses Legacy IOs (fast) *)
 
