@@ -47,6 +47,9 @@ Use round robin for the moment.
 SECURITY
 ========
 
+- for encryption: try AES and twofish
+  - then prefer the one with the highest bitrate
+
 - before executing a command from the CLI, a DS or MDS
   could verify the signature of the command.
   only commands signed with the private key of the user
