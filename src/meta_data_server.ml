@@ -52,7 +52,6 @@ let main () =
     while !not_finished do
       let encoded = Sock.recv incoming in
       let message = For_MDS.decode encoded in
-      Log.debug "got req";
       begin match message with
        | For_MDS.From_DS (Join_push ds) ->
          let ds_as_string = Node.to_string ds in

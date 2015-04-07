@@ -147,15 +147,16 @@ let main () =
     while !not_finished do
       let encoded = Sock.recv incoming in
       let message = For_DS.decode encoded in
-      Log.debug "got req";
       begin match message with
         | For_DS.From_MDS (Send_to_req (_ds_rank, _fn, _chunk)) ->
-          failwith "not implemented yet"
+          abort "Send_to_req"
         | For_DS.From_MDS Quit_cmd ->
           let _ = Log.info "got Quit" in
           not_finished := false
-        | For_DS.From_DS  Chunk (_fn, _chunk, _data) -> abort "got Chunk"
-        | For_DS.From_CLI Add_file _f -> abort "Add_file"
+        | For_DS.From_DS (Chunk (_fn, _chunk, _data)) ->
+          abort "Chunk"
+        | For_DS.From_CLI Add_file _f ->
+          abort "Add_file"
       end
     done;
   with exn -> begin
