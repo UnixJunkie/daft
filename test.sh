@@ -8,9 +8,9 @@ rm -rf /tmp/*.ds # clean previous datastore
 
 ./daft_mds -m machines & # one MDS
 
-./daft_ds -r 0 -mds `hostname -f` -p 8083 & # one DS
-./daft_ds -r 1 -mds `hostname -f` -p 8084 & # one DS
-./daft_ds -r 2 -mds `hostname -f` -p 8085 & # one DS
+./daft_ds -m machines -r 0 -mds `hostname -f` -p 8083 & # one DS
+./daft_ds -m machines -r 1 -mds `hostname -f` -p 8084 & # one DS
+./daft_ds -m machines -r 2 -mds `hostname -f` -p 8085 & # one DS
 
 sleep 1s
 

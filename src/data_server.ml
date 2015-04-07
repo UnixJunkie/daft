@@ -4,6 +4,7 @@ open Types.Protocol
 
 let ds_in_yellow = Utils.fg_yellow ^ "DS" ^ Utils.fg_reset
 
+module A  = Array
 module Fn = Filename
 module From_DS = Types.Protocol.From_DS
 module From_MDS = Types.Protocol.From_MDS
@@ -129,6 +130,9 @@ let main () =
   if !mds_port_in = uninitialized then (Log.fatal "-sp is mandatory"; exit 1);
   if !ds_rank = uninitialized then (Log.fatal "-r is mandatory"; exit 1);
   if !ds_port_in = uninitialized then (Log.fatal "-p is mandatory"; exit 1);
+  if !machine_file = "" then abort "-m is mandatory";
+  let int2node = Utils.data_nodes_array !machine_file in
+  Log.info "read %d host(s)" (A.length int2node);
   local_node := Node.create !ds_rank ds_host !ds_port_in;
   Log.info "Client of MDS %s:%d" !mds_host !mds_port_in;
   data_store_root := create_data_store ();

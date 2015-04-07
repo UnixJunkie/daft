@@ -39,9 +39,8 @@ let main () =
     (sprintf "usage: %s <options>" Sys.argv.(0));
   (* check options *)
   if !machine_file = "" then abort "-m is mandatory";
-  Log.info "MDS: %s:%d" host !port_in;
   let int2node = Utils.data_nodes_array !machine_file in
-  Log.info "MDS: read %d host(s)" (A.length int2node);
+  Log.info "read %d host(s)" (A.length int2node);
   (* start all DSs *) (* FBR: later maybe, we can do this by hand for the moment *)
   (* start server *)
   Log.info "binding server to %s:%d" "*" !port_in;
