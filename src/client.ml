@@ -63,6 +63,9 @@ let main () =
             | "quit" ->
               let quit_cmd = For_MDS.encode (For_MDS.From_CLI (Quit_cmd)) in
               Sock.send for_MDS quit_cmd;
+              Utils.sleep_ms 100; (* wait a bit for the message to be sent
+                                     I tried to play with the linger socket option
+                                     but it did not work *)
               not_finished := false;
             | _ -> Log.error "unknown command: %s" cmd
           end
