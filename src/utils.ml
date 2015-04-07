@@ -1,7 +1,11 @@
 
 open Printf
 
-let default_mds_host = "*" (* all interfaces (I guess) on the host where the MDS is launched *)
+module A = Array
+module L = List
+module Node = Types.Node
+
+let default_mds_host = "*" (* star means all interfaces *)
 let default_ds_port_in  = 8081
 let default_mds_port_in = 8082
 let default_chunk_size = 1_000_000 (* bytes *)
@@ -86,3 +90,29 @@ let set_host_port (host_ref: string ref) (port_ref: int ref) (s: string) =
   let host, port = string_to_host_port s in
   host_ref := host;
   port_ref := port
+
+let parse_machine_line (rank: int) (l: string): Node.t =
+  let host, port = string_to_host_port l in
+  Node.create rank host port
+
+let parse_machine_file (fn: string): Node.t list =
+  let res = ref [] in
+  with_in_file fn
+    (fun input ->
+       try
+         let i = ref 0 in
+         while true do
+           res := (parse_machine_line !i (Legacy.input_line input)) :: !res;
+           incr i;
+         done
+       with End_of_file -> ()
+    );
+  L.rev !res
+
+let data_nodes_array (fn: string) =
+  let machines = parse_machine_file fn in
+  let len = L.length machines in
+  let res = A.create len (Node.dummy (), None) in
+  L.iter (fun node -> A.set res (Node.get_rank node) (node, None)
+         ) machines;
+  res

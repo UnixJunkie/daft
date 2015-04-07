@@ -13,32 +13,6 @@ module Log = Log.Make (struct let section = mds_in_blue end)
 module Node = Types.Node
 module Sock = ZMQ.Socket
 
-let parse_machine_line (rank: int) (l: string): Node.t =
-  let host, port = Utils.string_to_host_port l in
-  Node.create rank host port
-
-let parse_machine_file (fn: string): Node.t list =
-  let res = ref [] in
-  Utils.with_in_file fn
-    (fun input ->
-       try
-         let i = ref 0 in
-         while true do
-           res := (parse_machine_line !i (Legacy.input_line input)) :: !res;
-           incr i;
-         done
-       with End_of_file -> ()
-    );
-  L.rev !res
-
-let data_nodes_array (fn: string) =
-  let machines = parse_machine_file fn in
-  let len = L.length machines in
-  let res = A.create len (Node.dummy (), None) in
-  L.iter (fun node -> A.set res (Node.get_rank node) (node, None)
-         ) machines;
-  res
-
 let start_data_nodes () =
   (* FBR: scp exe to each node *)
   (* FBR: ssh node to start it *)
@@ -66,7 +40,7 @@ let main () =
   (* check options *)
   if !machine_file = "" then abort "-m is mandatory";
   Log.info "MDS: %s:%d" host !port_in;
-  let int2node = data_nodes_array !machine_file in
+  let int2node = Utils.data_nodes_array !machine_file in
   Log.info "MDS: read %d host(s)" (A.length int2node);
   (* start all DSs *) (* FBR: later maybe, we can do this by hand for the moment *)
   (* start server *)
