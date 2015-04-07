@@ -53,9 +53,10 @@ let main () =
   try
     while !not_finished do
       let command_str = read_line () in
+      Log.info "command: %s" command_str;
       let parsed_command = BatString.nsplit ~by:" " command_str in
       begin match parsed_command with
-        | [] -> abort "parsed_command = []"
+        | [] -> Log.error "empty command"
         | cmd :: _args ->
           begin match cmd with
             | "" -> Log.error "cmd = \"\""
