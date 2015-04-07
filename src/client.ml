@@ -60,7 +60,7 @@ let main () =
         | cmd :: _args ->
           begin match cmd with
             | "" -> Log.error "cmd = \"\""
-            | "quit" ->
+            | "q" | "quit" | "exit" ->
               let quit_cmd = For_MDS.encode (For_MDS.From_CLI (Quit_cmd)) in
               Sock.send for_MDS quit_cmd;
               Utils.sleep_ms 100; (* wait a bit for the message to be sent
