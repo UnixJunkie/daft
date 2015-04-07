@@ -17,11 +17,6 @@ COMMANDS SEMANTICS
    - the MDS
    - then the MDS starts all DSs
 
-2) quit
-   - the MDS receives a quit command from the CLI
-   - it send the quit command to all DSs
-   - each DS quit upon reception of the quit command
-
 3) put a file
 
 4) put a directory
