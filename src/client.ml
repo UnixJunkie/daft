@@ -63,7 +63,7 @@ let main () =
               let quit_cmd = For_MDS.encode (For_MDS.From_CLI (Quit_cmd)) in
               Sock.send for_MDS quit_cmd;
               not_finished := false;
-            | _ -> Log.error "unhandled: %s" cmd
+            | _ -> Log.error "unknown command: %s" cmd
           end
       end
     done

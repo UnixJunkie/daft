@@ -74,22 +74,26 @@ let main () =
        | For_MDS.From_CLI Ls_cmd_req -> abort "Ls_cmd_req"
        | For_MDS.From_CLI Quit_cmd ->
          let _ = Log.info "got Quit" in
-         abort "Quit_cmd_req"
-         (* FBR: send Quit to all DSs then Quit_Ack to the CLI
-            FBR: this requires a push socket in the MDS and a pull docket
-                 on each DS *)
-         (* not_finished := false *)
+         (* send Quit to all DSs *)
+         A.iteri (fun i (_ds, maybe_sock) -> match maybe_sock with
+             | None -> Log.warn "DS %d missing" i
+             | Some to_DS ->
+               let quit = From_MDS.encode (From_MDS.To_DS Quit_cmd) in
+               Sock.send to_DS quit
+           ) int2node;
+         not_finished := false
       end
     done
-  with exn ->
-    (Log.error "exception";
-     ZMQ.Socket.close incoming;
-     A.iteri (fun i (_ds, maybe_sock) -> match maybe_sock with
-         | Some s -> ZMQ.Socket.close s
-         | None -> Log.warn "DS %d missing" i
-       ) int2node;
-     ZMQ.Context.terminate ctx;
-     raise exn)
+  with exn -> begin
+      Log.error "exception";
+      ZMQ.Socket.close incoming;
+      A.iteri (fun i (_ds, maybe_sock) -> match maybe_sock with
+          | Some s -> ZMQ.Socket.close s
+          | None -> Log.warn "DS %d missing" i
+        ) int2node;
+      ZMQ.Context.terminate ctx;
+      raise exn
+    end
 ;;
 
 main ()

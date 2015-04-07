@@ -24,6 +24,7 @@ let ds_log_fn = ref ""
 let ds_host = Utils.hostname ()
 let ds_port_in = ref Utils.default_ds_port_in
 let ds_rank = ref uninitialized
+let machine_file = ref ""
 let mds_host = ref "localhost"
 let mds_port_in = ref Utils.default_mds_port_in
 let chunk_size = ref Utils.default_chunk_size (* DAFT global constant *)
@@ -111,6 +112,8 @@ let main () =
       "-l", Arg.Set_string ds_log_fn, "<filename> where to log";
       "-p", Arg.Set_int ds_port_in, "<port> where to listen";
       "-r", Arg.Set_int ds_rank, "<rank> rank among other data nodes";
+      "-m", Arg.Set_string machine_file,
+      "machine_file list of [user@]host:port (one per line)";
       "-mds", Arg.Set_string mds_host, "<server> MDS host";
       "-mdsp", Arg.Set_int mds_port_in, "<port> MDS port" ]
     (fun arg -> raise (Arg.Bad ("Bad argument: " ^ arg)))
@@ -138,10 +141,8 @@ let main () =
   let to_mds = Utils.(zmq_socket Push ctx !mds_host !mds_port_in) in
   let here_I_am = From_DS.encode (From_DS.To_MDS (Join_push !local_node)) in
   Sock.send to_mds here_I_am;
-  (* loop on messages until quit command *)
-  (* FBR: create an array of DS sockets for sending
-          --> we must know at startup time the max number of DSs that will join *)
-  try
+  (* FBR: create an array of DS sockets for sending *)
+  try (* loop on messages until quit command *)
     let not_finished = ref true in
     while !not_finished do
       let encoded = Sock.recv incoming in
@@ -158,7 +159,7 @@ let main () =
       end
     done;
   with exn -> begin
-      Log.info "exception";
+      Log.error "exception";
       let (_: int) = delete_data_store !data_store_root in
       ZMQ.Socket.close incoming;
       ZMQ.Socket.close to_mds;
