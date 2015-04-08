@@ -147,7 +147,7 @@ let main () =
   let ctx = ZMQ.Context.create () in
   let incoming = Utils.(zmq_socket Pull ctx "*" !ds_port_in) in
   (* feedback socket to the local CLI *)
-  let to_cli = Utils.(zmq_socket Push ctx "*" !cli_port_in) in
+  let to_cli = Utils.(zmq_socket Push ctx ds_host !cli_port_in) in
   (* register at the MDS *)
   Log.info "connecting to MDS %s:%d" !mds_host !mds_port_in;
   let to_mds = Utils.(zmq_socket Push ctx !mds_host !mds_port_in) in
