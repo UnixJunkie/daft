@@ -30,6 +30,15 @@ end
 
 module NodeSet = struct
   include Set.Make(Node)
+  let to_string ns =
+    let res = Buffer.create 1024 in
+    Buffer.add_string res "[";
+    iter (fun n ->
+        Buffer.add_string res (Node.to_string n);
+        Buffer.add_string res "; "
+      ) ns;
+    Buffer.add_string res "]";
+    Buffer.contents res
 end
 
 module File = struct
@@ -44,6 +53,13 @@ module File = struct
       { rank; size; nodes }
     let compare c1 c2 =
       BatInt.compare c1.rank c2.rank
+    let to_string c =
+      let string_of_size = function
+        | None -> ""
+        | Some s -> sprintf "size: %Ld " s
+      in
+      sprintf "rank: %d %snodes: %s"
+        c.rank (string_of_size c.size) (NodeSet.to_string c.nodes)
   end
 
   module ChunkSet = struct
@@ -58,6 +74,11 @@ module File = struct
       in
       if nb_chunks <= 0 then empty
       else loop empty 0
+    let to_string cs =
+      let res = Buffer.create 1024 in
+      iter (fun c -> Buffer.add_string res (Chunk.to_string c)
+           ) cs;
+      Buffer.contents res
   end
 
   type t = { name:      string     ;
@@ -70,6 +91,9 @@ module File = struct
     { name; size; stat; nb_chunks ; chunks }
   let compare f1 f2 =
     String.compare f1.name f2.name
+  let to_string f =
+    sprintf "name: %s size: %Ld #chunks: %d\n%s"
+      f.name f.size f.nb_chunks (ChunkSet.to_string f.chunks)
 end
 
 (* the status of the "filesystem" is just a set of files *)
@@ -85,6 +109,13 @@ module FileSet = struct
                              chunks = ChunkSet.empty })
     in
     mem dummy_file s
+  let to_string fs =
+    let res = Buffer.create 1024 in
+    iter (fun f ->
+        Buffer.add_string res (File.to_string f);
+        Buffer.add_string res "\n"
+      ) fs;
+    Buffer.contents res
 end
 
 (* only support Raw mode until all commands are properly working
@@ -117,8 +148,11 @@ module Protocol = struct
   type ds_to_mds =
     | Join_push of Node.t (* a DS registering itself with the MDS *)
     | Chunk_ack of filename * chunk_id
+    | Add_file_req of ds_rank * File.t
 
   type mds_to_ds =
+    | Add_file_ack of filename
+    | Add_file_nack of filename
     | Send_to_req of ds_rank * filename * chunk_id
     | Quit_cmd
 
@@ -126,7 +160,6 @@ module Protocol = struct
     | Chunk of filename * chunk_id * chunk_data
 
   type cli_to_mds =
-    | Add_file_cmd_req of File.t
     | Ls_cmd_req
     | Quit_cmd (* MDS must then send Quit to all DSs then exit itself *)
 
@@ -134,13 +167,18 @@ module Protocol = struct
     | Ls_cmd_ack of FileSet.t
 
   type cli_to_ds =
-    | Add_file of File.t (* if op. is successful,
-                            it will be followed by a
-                            cli_to_mds.Add_file message.
-                            If the Add_file fails, we'll have
-                            to rollback the local datastore *)
+    | Add_file_cmd_req of filename
 
-  type ds_to_cli = Ok | Already_here | Is_directory | Copy_failed
+  type add_file_error = Already_here | Is_directory | Copy_failed
+
+  let string_of_add_file_error = function
+    | Already_here -> "already here"
+    | Is_directory -> "directory"
+    | Copy_failed -> "copy failed"
+
+  type ds_to_cli =
+    | Add_file_cmd_ack of filename
+    | Add_file_cmd_nack of filename * add_file_error
 
   (* modules useful when sending a message *)
 

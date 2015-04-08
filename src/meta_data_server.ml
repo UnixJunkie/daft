@@ -67,12 +67,13 @@ let main () =
              Log.warn "suspicious Join req from %s" ds_as_string;
          end
        | For_MDS.From_DS (Add_file_req (ds_rank, f)) -> (* ----------------- *)
-         (* FBR: for the moment, for tests only, we always send a nack *)
+         let open Types.File in
          begin match snd int2node.(ds_rank) with
            | None -> Log.warn "cannot send nack of %s to %d" f.name ds_rank
            | Some receiver ->
+             (* FBR: for the moment, for tests only, we always send a nack *)
              let nack =
-               From_MDS.encode (From_MDS.To_DS (Add_file_nack (f.name)))
+               From_MDS.encode (From_MDS.To_DS (Add_file_nack f.name))
              in
              Sock.send receiver nack
          end
