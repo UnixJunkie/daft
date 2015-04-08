@@ -29,7 +29,6 @@ let main () =
   Logger.color_on ();
   (* setup MDS *)
   let port_in = ref Utils.default_mds_port_in in
-  let host = Utils.hostname () in
   let machine_file = ref "" in
   Arg.parse
     [ "-p", Arg.Set_int port_in, "port where to listen";
@@ -52,7 +51,7 @@ let main () =
       let encoded = Sock.recv incoming in
       let message = For_MDS.decode encoded in
       begin match message with
-       | For_MDS.From_DS (Join_push ds) ->
+       | For_MDS.From_DS (Join_push ds) -> (* ------------------------------ *)
          let ds_as_string = Node.to_string ds in
          Log.info "DS %s Join req" ds_as_string;
          let ds_rank, ds_host, ds_port_in = Node.to_triplet ds in
@@ -67,10 +66,21 @@ let main () =
            else
              Log.warn "suspicious Join req from %s" ds_as_string;
          end
-       | For_MDS.From_DS (Chunk_ack (_fn, _chunk)) -> abort "Chunk_ack"
-       | For_MDS.From_CLI Add_file_cmd_req _f -> abort "Add_file_cmd_req"
-       | For_MDS.From_CLI Ls_cmd_req -> abort "Ls_cmd_req"
-       | For_MDS.From_CLI Quit_cmd ->
+       | For_MDS.From_DS (Add_file_req (ds_rank, f)) -> (* ----------------- *)
+         (* FBR: for the moment, for tests only, we always send a nack *)
+         begin match snd int2node.(ds_rank) with
+           | None -> Log.warn "cannot send nack of %s to %d" f.name ds_rank
+           | Some receiver ->
+             let nack =
+               From_MDS.encode (From_MDS.To_DS (Add_file_nack (f.name)))
+             in
+             Sock.send receiver nack
+         end
+       | For_MDS.From_DS (Chunk_ack (_fn, _chunk)) -> (* ------------------- *)
+         abort "Chunk_ack"
+       | For_MDS.From_CLI Ls_cmd_req -> (* --------------------------------- *)
+         abort "Ls_cmd_req"
+       | For_MDS.From_CLI Quit_cmd -> (* ----------------------------------- *)
          let _ = Log.info "got Quit" in
          (* send Quit to all DSs *)
          A.iteri (fun i (_ds, maybe_sock) -> match maybe_sock with
