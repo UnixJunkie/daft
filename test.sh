@@ -14,4 +14,4 @@ rm -rf /tmp/*.ds # clean previous datastore
 
 sleep 1s
 
-echo quit | ./daft_cli
+echo quit | ./daft_cli -ds meleze.ens.fr:8083
