@@ -21,6 +21,7 @@ let ds_host = ref (Utils.hostname ())
 let ds_port_in = ref Utils.default_ds_port_in
 let mds_host = ref "localhost"
 let mds_port_in = ref Utils.default_mds_port_in
+let cli_port_in = ref Utils.default_cli_port_in
 
 let abort msg =
   Log.fatal msg;
@@ -33,7 +34,8 @@ let main () =
   Logger.color_on ();
   (* options parsing *)
   Arg.parse
-    [ "-mds", Arg.String (Utils.set_host_port mds_host mds_port_in),
+    [ "-cli", Arg.Set_int cli_port_in, "<port> where the CLI is listening";
+      "-mds", Arg.String (Utils.set_host_port mds_host mds_port_in),
       "<host:port> MDS";
       "-ds", Arg.String (Utils.set_host_port ds_host ds_port_in),
       "<host:port> local DS" ]
@@ -45,7 +47,8 @@ let main () =
   let ctx = ZMQ.Context.create () in
   let for_MDS = Utils.(zmq_socket Push ctx !mds_host !mds_port_in) in
   Log.info "Client of MDS %s:%d" !mds_host !mds_port_in;
-  let for_DS  = Utils.(zmq_socket Push ctx !ds_host  !ds_port_in ) in
+  let for_DS = Utils.(zmq_socket Push ctx !ds_host !ds_port_in) in
+  let incoming = Utils.(zmq_socket Pull ctx "*" !cli_port_in) in
   Log.info "Client of DS %s:%d" !ds_host !ds_port_in;
   (* the CLI execute just one command then exit *)
   (* we could have a batch mode, executing several commands from a file *)
@@ -57,10 +60,29 @@ let main () =
       let parsed_command = BatString.nsplit ~by:" " command_str in
       begin match parsed_command with
         | [] -> Log.error "empty command"
-        | cmd :: _args ->
+        | cmd :: args ->
           begin match cmd with
             | "" -> Log.error "cmd = \"\""
-            | "q" | "quit" | "exit" ->
+            | "put" -> (* -------------------------------------------------- *)
+              begin match args with
+                | [] -> Log.error "put: no filename"
+                | [fn] ->
+                  let put = For_DS.encode (For_DS.From_CLI (Add_file_cmd_req fn)) in
+                  Sock.send for_DS put;
+                  (* process answer *)
+                  let encoded = Sock.recv incoming in
+                  let message = For_CLI.decode encoded in
+                  begin match message with
+                    | For_CLI.From_MDS (Ls_cmd_ack f) ->
+                      Log.info "%s" (FileSet.to_string f)
+                    | For_CLI.From_DS (Add_file_cmd_ack fn) ->
+                      Log.info "put %s: OK" fn
+                    | For_CLI.From_DS (Add_file_cmd_nack (fn, err)) ->
+                      Log.error "put %s: %s" fn (string_of_add_file_error err)
+                  end
+                | _ -> Log.error "put: more than one filename"
+              end
+            | "q" | "quit" | "exit" -> (* ---------------------------------- *)
               let quit_cmd = For_MDS.encode (For_MDS.From_CLI (Quit_cmd)) in
               Sock.send for_MDS quit_cmd;
               Utils.sleep_ms 100; (* wait a bit for the message to be sent
