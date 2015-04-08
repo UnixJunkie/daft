@@ -28,7 +28,7 @@ let sleep_ms ms =
   ()
 
 (* like `cmd` in shell
-   FBR: use the one in batteries upon next release *)
+   TODO: use the one in batteries upon next release *)
 let run_and_read cmd =
   let string_of_file fn =
     let buff_size = 1024 in
