@@ -137,14 +137,23 @@ let main () =
   if !ds_port_in = uninitialized then (Log.fatal "-p is mandatory"; exit 1);
   if !cli_port_in = uninitialized then (Log.fatal "-cli is mandatory"; exit 1);
   if !machine_file = "" then abort "-m is mandatory";
+  let ctx = ZMQ.Context.create () in
   let int2node = Utils.data_nodes_array !machine_file in
+  (* create a push socket for each DS, except the current one because we
+     will never send to self *)
+  A.iteri (fun i (node, _sock) ->
+      if i <> !ds_rank then
+        let sock =
+          Utils.(zmq_socket Push ctx (Node.get_host node) (Node.get_port node))
+        in
+        A.set int2node i (node, Some sock)
+    ) int2node;
   Log.info "read %d host(s)" (A.length int2node);
   local_node := Node.create !ds_rank ds_host !ds_port_in;
   Log.info "Client of MDS %s:%d" !mds_host !mds_port_in;
   data_store_root := create_data_store ();
   (* setup server *)
   Log.info "binding server to %s:%d" "*" !ds_port_in;
-  let ctx = ZMQ.Context.create () in
   let incoming = Utils.(zmq_socket Pull ctx "*" !ds_port_in) in
   (* feedback socket to the local CLI *)
   let to_cli = Utils.(zmq_socket Push ctx ds_host !cli_port_in) in
@@ -153,7 +162,6 @@ let main () =
   let to_mds = Utils.(zmq_socket Push ctx !mds_host !mds_port_in) in
   let here_I_am = From_DS.encode (From_DS.To_MDS (Join_push !local_node)) in
   Sock.send to_mds here_I_am;
-  (* FBR: create an array of DS sockets for sending *)
   try (* loop on messages until quit command *)
     let not_finished = ref true in
     while !not_finished do
