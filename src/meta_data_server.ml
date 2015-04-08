@@ -13,10 +13,10 @@ module Log = Log.Make (struct let section = mds_in_blue end)
 module Node = Types.Node
 module Sock = ZMQ.Socket
 
-let start_data_nodes () =
-  (* FBR: scp exe to each node *)
-  (* FBR: ssh node to start it *)
-  failwith "not implemented yet"
+let start_data_nodes _machine_fn =
+  (* TODO: scp exe to each node *)
+  (* TODO: ssh node to start it *)
+  ()
 
 let abort msg =
   Log.fatal msg;
@@ -40,7 +40,7 @@ let main () =
   if !machine_file = "" then abort "-m is mandatory";
   let int2node = Utils.data_nodes_array !machine_file in
   Log.info "read %d host(s)" (A.length int2node);
-  (* start all DSs *) (* FBR: later maybe, we can do this by hand for the moment *)
+  start_data_nodes !machine_file;
   (* start server *)
   Log.info "binding server to %s:%d" "*" !port_in;
   let ctx = ZMQ.Context.create () in
