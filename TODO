@@ -15,6 +15,9 @@ TODO
     - batch at most N messages before processing the state updates
       first. Process messages immediately if less than N are available
 
+- files in the datastore should be in read-only mode for
+  the owner only (UGO right 400)
+
 COMMANDS SEMANTICS
 ==================
 
