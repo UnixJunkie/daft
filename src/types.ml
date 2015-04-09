@@ -148,8 +148,6 @@ module Protocol = struct
   type chunk_id = int
   type chunk_data = string
 
-  (* the MDS is a master, DSs are its slaves *)
-  (* message types *)
   type ds_to_mds =
     | Join_push of Node.t (* a DS registering itself with the MDS *)
     | Chunk_ack of filename * chunk_id
@@ -176,73 +174,27 @@ module Protocol = struct
 
   type add_file_error = Already_here | Is_directory | Copy_failed
 
-  let string_of_add_file_error = function
-    | Already_here -> "already here"
-    | Is_directory -> "directory"
-    | Copy_failed -> "copy failed"
-
   type ds_to_cli =
     | Add_file_cmd_ack of filename
     | Add_file_cmd_nack of filename * add_file_error
 
-  (* modules useful when sending a message *)
+  type t = DS_to_MDS of ds_to_mds
+         | MDS_to_DS of mds_to_ds
+         | DS_to_DS of ds_to_ds
+         | CLI_to_MDS of cli_to_mds
+         | MDS_to_CLI of mds_to_cli
+         | CLI_to_DS of cli_to_ds
+         | DS_to_CLI of ds_to_cli
 
-  module From_MDS = struct
-    type t = To_DS  of mds_to_ds
-           | To_CLI of mds_to_cli
-    let encode (m: t): string =
-      Marshal.to_string m [Marshal.No_sharing]
-    let decode (s: string): t =
+  let encode (m: t): string =
+    Marshal.to_string m [Marshal.No_sharing]
+
+  let decode (s: string): t =
       (Marshal.from_string s 0: t)
-  end
 
-  module From_DS = struct
-    type t = To_MDS of ds_to_mds
-           | To_DS  of ds_to_ds
-           | To_CLI of ds_to_cli
-    let encode (m: t): string =
-      Marshal.to_string m [Marshal.No_sharing]
-    let decode (s: string): t =
-      (Marshal.from_string s 0: t)
-  end
-
-  module From_CLI = struct
-    type t = To_MDS of cli_to_mds
-           | To_DS  of cli_to_ds
-    let encode (m: t): string =
-      Marshal.to_string m [Marshal.No_sharing]
-    let decode (s: string): t =
-      (Marshal.from_string s 0: t)
-  end
-
-  (* modules useful when receiving a message *)
-
-  module For_MDS = struct
-    type t = From_DS  of ds_to_mds
-           | From_CLI of cli_to_mds
-    let encode (m: t): string =
-      Marshal.to_string m [Marshal.No_sharing]
-    let decode (s: string): t =
-      (Marshal.from_string s 0: t)
-  end
-
-  module For_DS = struct
-    type t = From_MDS of mds_to_ds
-           | From_DS  of ds_to_ds
-           | From_CLI of cli_to_ds
-    let encode (m: t): string =
-      Marshal.to_string m [Marshal.No_sharing]
-    let decode (s: string): t =
-      (Marshal.from_string s 0: t)
-  end
-
-  module For_CLI = struct
-    type t = From_MDS of mds_to_cli
-           | From_DS  of ds_to_cli
-    let encode (m: t): string =
-      Marshal.to_string m [Marshal.No_sharing]
-    let decode (s: string): t =
-      (Marshal.from_string s 0: t)
-  end
+  let string_of_add_file_error = function
+    | Already_here -> "already here"
+    | Is_directory -> "directory"
+    | Copy_failed -> "copy failed"
 
 end

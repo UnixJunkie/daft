@@ -61,10 +61,10 @@ let main () =
     while !not_finished do
       Log.debug "waiting msg";
       let encoded = Sock.recv incoming in
-      let message = For_MDS.decode encoded in
+      let message = decode encoded in
       Log.debug "got msg";
       begin match message with
-       | For_MDS.From_DS (Join_push ds) -> (* ------------------------------ *)
+       | DS_to_MDS (Join_push ds) -> (* ------------------------------------ *)
          Log.debug "got Join_push";
          let ds_as_string = Node.to_string ds in
          Log.info "DS %s Join req" ds_as_string;
@@ -80,7 +80,7 @@ let main () =
            else
              Log.warn "suspicious Join req from %s" ds_as_string;
          end
-       | For_MDS.From_DS (Add_file_req (ds_rank, f)) -> (* ----------------- *)
+       | DS_to_MDS (Add_file_req (ds_rank, f)) -> (* ----------------------- *)
          Log.debug "got Add_file_req";
          let open Types.File in
          begin match snd int2node.(ds_rank) with
@@ -95,28 +95,32 @@ let main () =
                  Add_file_ack f.name
                end
              in
-             let answer = From_MDS.encode (From_MDS.To_DS ack_or_nack) in
+             let answer = encode (MDS_to_DS ack_or_nack) in
              Sock.send receiver answer
          end
-       | For_MDS.From_DS (Chunk_ack (_fn, _chunk)) -> (* ------------------- *)
+       | DS_to_MDS (Chunk_ack (_fn, _chunk)) -> (* ------------------------- *)
          Log.debug "got Chunk_ack";
          abort "Chunk_ack"
-       | For_MDS.From_CLI Ls_cmd_req -> (* --------------------------------- *)
+       | CLI_to_MDS Ls_cmd_req -> (* --------------------------------------- *)
          Log.debug "got Ls_cmd_req";
-         let ls_ack =
-           From_MDS.encode (From_MDS.To_CLI (Ls_cmd_ack !global_state)) in
+         let ls_ack = encode (MDS_to_CLI (Ls_cmd_ack !global_state)) in
          Sock.send to_cli ls_ack
-       | For_MDS.From_CLI Quit_cmd -> (* ----------------------------------- *)
+       | CLI_to_MDS Quit_cmd -> (* ----------------------------------------- *)
          Log.debug "got Quit_cmd";
          let _ = Log.info "got Quit" in
          (* send Quit to all DSs *)
          A.iteri (fun i (_ds, maybe_sock) -> match maybe_sock with
              | None -> Log.warn "DS %d missing" i
              | Some to_DS ->
-               let quit = From_MDS.encode (From_MDS.To_DS Quit_cmd) in
+               let quit = encode (MDS_to_DS Quit_cmd) in
                Sock.send to_DS quit
            ) int2node;
          not_finished := false
+       | DS_to_CLI  _ -> Log.warn "DS_to_CLI"
+       | MDS_to_DS  _ -> Log.warn "MDS_to_DS"
+       | MDS_to_CLI _ -> Log.warn "MDS_to_CLI"
+       | DS_to_DS   _ -> Log.warn "DS_to_DS"
+       | CLI_to_DS  _ -> Log.warn "CLI_to_DS"
       end
     done
   with exn -> begin

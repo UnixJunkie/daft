@@ -6,8 +6,6 @@ let ds_in_yellow = Utils.fg_yellow ^ "DS" ^ Utils.fg_reset
 
 module A  = Array
 module Fn = Filename
-module From_DS = Types.Protocol.From_DS
-module From_MDS = Types.Protocol.From_MDS
 module FU = FileUtil
 module Logger = Log
 (* prefix all logs *)
@@ -80,12 +78,12 @@ let add_file (fn: string): ds_to_cli =
     FU.( (* opened FU to get rid of warning 40 *)
       let stat = FU.stat fn in
       let size = FU.byte_of_size stat.size in
-      let fn =
-        if S.starts_with fn "/" (* chop leading '/' if any *)
-        then S.lchop ~n:1 fn
-        else fn
+      let dest_fn =
+        if S.starts_with fn "/" then
+          !data_store_root ^ fn
+        else
+          !data_store_root ^ "/" ^ fn
       in
-      let dest_fn = !data_store_root ^ "/" ^ fn in
       let dest_dir = Fn.dirname dest_fn in
       (* mkdir create all necessary parent dirs *)
       FU.mkdir ~parent:true ~mode:0o700 dest_dir;
@@ -161,41 +159,40 @@ let main () =
   (* register at the MDS *)
   Log.info "connecting to MDS %s:%d" !mds_host !mds_port_in;
   let to_mds = Utils.(zmq_socket Push ctx !mds_host !mds_port_in) in
-  let here_I_am = From_DS.encode (From_DS.To_MDS (Join_push !local_node)) in
+  let here_I_am = encode (DS_to_MDS (Join_push !local_node)) in
   Sock.send to_mds here_I_am;
   try (* loop on messages until quit command *)
     let not_finished = ref true in
     while !not_finished do
       let encoded = Sock.recv incoming in
-      let message = For_DS.decode encoded in
+      let message = decode encoded in
       begin match message with
-        | For_DS.From_MDS (Send_to_req (_ds_rank, _fn, _chunk)) -> (* ------ *)
+        | MDS_to_DS (Send_to_req (_ds_rank, _fn, _chunk)) -> (* ------ *)
           Log.debug "got Send_to_req";
           abort "Send_to_req"
-        | For_DS.From_MDS Quit_cmd -> (* ----------------------------------- *)
+        | MDS_to_DS Quit_cmd -> (* ----------------------------------- *)
           Log.debug "got Quit_cmd";
           let _ = Log.info "got Quit" in
           not_finished := false
-        | For_DS.From_MDS (Add_file_ack fn) -> (* -------------------------- *)
+        | MDS_to_DS (Add_file_ack fn) -> (* -------------------------- *)
           Log.debug "got Add_file_ack";
           (* forward the good news to the CLI *)
-          let ack = For_CLI.encode (For_CLI.From_DS (Add_file_cmd_ack fn)) in
+          let ack = encode (DS_to_CLI (Add_file_cmd_ack fn)) in
           Sock.send to_cli ack
-        | For_DS.From_MDS (Add_file_nack fn) -> (* ------------------------- *)
+        | MDS_to_DS (Add_file_nack fn) -> (* ------------------------- *)
           Log.debug "got Add_file_nack";
           (* FBR: rollback local data store; DO WE REALLY NEED TO DO THIS ??? *)
           Log.warn "datastore was not rolled back for %s" fn;
           (* rollback local state *)
           local_state := FileSet.remove_fn fn !local_state;
           let nack = (* forward the nack to the CLI *)
-            For_CLI.encode
-              (For_CLI.From_DS (Add_file_cmd_nack (fn, Already_here)))
+            encode (DS_to_CLI (Add_file_cmd_nack (fn, Already_here)))
           in
           Sock.send to_cli nack
-        | For_DS.From_DS (Chunk (_fn, _chunk, _data)) -> (* ---------------- *)
+        | DS_to_DS (Chunk (_fn, _chunk, _data)) -> (* ---------------- *)
           Log.debug "got Chunk";
           abort "Chunk"
-        | For_DS.From_CLI (Add_file_cmd_req fn) -> (* ---------------------- *)
+        | CLI_to_DS (Add_file_cmd_req fn) -> (* ---------------------- *)
           Log.debug "got Add_file_cmd_req";
           let res = add_file fn in
           begin match res with
@@ -203,14 +200,16 @@ let main () =
               (* notify MDS about this new file *)
               let file = FileSet.find_fn fn !local_state in
               let add_file_req = Add_file_req (!ds_rank, file) in
-              let add_file_msg = For_MDS.encode (For_MDS.From_DS add_file_req) in
+              let add_file_msg = encode (DS_to_MDS add_file_req) in
               Sock.send to_mds add_file_msg
             | Add_file_cmd_nack (fn, err) ->
-              let nack =
-                For_CLI.encode (For_CLI.From_DS (Add_file_cmd_nack (fn, err)))
-              in
+              let nack = encode (DS_to_CLI (Add_file_cmd_nack (fn, err))) in
               Sock.send to_cli nack
           end
+        | DS_to_CLI  _ -> Log.warn "DS_to_CLI"
+        | MDS_to_CLI _ -> Log.warn "MDS_to_CLI"
+        | DS_to_MDS  _ -> Log.warn "DS_to_MDS"
+        | CLI_to_MDS _ -> Log.warn "CLI_to_MDS"
       end
     done;
   with exn -> begin
@@ -218,6 +217,7 @@ let main () =
       let (_: int) = delete_data_store !data_store_root in
       ZMQ.Socket.close incoming;
       ZMQ.Socket.close to_mds;
+      Utils.cleanup_data_nodes_array int2node;
       ZMQ.Context.terminate ctx;
       raise exn
     end
