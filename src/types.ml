@@ -101,14 +101,18 @@ module FileSet = struct
   include Set.Make(File)
   let dummy_stat = FU.stat "/dev/null" (* should be private *)
   (* extend module with more operations *)
+  let dummy_file fn =
+    File.({ name = fn;
+            size = Int64.zero;
+            stat = dummy_stat;
+            nb_chunks = 0;
+            chunks = ChunkSet.empty })
   let contains_fn fn s =
-    let dummy_file = File.({ name = fn;
-                             size = Int64.zero;
-                             stat = dummy_stat;
-                             nb_chunks = 0;
-                             chunks = ChunkSet.empty })
-    in
-    mem dummy_file s
+    mem (dummy_file fn) s
+  let find_fn fn s =
+    find (dummy_file fn) s
+  let remove_fn fn s =
+    remove (dummy_file fn) s
   let to_string fs =
     let res = Buffer.create 1024 in
     iter (fun f ->
@@ -130,12 +134,13 @@ type storage_mode = Raw | Compressed | Encrypted | Signed
 
 module Protocol = struct
 
-  (* naming of messages
-     ------------------
+  (* messages naming
+     ---------------
      *_req: request that will need an answer
      *_ack: positive answer to a request
      *_nack: negative answer to a request
-     *_push: message that doesn't need answer
+     *_push: message that doesn't need an answer or whose answer will not
+             be sent by the one receiving it
      *_cmd_*: related to a command from the CLI *)
 
   type ds_rank = int
