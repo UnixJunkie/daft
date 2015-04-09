@@ -22,8 +22,8 @@ echo quit | ./daft_cli -ds meleze.ens.fr:8083
 # ./daft_cli -ds meleze.ens.fr:8083
 
 # # to run all processes separately by hand
-# FBR: find a way to fire each one in a different xterm so that logs
-#      are not interlaced
+# # FBR: find a way to fire each one in a different xterm so that logs
+# #      are not interlaced
 # ./daft_mds -m machines -cli meleze.ens.fr:8000
 
 # ./daft_ds -m machines -r 0 -mds `hostname -f` -p 8083 -cli meleze.ens.fr:8000
