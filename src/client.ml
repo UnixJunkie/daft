@@ -27,6 +27,23 @@ let abort msg =
   Log.fatal msg;
   exit 1
 
+let process_answer incoming =
+  Log.debug "waiting msg";
+  let encoded = Sock.recv incoming in
+  let message = For_CLI.decode encoded in
+  Log.debug "got msg";
+  match message with
+  | For_CLI.From_MDS (Ls_cmd_ack f) ->
+    Log.debug "got Ls_cmd_ack";
+    let listing = FileSet.to_string f in
+    Log.info "%s" listing
+  | For_CLI.From_DS (Add_file_cmd_ack fn) ->
+    Log.debug "got Add_file_cmd_ack";
+    Log.info "put %s: OK" fn
+  | For_CLI.From_DS (Add_file_cmd_nack (fn, err)) ->
+    Log.debug "got Add_file_cmd_nack";
+    Log.error "put %s: %s" fn (string_of_add_file_error err)
+
 let main () =
   (* setup logger *)
   Logger.set_log_level Logger.DEBUG;
@@ -69,26 +86,20 @@ let main () =
                 | [fn] ->
                   let put = For_DS.encode (For_DS.From_CLI (Add_file_cmd_req fn)) in
                   Sock.send for_DS put;
-                  (* process answer *)
-                  let encoded = Sock.recv incoming in
-                  let message = For_CLI.decode encoded in
-                  begin match message with
-                    | For_CLI.From_MDS (Ls_cmd_ack f) ->
-                      Log.info "%s" (FileSet.to_string f)
-                    | For_CLI.From_DS (Add_file_cmd_ack fn) ->
-                      Log.info "put %s: OK" fn
-                    | For_CLI.From_DS (Add_file_cmd_nack (fn, err)) ->
-                      Log.error "put %s: %s" fn (string_of_add_file_error err)
-                  end
+                  process_answer incoming
                 | _ -> Log.error "put: more than one filename"
               end
             | "q" | "quit" | "exit" -> (* ---------------------------------- *)
-              let quit_cmd = For_MDS.encode (For_MDS.From_CLI (Quit_cmd)) in
+              let quit_cmd = For_MDS.encode (For_MDS.From_CLI Quit_cmd) in
               Sock.send for_MDS quit_cmd;
               Utils.sleep_ms 100; (* wait a bit for the message to be sent
                                      I tried to play with the linger socket option
                                      but it did not work *)
               not_finished := false;
+            | "l" | "ls" -> (* --------------------------------------------- *)
+              let ls_cmd = For_MDS.encode (For_MDS.From_CLI Ls_cmd_req) in
+              Sock.send for_MDS ls_cmd;
+              process_answer incoming
             | _ -> Log.error "unknown command: %s" cmd
           end
       end
