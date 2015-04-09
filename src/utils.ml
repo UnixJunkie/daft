@@ -118,3 +118,9 @@ let data_nodes_array (fn: string) =
   L.iter (fun node -> A.set res (Node.get_rank node) (node, None)
          ) machines;
   res
+
+let cleanup_data_nodes_array a =
+  A.iter (fun (_node, maybe_socket) -> match maybe_socket with
+      | None -> ()
+      | Some sock -> ZMQ.Socket.close sock
+    ) a
