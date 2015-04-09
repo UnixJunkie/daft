@@ -18,14 +18,13 @@ module File = Types.File
 module FileSet = Types.FileSet
 module Sock = ZMQ.Socket
 
-let uninitialized = -1
-
 (* setup data server *)
 let ds_log_fn = ref ""
 let ds_host = Utils.hostname ()
 let ds_port_in = ref Utils.default_ds_port_in
+let cli_host = ref ""
 let cli_port_in = ref Utils.default_cli_port_in
-let ds_rank = ref uninitialized
+let ds_rank = ref Utils.uninitialized
 let machine_file = ref ""
 let mds_host = ref "localhost"
 let mds_port_in = ref Utils.default_mds_port_in
@@ -115,7 +114,8 @@ let main () =
   Arg.parse
     [ "-cs", Arg.Set_int chunk_size, "<size> file chunk size";
       "-l", Arg.Set_string ds_log_fn, "<filename> where to log";
-      "-cli", Arg.Set_int cli_port_in, "<port> where the CLI is listening";
+      "-cli", Arg.String (Utils.set_host_port cli_host cli_port_in),
+      "<host:port> CLI";
       "-p", Arg.Set_int ds_port_in, "<port> where to listen";
       "-r", Arg.Set_int ds_rank, "<rank> rank among other data nodes";
       "-m", Arg.Set_string machine_file,
@@ -130,12 +130,13 @@ let main () =
     let log_out = Legacy.open_out !ds_log_fn in
     Logger.set_output log_out
   end;
-  if !chunk_size = uninitialized then (Log.fatal "-cs is mandatory"; exit 1);
-  if !mds_host = "" then (Log.fatal "-mds is mandatory"; exit 1);
-  if !mds_port_in = uninitialized then (Log.fatal "-sp is mandatory"; exit 1);
-  if !ds_rank = uninitialized then (Log.fatal "-r is mandatory"; exit 1);
-  if !ds_port_in = uninitialized then (Log.fatal "-p is mandatory"; exit 1);
-  if !cli_port_in = uninitialized then (Log.fatal "-cli is mandatory"; exit 1);
+  if !chunk_size = Utils.uninitialized then abort "-cs is mandatory";
+  if !mds_host = "" then abort "-mds is mandatory";
+  if !mds_port_in = Utils.uninitialized then abort "-sp is mandatory";
+  if !ds_rank = Utils.uninitialized then abort "-r is mandatory";
+  if !ds_port_in = Utils.uninitialized then abort "-p is mandatory";
+  if !cli_host = "" then abort "-cli is mandatory";
+  if !cli_port_in = Utils.uninitialized then abort "-cli is mandatory";
   if !machine_file = "" then abort "-m is mandatory";
   let ctx = ZMQ.Context.create () in
   let int2node = Utils.data_nodes_array !machine_file in
@@ -156,7 +157,7 @@ let main () =
   Log.info "binding server to %s:%d" "*" !ds_port_in;
   let incoming = Utils.(zmq_socket Pull ctx "*" !ds_port_in) in
   (* feedback socket to the local CLI *)
-  let to_cli = Utils.(zmq_socket Push ctx ds_host !cli_port_in) in
+  let to_cli = Utils.(zmq_socket Push ctx !cli_host !cli_port_in) in
   (* register at the MDS *)
   Log.info "connecting to MDS %s:%d" !mds_host !mds_port_in;
   let to_mds = Utils.(zmq_socket Push ctx !mds_host !mds_port_in) in
@@ -169,22 +170,47 @@ let main () =
       let message = For_DS.decode encoded in
       begin match message with
         | For_DS.From_MDS (Send_to_req (_ds_rank, _fn, _chunk)) -> (* ------ *)
+          Log.debug "got Send_to_req";
           abort "Send_to_req"
         | For_DS.From_MDS Quit_cmd -> (* ----------------------------------- *)
+          Log.debug "got Quit_cmd";
           let _ = Log.info "got Quit" in
           not_finished := false
         | For_DS.From_MDS (Add_file_ack fn) -> (* -------------------------- *)
+          Log.debug "got Add_file_ack";
+          (* forward the good news to the CLI *)
           let ack = For_CLI.encode (For_CLI.From_DS (Add_file_cmd_ack fn)) in
           Sock.send to_cli ack
         | For_DS.From_MDS (Add_file_nack fn) -> (* ------------------------- *)
-          let nack =
-            For_CLI.encode (For_CLI.From_DS (Add_file_cmd_nack (fn, Already_here)))
+          Log.debug "got Add_file_nack";
+          (* FBR: rollback local data store; DO WE REALLY NEED TO DO THIS ??? *)
+          Log.warn "datastore was not rolled back for %s" fn;
+          (* rollback local state *)
+          local_state := FileSet.remove_fn fn !local_state;
+          let nack = (* forward the nack to the CLI *)
+            For_CLI.encode
+              (For_CLI.From_DS (Add_file_cmd_nack (fn, Already_here)))
           in
           Sock.send to_cli nack
         | For_DS.From_DS (Chunk (_fn, _chunk, _data)) -> (* ---------------- *)
+          Log.debug "got Chunk";
           abort "Chunk"
-        | For_DS.From_CLI Add_file_cmd_req _f -> (* ------------------------ *)
-          abort "Add_file_cmd_req"
+        | For_DS.From_CLI (Add_file_cmd_req fn) -> (* ---------------------- *)
+          Log.debug "got Add_file_cmd_req";
+          let res = add_file fn in
+          begin match res with
+            | Add_file_cmd_ack fn ->
+              (* notify MDS about this new file *)
+              let file = FileSet.find_fn fn !local_state in
+              let add_file_req = Add_file_req (!ds_rank, file) in
+              let add_file_msg = For_MDS.encode (For_MDS.From_DS add_file_req) in
+              Sock.send to_mds add_file_msg
+            | Add_file_cmd_nack (fn, err) ->
+              let nack =
+                For_CLI.encode (For_CLI.From_DS (Add_file_cmd_nack (fn, err)))
+              in
+              Sock.send to_cli nack
+          end
       end
     done;
   with exn -> begin
