@@ -6,12 +6,17 @@ let mds_in_blue = Utils.fg_cyan ^ "MDS" ^ Utils.fg_reset
 
 module A = Array
 module Ht = Hashtbl
+module FileSet = Types.FileSet
 module L = List
 module Logger = Log (* !!! keep this one before Log alias !!! *)
 (* prefix all logs *)
 module Log = Log.Make (struct let section = mds_in_blue end)
 module Node = Types.Node
 module Sock = ZMQ.Socket
+
+let global_state = ref FileSet.empty
+let cli_host = ref ""
+let cli_port_in = ref Utils.default_cli_port_in
 
 let start_data_nodes _machine_fn =
   (* TODO: scp exe to each node *)
@@ -33,25 +38,34 @@ let main () =
   Arg.parse
     [ "-p", Arg.Set_int port_in, "port where to listen";
       "-m", Arg.Set_string machine_file,
-      "machine_file list of [user@]host:port (one per line)" ]
+      "machine_file list of [user@]host:port (one per line)";
+      "-cli", Arg.String (Utils.set_host_port cli_host cli_port_in),
+      "<host:port> CLI" ]
     (fun arg -> raise (Arg.Bad ("Bad argument: " ^ arg)))
     (sprintf "usage: %s <options>" Sys.argv.(0));
   (* check options *)
   if !machine_file = "" then abort "-m is mandatory";
+  if !cli_host = "" then abort "-cli is mandatory";
+  if !cli_port_in = Utils.uninitialized then abort "-cli is mandatory";
   let int2node = Utils.data_nodes_array !machine_file in
   Log.info "read %d host(s)" (A.length int2node);
   start_data_nodes !machine_file;
   (* start server *)
   Log.info "binding server to %s:%d" "*" !port_in;
   let ctx = ZMQ.Context.create () in
+  (* feedback socket to the local CLI *)
+  let to_cli = Utils.(zmq_socket Push ctx !cli_host !cli_port_in) in
   let incoming = Utils.(zmq_socket Pull ctx "*" !port_in ) in
   try (* loop on messages until quit command *)
     let not_finished = ref true in
     while !not_finished do
+      Log.debug "waiting msg";
       let encoded = Sock.recv incoming in
       let message = For_MDS.decode encoded in
+      Log.debug "got msg";
       begin match message with
        | For_MDS.From_DS (Join_push ds) -> (* ------------------------------ *)
+         Log.debug "got Join_push";
          let ds_as_string = Node.to_string ds in
          Log.info "DS %s Join req" ds_as_string;
          let ds_rank, ds_host, ds_port_in = Node.to_triplet ds in
@@ -67,21 +81,33 @@ let main () =
              Log.warn "suspicious Join req from %s" ds_as_string;
          end
        | For_MDS.From_DS (Add_file_req (ds_rank, f)) -> (* ----------------- *)
+         Log.debug "got Add_file_req";
          let open Types.File in
          begin match snd int2node.(ds_rank) with
            | None -> Log.warn "cannot send nack of %s to %d" f.name ds_rank
            | Some receiver ->
-             (* FBR: for the moment, for tests only, we always send a nack *)
-             let nack =
-               From_MDS.encode (From_MDS.To_DS (Add_file_nack f.name))
+             let ack_or_nack =
+               if FileSet.contains_fn f.name !global_state then
+                 (* already one with same name *)
+                 Add_file_nack f.name
+               else begin
+                 global_state := FileSet.add f !global_state;
+                 Add_file_ack f.name
+               end
              in
-             Sock.send receiver nack
+             let answer = From_MDS.encode (From_MDS.To_DS ack_or_nack) in
+             Sock.send receiver answer
          end
        | For_MDS.From_DS (Chunk_ack (_fn, _chunk)) -> (* ------------------- *)
+         Log.debug "got Chunk_ack";
          abort "Chunk_ack"
        | For_MDS.From_CLI Ls_cmd_req -> (* --------------------------------- *)
-         abort "Ls_cmd_req"
+         Log.debug "got Ls_cmd_req";
+         let ls_ack =
+           From_MDS.encode (From_MDS.To_CLI (Ls_cmd_ack !global_state)) in
+         Sock.send to_cli ls_ack
        | For_MDS.From_CLI Quit_cmd -> (* ----------------------------------- *)
+         Log.debug "got Quit_cmd";
          let _ = Log.info "got Quit" in
          (* send Quit to all DSs *)
          A.iteri (fun i (_ds, maybe_sock) -> match maybe_sock with
