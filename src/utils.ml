@@ -5,6 +5,7 @@ module A = Array
 module L = List
 module Node = Types.Node
 
+let uninitialized = -1
 let default_mds_host = "*" (* star means all interfaces *)
 let default_ds_port_in  = 8081
 let default_mds_port_in = 8082
