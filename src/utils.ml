@@ -68,14 +68,20 @@ let with_out_file fn f =
 type socket_type = Push | Pull
 
 let zmq_socket (t: socket_type) (context: ZMQ.Context.t) (host: string) (port: int) =
-  let sock_type, bind_or_connect = match t with
-    | Push -> ZMQ.Socket.push, ZMQ.Socket.connect
-    | Pull -> ZMQ.Socket.pull, ZMQ.Socket.bind
-  in
-  let sock = ZMQ.Socket.create context sock_type in
   let host_and_port = sprintf "tcp://%s:%d" host port in
-  bind_or_connect sock host_and_port;
-  sock
+  match t with
+  | Pull -> 
+    let sock = ZMQ.Socket.create context ZMQ.Socket.pull in
+    ZMQ.Socket.bind sock host_and_port;
+    sock
+  | Push ->
+    let sock = ZMQ.Socket.create context ZMQ.Socket.push in
+    ZMQ.Socket.connect sock host_and_port;
+    (* a push socket must wait forever (upon close) that all its messages
+       have been sent *)
+    let infinity = -1 in
+    ZMQ.Socket.set_linger_period sock infinity;
+    sock
 
 open Batteries (* everything before uses Legacy IOs (fast) *)
 
@@ -119,8 +125,8 @@ let data_nodes_array (fn: string) =
          ) machines;
   res
 
-let cleanup_data_nodes_array a =
-  A.iter (fun (_node, maybe_socket) -> match maybe_socket with
-      | None -> ()
-      | Some sock -> ZMQ.Socket.close sock
+let cleanup_data_nodes_array warn a =
+  A.iteri (fun i (_ds, maybe_sock) -> match maybe_sock with
+      | Some s -> ZMQ.Socket.close s
+      | None -> if warn then Log.warn "DS %d missing" i
     ) a

@@ -212,14 +212,19 @@ let main () =
         | CLI_to_MDS _ -> Log.warn "CLI_to_MDS"
       end
     done;
+    raise Types.Loop_end;
   with exn -> begin
-      Log.error "exception";
       let (_: int) = delete_data_store !data_store_root in
       ZMQ.Socket.close incoming;
       ZMQ.Socket.close to_mds;
-      Utils.cleanup_data_nodes_array int2node;
+      ZMQ.Socket.close to_cli;
+      let dont_warn = false in
+      Utils.cleanup_data_nodes_array dont_warn int2node;
       ZMQ.Context.terminate ctx;
-      raise exn
+      begin match exn with
+        | Types.Loop_end -> ()
+        | _ -> raise exn
+      end
     end
 ;;
 

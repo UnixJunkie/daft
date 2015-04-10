@@ -1,6 +1,8 @@
 open Batteries
 open Printf
 
+exception Loop_end
+
 module FU = FileUtil
 
 module Node = struct

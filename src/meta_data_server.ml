@@ -108,12 +108,11 @@ let main () =
        | CLI_to_MDS Quit_cmd -> (* ----------------------------------------- *)
          Log.debug "got Quit_cmd";
          let _ = Log.info "got Quit" in
+         let quit = encode (MDS_to_DS Quit_cmd) in
          (* send Quit to all DSs *)
          A.iteri (fun i (_ds, maybe_sock) -> match maybe_sock with
              | None -> Log.warn "DS %d missing" i
-             | Some to_DS ->
-               let quit = encode (MDS_to_DS Quit_cmd) in
-               Sock.send to_DS quit
+             | Some to_DS_i -> Sock.send to_DS_i quit
            ) int2node;
          not_finished := false
        | DS_to_CLI  _ -> Log.warn "DS_to_CLI"
@@ -122,16 +121,18 @@ let main () =
        | DS_to_DS   _ -> Log.warn "DS_to_DS"
        | CLI_to_DS  _ -> Log.warn "CLI_to_DS"
       end
-    done
+    done;
+    raise Types.Loop_end;
   with exn -> begin
-      Log.error "exception";
       ZMQ.Socket.close incoming;
-      A.iteri (fun i (_ds, maybe_sock) -> match maybe_sock with
-          | Some s -> ZMQ.Socket.close s
-          | None -> Log.warn "DS %d missing" i
-        ) int2node;
+      ZMQ.Socket.close to_cli;
+      let warn = true in
+      Utils.cleanup_data_nodes_array warn int2node;
       ZMQ.Context.terminate ctx;
-      raise exn
+      begin match exn with
+        | Types.Loop_end -> ()
+        | _ -> raise exn
+      end
     end
 ;;
 

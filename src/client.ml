@@ -97,9 +97,6 @@ let main () =
             | "q" | "quit" | "exit" -> (* ---------------------------------- *)
               let quit_cmd = encode (CLI_to_MDS Quit_cmd) in
               Sock.send for_MDS quit_cmd;
-              Utils.sleep_ms 100; (* wait a bit for the message to be sent
-                                     I tried to play with the linger socket option
-                                     but it did not work *)
               not_finished := false;
             | "l" | "ls" -> (* --------------------------------------------- *)
               let ls_cmd = encode (CLI_to_MDS Ls_cmd_req) in
@@ -108,13 +105,17 @@ let main () =
             | _ -> Log.error "unknown command: %s" cmd
           end
       end
-    done
+    done;
+    raise Types.Loop_end;
   with exn -> begin
-      Log.info "exception";
       ZMQ.Socket.close for_MDS;
       ZMQ.Socket.close for_DS;
+      ZMQ.Socket.close incoming;
       ZMQ.Context.terminate ctx;
-      raise exn
+      begin match exn with
+        | Types.Loop_end -> ()
+        | _ -> raise exn
+      end
     end
 ;;
 
