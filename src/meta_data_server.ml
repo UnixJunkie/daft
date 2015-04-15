@@ -70,20 +70,25 @@ let main () =
          Log.info "DS %s Join req" ds_as_string;
          let ds_rank, ds_host, ds_port_in = Node.to_triplet ds in
          (* check it is the one we expect at that rank *)
-         let expected_ds, prev_sock = int2node.(ds_rank) in
-         begin match prev_sock with
-         | Some _ -> Log.warn "%s already joined" ds_as_string
-         | None -> (* remember him for the future *)
-           if ds = expected_ds then
-             let sock = Utils.(zmq_socket Push ctx ds_host ds_port_in) in
-             A.set int2node ds_rank (ds, Some sock)
-           else
+         if Utils.out_of_bounds ds_rank int2node then
+           Log.warn "suspicious rank %d in Join_push" ds_rank
+         else
+           let expected_ds, prev_sock = int2node.(ds_rank) in
+           begin match prev_sock with
+             | Some _ -> Log.warn "%s already joined" ds_as_string
+             | None -> (* remember him for the future *)
+               if ds = expected_ds then
+                 let sock = Utils.(zmq_socket Push ctx ds_host ds_port_in) in
+                 A.set int2node ds_rank (ds, Some sock)
+               else
              Log.warn "suspicious Join req from %s" ds_as_string;
-         end
+           end
        | DS_to_MDS (Add_file_req (ds_rank, f)) -> (* ----------------------- *)
          Log.debug "got Add_file_req";
          let open Types.File in
-         begin match snd int2node.(ds_rank) with
+         if Utils.out_of_bounds ds_rank int2node then
+           Log.warn "suspicious rank %d in Add_file_req" ds_rank
+         else begin match snd int2node.(ds_rank) with
            | None -> Log.warn "cannot send nack of %s to %d" f.name ds_rank
            | Some receiver ->
              let ack_or_nack =
