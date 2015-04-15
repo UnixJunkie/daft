@@ -1,3 +1,4 @@
+all: config build
 
 build:
 	obuild build
