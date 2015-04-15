@@ -28,6 +28,9 @@ let sleep_ms ms =
   let (_, _, _) = Unix.select [] [] [] (float_of_int ms /. 1000.) in
   ()
 
+let out_of_bounds i a =
+  i < 0 || i > (A.length a) - 1
+
 (* like `cmd` in shell
    TODO: use the one in batteries upon next release *)
 let run_and_read cmd =
