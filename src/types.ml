@@ -131,8 +131,8 @@ end
    signing alone could provide some sort of authentication for
    commands which allow to control the state of the system; an
    attacker could observe the system if he is on the same network
-   but not control it *)
-type storage_mode = Raw | Compressed | Encrypted | Signed
+   but not control it. *)
+type data_mode = Raw | Compressed | Encrypted | Signed
 
 module Protocol = struct
 
