@@ -9,19 +9,19 @@ obuild-ver: 1
 Executable daft_cli
   oflags: -bin-annot -w +27 -warn-error +8 -g
   path: src
-  build-deps: dolog, batteries, fileutils, ZMQ
+  build-deps: dolog, batteries, fileutils, ZMQ, cryptokit
   main-is: client.ml
 
 # Meta Data Server (MDS)
 Executable daft_mds
   oflags: -bin-annot -w +27 -warn-error +8 -g
   path: src
-  build-deps: dolog, batteries, fileutils, ZMQ
+  build-deps: dolog, batteries, fileutils, ZMQ, cryptokit
   main-is: meta_data_server.ml
 
 # Data Server (DS)
 Executable daft_ds
   oflags: -bin-annot -w +27 -warn-error +8 -g
   path: src
-  build-deps: dolog, batteries, fileutils, ZMQ
+  build-deps: dolog, batteries, fileutils, ZMQ, cryptokit
   main-is: data_server.ml
