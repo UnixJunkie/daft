@@ -47,21 +47,28 @@ SECURITY
 - encryption of messages: if a message cannot be decrypted, then
   it is not from a member of the communication group (because it is from
   someone who doesn't know the group's secret)
-  secret: int
-  salt: int
+  encryption_key: symmetric key used to encrypt and decrypt
+  secret_key: int; prepended to all messages with salt
+  salt: int; random
   to_encrypt = secret ^ salt ^ message
-  // the secret is shared between CLI, MDS and DS)
-  to_send = crypt (to_encrypt)
+  // the encryption_key plus the secret_key are shared between CLI, MDS and DS)
+  to_send = crypt (encryption_key, to_encrypt)
 
 - decryption of messages
-  to_check = decrypt (message)
-  if to_check starts_with secret then
+  to_check = decrypt (encryption_key, message)
+  if to_check starts_with secret_key then
     OK
   else
     Fail
 
+- for signing messages, just use a MAC from cryptokit
+  cryptokit-1.10/_build/src/api-cryptokit.docdir/Cryptokit.MAC.html
+  hmac_sha1 would be fine
+
 - for encryption: try AES and twofish
   - then prefer the one with the highest bitrate
+  - use a stream cipher some day if better for performance
+    (high bitrate + not growing messages are nice properties)
 
 - before executing a command from the CLI, a DS or MDS
   could verify the signature of the command.
