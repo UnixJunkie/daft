@@ -44,6 +44,22 @@ Use round robin for the moment.
 SECURITY
 ========
 
+- encryption of messages: if a message cannot be decrypted, then
+  it is not from a member of the communication group (because it is from
+  someone who doesn't know the group's secret)
+  secret: int
+  salt: int
+  to_encrypt = secret ^ salt ^ message
+  // the secret is shared between CLI, MDS and DS)
+  to_send = crypt (to_encrypt)
+
+- decryption of messages
+  to_check = decrypt (message)
+  if to_check starts_with secret then
+    OK
+  else
+    Fail
+
 - for encryption: try AES and twofish
   - then prefer the one with the highest bitrate
 
