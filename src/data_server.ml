@@ -89,7 +89,7 @@ let add_file (fn: string): ds_to_cli =
       FU.mkdir ~parent:true ~mode:0o700 dest_dir;
       FU.cp ~follow:FU.Follow ~force:FU.Force ~recurse:false [fn] dest_fn;
       (* keep only read (and optionally exec) perms for the user *)
-      if Utils.is_executable dest_fn
+      if Utils.is_executable fn
       then Unix.chmod dest_fn 0o500
       else Unix.chmod dest_fn 0o400;
       (* check cp succeeded based on new file's size *)
