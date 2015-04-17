@@ -188,11 +188,14 @@ module Protocol = struct
          | CLI_to_DS of cli_to_ds
          | DS_to_CLI of ds_to_cli
 
+  (* FBR: add mode parameter *)
   let encode (m: t): string =
     Marshal.to_string m [Marshal.No_sharing]
 
+  (* FBR: add mode parameter *)
   let decode (s: string): t =
-      (Marshal.from_string s 0: t)
+    (* FBR: check message size first; log too big *)
+    (Marshal.from_string s 0: t)
 
   let string_of_add_file_error = function
     | Already_here -> "already here"
