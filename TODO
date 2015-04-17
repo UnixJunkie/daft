@@ -2,6 +2,7 @@ TODO
 ====
 
 - put incoming messages of the MDS into a priority queue
+  - initial queue size is 3 times the number of DSs
   - state updating messages must be processed with a higher priority
     than executing commands
     - use ZMQ.Socket.has_more to know if we can read more messages
@@ -14,14 +15,15 @@ TODO
 COMMANDS SEMANTICS
 ==================
 
-1) start
-   - the MDS
+1) get a file
+
+1') rget: get on a remote DS
+
+2) start
    - then the MDS starts all DSs
 
-3) put a file
-
 4) put a directory
-   TODO: recursive put file on all the content of the dir
+   TODO: recursive put file of all the content of the dir
 
 PERFORMANCE
 ===========
