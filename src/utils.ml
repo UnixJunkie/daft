@@ -56,6 +56,14 @@ let run_and_read cmd =
   Unix.unlink tmp_fn;
   (status, output)
 
+let is_executable fn =
+  let open Unix in
+  try
+    access fn [X_OK];
+    true
+  with Unix_error (_, _, _) ->
+    false
+
 let with_in_file fn f =
   let input = open_in fn in
   let res = f input in
@@ -73,7 +81,7 @@ type socket_type = Push | Pull
 let zmq_socket (t: socket_type) (context: ZMQ.Context.t) (host: string) (port: int) =
   let host_and_port = sprintf "tcp://%s:%d" host port in
   match t with
-  | Pull -> 
+  | Pull ->
     let sock = ZMQ.Socket.create context ZMQ.Socket.pull in
     ZMQ.Socket.bind sock host_and_port;
     sock
