@@ -44,7 +44,7 @@ let create_data_store (): string =
   let data_store_root =
     sprintf "%s/%s.ds" tmp_dir (Node.to_string !local_node)
   in
-  Unix.mkdir data_store_root 0o700;
+  Unix.mkdir data_store_root 0o700; (* access rights for owner only *)
   Log.info "I store in %s" data_store_root;
   data_store_root
 
@@ -88,6 +88,10 @@ let add_file (fn: string): ds_to_cli =
       (* mkdir create all necessary parent dirs *)
       FU.mkdir ~parent:true ~mode:0o700 dest_dir;
       FU.cp ~follow:FU.Follow ~force:FU.Force ~recurse:false [fn] dest_fn;
+      (* keep only read (and optionally exec) perms for the user *)
+      if Utils.is_executable dest_fn
+      then Unix.chmod dest_fn 0o500
+      else Unix.chmod dest_fn 0o400;
       (* check cp succeeded based on new file's size *)
       let stat' = FU.stat dest_fn in
       if stat'.size <> stat.size then
