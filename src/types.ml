@@ -210,6 +210,8 @@ module Protocol = struct
          | CLI_to_DS of cli_to_ds
          | DS_to_CLI of ds_to_cli
 
+  (* FBR: add to_string *)
+
   (* FBR: add mode parameter *)
   let encode (m: t): string =
     Marshal.to_string m [Marshal.No_sharing]
