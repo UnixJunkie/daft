@@ -71,10 +71,9 @@ let compute_chunks (size: int64) =
 
 (* get the path of file 'fn' in the local datastore *)
 let fn_to_path (fn: filename): string =
-  if S.starts_with fn "/" then
-    !data_store_root ^ fn
-  else
-    !data_store_root ^ "/" ^ fn
+  !data_store_root ^
+  if S.starts_with fn "/" then fn
+  else "/" ^ fn
 
 let add_file (fn: string): ds_to_cli =
   if FileSet.contains_fn fn !local_state then
