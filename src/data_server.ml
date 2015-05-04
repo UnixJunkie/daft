@@ -54,14 +54,12 @@ let delete_data_store (ds: string): int =
 
 (* how many there are and size of the last one if < chunk_size *)
 let compute_chunks (size: int64) =
-  let ratio =
-    (Int64.to_float size) /. (float_of_int File.Chunk.default_size)
-  in
+  let ratio = (Int64.to_float size) /. (float_of_int !chunk_size) in
   (* total number of chunks *)
   let nb_chunks = int_of_float (ceil ratio) in
   (* number of full chunks *)
   let nb_chunks_i64 = Int64.of_int (int_of_float ratio) in
-  let chunk_size_i64 = Int64.of_int File.Chunk.default_size in
+  let chunk_size_i64 = Int64.of_int !chunk_size in
   let last_chunk_size_i64 = Int64.(size - (nb_chunks_i64 * chunk_size_i64)) in
   let last_chunk_size_opt = if last_chunk_size_i64 <> Int64.zero
                             then Some last_chunk_size_i64
@@ -99,7 +97,7 @@ let add_file (fn: string): ds_to_cli =
         Fetch_file_cmd_nack (fn, Copy_failed)
       else begin (* update local state *)
         let nb_chunks, last_chunk_size = compute_chunks size in
-        (* n.b. we keep the stat struct from the original file *)
+        (* we keep the stat struct from the original file *)
         let new_file =
           File.create fn size stat nb_chunks last_chunk_size !local_node
         in
@@ -195,14 +193,21 @@ let main () =
           in
           Sock.send to_cli nack
         | DS_to_DS (Chunk (fn, chunk, data)) -> (* ------------------- *)
-          (* 1) write it *)
-          (* 2) update local state *)
-          (* 3) notify MDS *)
           Log.debug "got Chunk";
-          abort "Chunk"
-          (* FBR: implement reception of chunk *)
+          (* write chunk at the right offset *)
+          let local_file = fn_to_path fn in
+          let offset = chunk * !chunk_size in
+          Utils.with_out_file_descr local_file
+            (fun out ->
+               assert(offset = Unix.(lseek out offset SEEK_SET));
+               let n = String.length data in
+               (* FBR: enforce chunk size *)
+               assert(n = Unix.write_substring out data 0 n));
+          (* update local state *)
           (* FBR: once all chunks of a given file have been received,
                   the DS must notify the CLI *)
+          (* notify MDS *)
+          abort "Chunk"
         | CLI_to_DS (Fetch_file_cmd_req (fn, Local)) -> (* ----------- *)
           Log.debug "got Fetch_file_cmd_req:Local";
           let res = add_file fn in
