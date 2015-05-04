@@ -1,5 +1,7 @@
 # to run local tests
 
+# FBR: use xterm -e [cmd]
+
 function reset () {
     pkill daft_mds    # kill MDS
     pkill daft_ds     # kill all DSs
