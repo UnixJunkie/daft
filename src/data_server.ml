@@ -69,6 +69,13 @@ let compute_chunks (size: int64) =
   in
   (nb_chunks, last_chunk_size_opt)
 
+(* get the path of file 'fn' in the local datastore *)
+let fn_to_path (fn: filename): string =
+  if S.starts_with fn "/" then
+    !data_store_root ^ fn
+  else
+    !data_store_root ^ "/" ^ fn
+
 let add_file (fn: string): ds_to_cli =
   if FileSet.contains_fn fn !local_state then
     Fetch_file_cmd_nack (fn, Already_here)
@@ -78,14 +85,9 @@ let add_file (fn: string): ds_to_cli =
     FU.( (* opened FU to get rid of warning 40 *)
       let stat = FU.stat fn in
       let size = FU.byte_of_size stat.size in
-      let dest_fn =
-        if S.starts_with fn "/" then
-          !data_store_root ^ fn
-        else
-          !data_store_root ^ "/" ^ fn
-      in
+      let dest_fn = fn_to_path fn in
       let dest_dir = Fn.dirname dest_fn in
-      (* mkdir create all necessary parent dirs *)
+      (* mkdir creates all necessary parent dirs *)
       FU.mkdir ~parent:true ~mode:0o700 dest_dir;
       FU.cp ~follow:FU.Follow ~force:FU.Force ~recurse:false [fn] dest_fn;
       (* keep only read (and optionally exec) perms for the user *)
@@ -193,7 +195,10 @@ let main () =
             encode (DS_to_CLI (Fetch_file_cmd_nack (fn, Already_here)))
           in
           Sock.send to_cli nack
-        | DS_to_DS (Chunk (_fn, _chunk, _data)) -> (* ---------------- *)
+        | DS_to_DS (Chunk (fn, chunk, data)) -> (* ------------------- *)
+          (* 1) write it *)
+          (* 2) update local state *)
+          (* 3) notify MDS *)
           Log.debug "got Chunk";
           abort "Chunk"
           (* FBR: implement reception of chunk *)
