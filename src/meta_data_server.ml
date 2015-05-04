@@ -110,6 +110,16 @@ let main () =
          Log.debug "got Ls_cmd_req";
          let ls_ack = encode (MDS_to_CLI (Ls_cmd_ack !global_state)) in
          Sock.send to_cli ls_ack
+       | CLI_to_MDS (Fetch_cmd_req (ds_rank, fn)) -> (* -------------------- *)
+         Log.debug "got Fetch_cmd_req";
+         if FileSet.contains_fn fn !global_state then
+           (* for each chunk, ask a randomly selected chunk source
+              to send the chunk to the required DS *)
+           failwith "not implemented yet"
+         else
+           let nack = encode (MDS_to_CLI (Fetch_cmd_nack fn)) in
+           (* this assumes there is a single CLI; might be wrong in the future *)
+           Sock.send to_cli nack
        | CLI_to_MDS Quit_cmd -> (* ----------------------------------------- *)
          Log.debug "got Quit_cmd";
          let _ = Log.info "got Quit" in

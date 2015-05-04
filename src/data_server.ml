@@ -71,9 +71,9 @@ let compute_chunks (size: int64) =
 
 let add_file (fn: string): ds_to_cli =
   if FileSet.contains_fn fn !local_state then
-    Add_file_cmd_nack (fn, Already_here)
+    Fetch_file_cmd_nack (fn, Already_here)
   else if Sys.is_directory fn then
-    Add_file_cmd_nack (fn, Is_directory)
+    Fetch_file_cmd_nack (fn, Is_directory)
   else
     FU.( (* opened FU to get rid of warning 40 *)
       let stat = FU.stat fn in
@@ -95,7 +95,7 @@ let add_file (fn: string): ds_to_cli =
       (* check cp succeeded based on new file's size *)
       let stat' = FU.stat dest_fn in
       if stat'.size <> stat.size then
-        Add_file_cmd_nack (fn, Copy_failed)
+        Fetch_file_cmd_nack (fn, Copy_failed)
       else begin (* update local state *)
         let nb_chunks, last_chunk_size = compute_chunks size in
         (* n.b. we keep the stat struct from the original file *)
@@ -103,7 +103,7 @@ let add_file (fn: string): ds_to_cli =
           File.create fn size stat nb_chunks last_chunk_size !local_node
         in
         local_state := FileSet.add new_file !local_state;
-        Add_file_cmd_ack fn
+        Fetch_file_cmd_ack fn
       end
     )
 
@@ -181,35 +181,45 @@ let main () =
         | MDS_to_DS (Add_file_ack fn) -> (* -------------------------- *)
           Log.debug "got Add_file_ack";
           (* forward the good news to the CLI *)
-          let ack = encode (DS_to_CLI (Add_file_cmd_ack fn)) in
+          let ack = encode (DS_to_CLI (Fetch_file_cmd_ack fn)) in
           Sock.send to_cli ack
         | MDS_to_DS (Add_file_nack fn) -> (* ------------------------- *)
           Log.debug "got Add_file_nack";
-          (* FBR: rollback local data store; DO WE REALLY NEED TO DO THIS ??? *)
-          Log.warn "datastore was not rolled back for %s" fn;
-          (* rollback local state *)
+          Log.warn "datastore: no rollback for %s" fn;
+          (* quick and dirty but maybe OK: only rollback local state's view *)
           local_state := FileSet.remove_fn fn !local_state;
-          let nack = (* forward the nack to the CLI *)
-            encode (DS_to_CLI (Add_file_cmd_nack (fn, Already_here)))
+          let nack = (* forward nack to CLI *)
+            encode (DS_to_CLI (Fetch_file_cmd_nack (fn, Already_here)))
           in
           Sock.send to_cli nack
         | DS_to_DS (Chunk (_fn, _chunk, _data)) -> (* ---------------- *)
           Log.debug "got Chunk";
           abort "Chunk"
-        | CLI_to_DS (Add_file_cmd_req fn) -> (* ---------------------- *)
-          Log.debug "got Add_file_cmd_req";
+          (* FBR: once all chunks of a given file have been received,
+                  the DS must notify the CLI *)
+        | CLI_to_DS (Fetch_file_cmd_req (fn, Local)) -> (* ----------- *)
+          Log.debug "got Fetch_file_cmd_req:Local";
           let res = add_file fn in
           begin match res with
-            | Add_file_cmd_ack fn ->
+            | Fetch_file_cmd_ack fn ->
               (* notify MDS about this new file *)
               let file = FileSet.find_fn fn !local_state in
               let add_file_req = Add_file_req (!ds_rank, file) in
               let add_file_msg = encode (DS_to_MDS add_file_req) in
               Sock.send to_mds add_file_msg
-            | Add_file_cmd_nack (fn, err) ->
-              let nack = encode (DS_to_CLI (Add_file_cmd_nack (fn, err))) in
+            | Fetch_file_cmd_nack (fn, err) ->
+              let nack = encode (DS_to_CLI (Fetch_file_cmd_nack (fn, err))) in
               Sock.send to_cli nack
           end
+        | CLI_to_DS (Fetch_file_cmd_req (fn, Remote)) -> (* ---------- *)
+          Log.debug "got Fetch_file_cmd_req:Remote";
+          (* finish quickly in case file is already present locally *)
+          if FileSet.contains_fn fn !local_state then
+            let ack = encode (DS_to_CLI (Fetch_file_cmd_ack fn)) in
+            Log.info "%s already here" fn;
+            Sock.send to_cli ack
+          else
+            abort "not implemented yet"
         | DS_to_CLI  _ -> Log.warn "DS_to_CLI"
         | MDS_to_CLI _ -> Log.warn "MDS_to_CLI"
         | DS_to_MDS  _ -> Log.warn "DS_to_MDS"
