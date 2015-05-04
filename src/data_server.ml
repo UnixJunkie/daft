@@ -203,7 +203,7 @@ let main () =
                let n = String.length data in
                (* FBR: enforce chunk size *)
                assert(n = Unix.write_substring out data 0 n));
-          (* update local state *)
+          (* FBR: update local state *)
           (* FBR: once all chunks of a given file have been received,
                   the DS must notify the CLI *)
           (* notify MDS *)
