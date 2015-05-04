@@ -76,6 +76,14 @@ let with_out_file fn f =
   close_out output;
   res
 
+(* same as with_out_file but using a unix file descriptor
+   instead of an out_channel *)
+let with_out_file_descr fn f =
+  let output = Unix.(openfile fn [O_WRONLY; O_CREAT] 0o400) in
+  let res = f output in
+  Unix.close output;
+  res
+
 type socket_type = Push | Pull
 
 let zmq_socket (t: socket_type) (context: ZMQ.Context.t) (host: string) (port: int) =
