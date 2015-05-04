@@ -9,6 +9,9 @@ TODO
     - batch at most N messages before processing the state updates
       first. Process messages immediately if less than N are available
 
+- all the ZMQ.send can be made asynchronous
+  - only the receive need not to be
+
 COMMANDS SEMANTICS
 ==================
 
