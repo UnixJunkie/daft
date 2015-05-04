@@ -43,6 +43,9 @@ module NodeSet = struct
     Buffer.contents res
 end
 
+module RNG = Random
+let _ = RNG.self_init ()
+
 module File = struct
   module Chunk = struct
     let default_size = 1024 * 1024
@@ -62,6 +65,19 @@ module File = struct
       in
       sprintf "rank: %d %snodes: %s"
         c.rank (string_of_size c.size) (NodeSet.to_string c.nodes)
+    exception Found of Node.t
+    (* randomly select a DS having this chunk *)
+    let select_source_rand (c: t): Node.t =
+      let n = NodeSet.cardinal c.nodes in
+      let rand = RNG.int n in
+      let i = ref 0 in
+      try
+        NodeSet.iter (fun node ->
+            if !i = rand then raise (Found node)
+            else incr i
+          ) c.nodes;
+        assert(false)
+      with Found node -> node
   end
 
   module ChunkSet = struct
@@ -145,6 +161,8 @@ module Protocol = struct
              be sent by the one receiving it
      *_cmd_*: related to a command from the CLI *)
 
+  (* we might need a cli_rank in the future, and assume there are at most
+     as many CLIs as there are DSs *)
   type ds_rank = int
   type filename = string
   type chunk_id = int
@@ -166,19 +184,23 @@ module Protocol = struct
 
   type cli_to_mds =
     | Ls_cmd_req
-    | Quit_cmd (* MDS must then send Quit to all DSs then exit itself *)
+    | Fetch_cmd_req of ds_rank * filename
+    | Quit_cmd
 
   type mds_to_cli =
     | Ls_cmd_ack of FileSet.t
+    | Fetch_cmd_nack of filename
+
+  type file_loc = Local (* disk *) | Remote (* host *)
 
   type cli_to_ds =
-    | Add_file_cmd_req of filename
+    | Fetch_file_cmd_req of filename * file_loc
 
-  type add_file_error = Already_here | Is_directory | Copy_failed
+  type fetch_error = Already_here | Is_directory | Copy_failed | No_such_file
 
   type ds_to_cli =
-    | Add_file_cmd_ack of filename
-    | Add_file_cmd_nack of filename * add_file_error
+    | Fetch_file_cmd_ack of filename
+    | Fetch_file_cmd_nack of filename * fetch_error
 
   type t = DS_to_MDS of ds_to_mds
          | MDS_to_DS of mds_to_ds
@@ -194,12 +216,15 @@ module Protocol = struct
 
   (* FBR: add mode parameter *)
   let decode (s: string): t =
-    (* FBR: check message size first; log too big *)
+    (* we should check the message is valid before unmarshalling it
+       (or software can crash);
+       maybe not when in Raw mode but other modes should do it *)
     (Marshal.from_string s 0: t)
 
-  let string_of_add_file_error = function
+  let string_of_fetch_error = function
     | Already_here -> "already here"
     | Is_directory -> "directory"
     | Copy_failed -> "copy failed"
+    | No_such_file -> "no such file"
 
 end
