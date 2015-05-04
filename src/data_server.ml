@@ -172,6 +172,7 @@ let main () =
       let message = decode encoded in
       begin match message with
         | MDS_to_DS (Send_to_req (_ds_rank, _fn, _chunk)) -> (* ------ *)
+          (* FBR: implement chunk sending *)
           Log.debug "got Send_to_req";
           abort "Send_to_req"
         | MDS_to_DS Quit_cmd -> (* ----------------------------------- *)
@@ -195,6 +196,7 @@ let main () =
         | DS_to_DS (Chunk (_fn, _chunk, _data)) -> (* ---------------- *)
           Log.debug "got Chunk";
           abort "Chunk"
+          (* FBR: implement reception of chunk *)
           (* FBR: once all chunks of a given file have been received,
                   the DS must notify the CLI *)
         | CLI_to_DS (Fetch_file_cmd_req (fn, Local)) -> (* ----------- *)
@@ -218,8 +220,11 @@ let main () =
             let ack = encode (DS_to_CLI (Fetch_file_cmd_ack fn)) in
             Log.info "%s already here" fn;
             Sock.send to_cli ack
-          else
-            abort "not implemented yet"
+          else (* forward request to MDS *)
+            let req = encode
+                (CLI_to_MDS (Fetch_cmd_req (Node.get_rank !local_node, fn)))
+            in
+            Sock.send to_mds req
         | DS_to_CLI  _ -> Log.warn "DS_to_CLI"
         | MDS_to_CLI _ -> Log.warn "MDS_to_CLI"
         | DS_to_MDS  _ -> Log.warn "DS_to_MDS"
