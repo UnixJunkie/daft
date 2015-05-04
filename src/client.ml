@@ -37,12 +37,15 @@ let process_answer incoming =
     Log.debug "got Ls_cmd_ack";
     let listing = FileSet.to_string f in
     Log.info "%s" listing
-  | DS_to_CLI (Add_file_cmd_ack fn) ->
-    Log.debug "got Add_file_cmd_ack";
-    Log.info "put %s: OK" fn
-  | DS_to_CLI (Add_file_cmd_nack (fn, err)) ->
-    Log.debug "got Add_file_cmd_nack";
-    Log.error "put %s: %s" fn (string_of_add_file_error err)
+  | MDS_to_CLI (Fetch_cmd_nack fn) ->
+    Log.debug "got Fetch_cmd_nack";
+    Log.error "no such file: %s" fn
+  | DS_to_CLI (Fetch_file_cmd_ack fn) ->
+    Log.debug "got Fetch_file_cmd_ack";
+    Log.info "%s: OK" fn
+  | DS_to_CLI (Fetch_file_cmd_nack (fn, err)) ->
+    Log.debug "got Fetch_file_cmd_nack";
+    Log.error "%s: %s" fn (string_of_fetch_error err)
   | DS_to_MDS _ -> Log.warn "DS_to_MDS"
   | MDS_to_DS _ -> Log.warn "MDS_to_DS"
   | DS_to_DS _ -> Log.warn "DS_to_DS"
@@ -85,11 +88,17 @@ let main () =
         | cmd :: args ->
           begin match cmd with
             | "" -> Log.error "cmd = \"\""
-            | "put" -> (* -------------------------------------------------- *)
+            | "put" (* ----------------------------------------------------- *)
+            | "fetch" ->
               begin match args with
                 | [] -> Log.error "put: no filename"
                 | [fn] ->
-                  let put = encode (CLI_to_DS (Add_file_cmd_req fn)) in
+                  let f_loc = match cmd with
+                    | "put" -> Local
+                    | "fetch" -> Remote
+                    | _ -> assert(false)
+                  in
+                  let put = encode (CLI_to_DS (Fetch_file_cmd_req (fn, f_loc))) in
                   Sock.send for_DS put;
                   process_answer incoming
                 | _ -> Log.error "put: more than one filename"
