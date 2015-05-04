@@ -1,4 +1,4 @@
-daft
+DAFT
 ====
 
 DAFT Allows File Transfers
