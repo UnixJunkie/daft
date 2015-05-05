@@ -64,7 +64,7 @@ let main () =
       let message = decode encoded in
       Log.debug "got msg";
       begin match message with
-       | DS_to_MDS (Join_push ds) -> (* ------------------------------------ *)
+       | DS_to_MDS (Join_push ds) ->
          Log.debug "got Join_push";
          let ds_as_string = Node.to_string ds in
          Log.info "DS %s Join req" ds_as_string;
@@ -83,7 +83,7 @@ let main () =
                else
              Log.warn "suspicious Join req from %s" ds_as_string;
            end
-       | DS_to_MDS (Add_file_req (ds_rank, f)) -> (* ----------------------- *)
+       | DS_to_MDS (Add_file_req (ds_rank, f)) ->
          Log.debug "got Add_file_req";
          let open Types.File in
          if Utils.out_of_bounds ds_rank int2node then
@@ -103,14 +103,14 @@ let main () =
              let answer = encode (MDS_to_DS ack_or_nack) in
              Sock.send receiver answer
          end
-       | DS_to_MDS (Chunk_ack (_fn, _chunk)) -> (* ------------------------- *)
+       | DS_to_MDS (Chunk_ack (_fn, _chunk)) ->
          Log.debug "got Chunk_ack";
          abort "Chunk_ack"
-       | CLI_to_MDS Ls_cmd_req -> (* --------------------------------------- *)
+       | CLI_to_MDS Ls_cmd_req ->
          Log.debug "got Ls_cmd_req";
          let ls_ack = encode (MDS_to_CLI (Ls_cmd_ack !global_state)) in
          Sock.send to_cli ls_ack
-       | CLI_to_MDS (Fetch_cmd_req (ds_rank, fn)) -> (* -------------------- *)
+       | CLI_to_MDS (Fetch_cmd_req (ds_rank, fn)) ->
          Log.debug "got Fetch_cmd_req";
          if FileSet.contains_fn fn !global_state then
            (* for each chunk, ask a randomly selected chunk source
@@ -120,7 +120,7 @@ let main () =
            let nack = encode (MDS_to_CLI (Fetch_cmd_nack fn)) in
            (* this assumes there is a single CLI; might be wrong in the future *)
            Sock.send to_cli nack
-       | CLI_to_MDS Quit_cmd -> (* ----------------------------------------- *)
+       | CLI_to_MDS Quit_cmd ->
          Log.debug "got Quit_cmd";
          let _ = Log.info "got Quit" in
          let quit = encode (MDS_to_DS Quit_cmd) in
