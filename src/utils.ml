@@ -70,14 +70,20 @@ let with_in_file fn f =
   close_in input;
   res
 
+(* same as with_in_file but using a unix file descriptor *)
+let with_in_file_descr fn f =
+  let input = Unix.(openfile fn [O_RDONLY] 0o400) in
+  let res = f input in
+  Unix.close input;
+  res
+
 let with_out_file fn f =
   let output = open_out fn in
   let res = f output in
   close_out output;
   res
 
-(* same as with_out_file but using a unix file descriptor
-   instead of an out_channel *)
+(* same as with_out_file but using a unix file descriptor *)
 let with_out_file_descr fn f =
   let output = Unix.(openfile fn [O_WRONLY; O_CREAT] 0o400) in
   let res = f output in
