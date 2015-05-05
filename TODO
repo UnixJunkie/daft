@@ -13,7 +13,7 @@ TODO
       first. Process messages immediately if less than N are available
 
 - all the ZMQ.send can be made asynchronous
-  - only the receive need not to be
+  - only the receive must not be
 
 COMMANDS SEMANTICS
 ==================
@@ -36,11 +36,6 @@ PERFORMANCE
   - just check the checksum of incoming packets
 
 - use LZ4 for on-the-fly compression
-
-maybe there should be a priority queue to sort incoming packets
-(commands, state update, data transfers).
-Maybe state update should be the highest priority in the MDS.
-Use round robin for the moment.
 
 - interesting worst case to test:
   many hosts ask for the same small file at the same time
