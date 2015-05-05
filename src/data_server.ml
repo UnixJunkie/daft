@@ -14,6 +14,7 @@ module S = String
 module Node = Types.Node
 module File = Types.File
 module FileSet = Types.FileSet
+module Chunk = File.Chunk
 module ChunkSet = File.ChunkSet
 module Sock = ZMQ.Socket
 
@@ -68,7 +69,7 @@ let compute_chunks (size: int64) =
   in
   (nb_chunks, last_chunk_size_opt)
 
-(* get the path of file 'fn' in the local datastore *)
+(* get the path of file fn in the local datastore *)
 let fn_to_path (fn: Types.filename): string =
   !data_store_root ^
   if S.starts_with fn "/" then fn
@@ -80,7 +81,7 @@ let add_file (fn: string): ds_to_cli =
   else if Sys.is_directory fn then
     Fetch_file_cmd_nack (fn, Is_directory)
   else
-    FU.( (* opened FU to get rid of warning 40 *)
+    FU.(
       let stat = FU.stat fn in
       let size = FU.byte_of_size stat.size in
       let dest_fn = fn_to_path fn in
@@ -102,8 +103,9 @@ let add_file (fn: string): ds_to_cli =
         let new_file = File.create fn size nb_chunks all_chunks in
         local_state := FileSet.add new_file !local_state;
         Fetch_file_cmd_ack fn
-      end
-    )
+      end)
+
+exception Invalid_ds_rank
 
 let main () =
   (* setup logger *)
@@ -169,20 +171,62 @@ let main () =
       let encoded = Sock.recv incoming in
       let message = decode encoded in
       begin match message with
-        | MDS_to_DS (Send_to_req (_ds_rank, _fn, _chunk)) -> (* ------ *)
-          (* FBR: implement chunk sending *)
-          Log.debug "got Send_to_req";
-          abort "Send_to_req"
-        | MDS_to_DS Quit_cmd -> (* ----------------------------------- *)
+        | MDS_to_DS (Send_to_req (ds_rank, fn, chunk_id, is_last)) ->
+          begin
+            Log.debug "got Send_to_req";
+            try (* 1) check we have this file *)
+              (* enforce ds_rank bounds because array access soon *)
+              if Utils.out_of_bounds ds_rank int2node
+              then raise Invalid_ds_rank;
+              let file = FileSet.find_fn fn !local_state in
+              let chunks = File.get_chunks file in
+              try (* 2) check we have this chunk *)
+                let chunk = ChunkSet.find_id chunk_id chunks in
+                (* 3) seek to it *)
+                let local_file = fn_to_path fn in
+                let chunk_data =
+                  Utils.with_in_file_descr local_file (fun input ->
+                      let offset = chunk_id * !chunk_size in
+                      assert(Unix.(lseek input offset SEEK_SET) = offset);
+                      let curr_chunk_size = match Chunk.get_size chunk with
+                        | None -> !chunk_size
+                        | Some s -> Int64.to_int s
+                      in
+                      (* WARNING: data copy here and allocation of 
+                                  a fresh buffer each time *)
+                      let buff = String.create curr_chunk_size in
+                      assert(Unix.read input buff 0 curr_chunk_size =
+                             curr_chunk_size);
+                      buff
+                    )
+                in
+                (* 4) send it *)
+                let to_send =
+                  encode
+                    (DS_to_DS (Chunk (fn, chunk_id, is_last, chunk_data)))
+                in
+                begin match int2node.(ds_rank) with
+                  | (_node, Some to_node_i) -> Sock.send to_node_i to_send
+                  | (_, None) -> assert(false)
+                end
+              with Not_found ->
+                Log.error "no such chunk: fn: %s id: %d" fn chunk_id
+            with
+            | Not_found ->
+              Log.error "Send_to_req: no such file: %s" fn
+            | Invalid_ds_rank ->
+              Log.error "Send_to_req: invalid rank: %d" ds_rank
+          end
+        | MDS_to_DS Quit_cmd ->
           Log.debug "got Quit_cmd";
           let _ = Log.info "got Quit" in
           not_finished := false
-        | MDS_to_DS (Add_file_ack fn) -> (* -------------------------- *)
+        | MDS_to_DS (Add_file_ack fn) ->
           Log.debug "got Add_file_ack";
           (* forward the good news to the CLI *)
           let ack = encode (DS_to_CLI (Fetch_file_cmd_ack fn)) in
           Sock.send to_cli ack
-        | MDS_to_DS (Add_file_nack fn) -> (* ------------------------- *)
+        | MDS_to_DS (Add_file_nack fn) ->
           Log.debug "got Add_file_nack";
           Log.warn "datastore: no rollback for %s" fn;
           (* quick and dirty but maybe OK: only rollback local state's view *)
@@ -247,7 +291,7 @@ let main () =
               );
             end
           end
-        | CLI_to_DS (Fetch_file_cmd_req (fn, Local)) -> (* ----------- *)
+        | CLI_to_DS (Fetch_file_cmd_req (fn, Local)) ->
           Log.debug "got Fetch_file_cmd_req:Local";
           let res = add_file fn in
           begin match res with
@@ -261,7 +305,7 @@ let main () =
               let nack = encode (DS_to_CLI (Fetch_file_cmd_nack (fn, err))) in
               Sock.send to_cli nack
           end
-        | CLI_to_DS (Fetch_file_cmd_req (fn, Remote)) -> (* ---------- *)
+        | CLI_to_DS (Fetch_file_cmd_req (fn, Remote)) ->
           Log.debug "got Fetch_file_cmd_req:Remote";
           (* finish quickly in case file is already present locally *)
           if FileSet.contains_fn fn !local_state then
