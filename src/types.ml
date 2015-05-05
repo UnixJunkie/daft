@@ -61,12 +61,14 @@ module File = struct
                size:  int64 option ; (* None if default_size; (Some x) else *)
                nodes: NodeSet.t    } (* which nodes have this chunk
                                         in their datastore *)
-    let create id size node =
+    let create (id: chunk_id) (size: int64 option) (node: Node.t): t =
       let nodes = NodeSet.singleton node in
       { id; size; nodes }
-    let compare c1 c2 =
+    let dummy (id: chunk_id): t =
+      { id; size = None; nodes = NodeSet.empty }
+    let compare (c1: t) (c2: t) =
       BatInt.compare c1.id c2.id
-    let to_string c =
+    let to_string (c: t): string =
       let string_of_size = function
         | None -> ""
         | Some s -> sprintf "size: %Ld " s
@@ -108,6 +110,8 @@ module File = struct
       iter (fun c -> Buffer.add_string res (Chunk.to_string c)
            ) cs;
       Buffer.contents res
+    let contains (id: chunk_id) (cs: t): bool =
+      mem (Chunk.dummy id) cs
   end
 
   type t = { name:      filename   ;
