@@ -66,7 +66,9 @@ module File = struct
       { id; size; nodes }
     let dummy (id: chunk_id): t =
       { id; size = None; nodes = NodeSet.empty }
-    let compare (c1: t) (c2: t) =
+    let get_size (c: t): int64 option =
+      c.size
+    let compare (c1: t) (c2: t): int =
       BatInt.compare c1.id c2.id
     let to_string (c: t): string =
       let string_of_size = function
@@ -110,8 +112,8 @@ module File = struct
       iter (fun c -> Buffer.add_string res (Chunk.to_string c)
            ) cs;
       Buffer.contents res
-    let contains (id: chunk_id) (cs: t): bool =
-      mem (Chunk.dummy id) cs
+    let find_id (id: chunk_id) (cs: t): Chunk.t =
+      find (Chunk.dummy id) cs
   end
 
   type t = { name:      filename   ;
@@ -203,7 +205,7 @@ module Protocol = struct
   type mds_to_ds =
     | Add_file_ack of filename
     | Add_file_nack of filename
-    | Send_to_req of ds_rank * filename * chunk_id
+    | Send_to_req of ds_rank * filename * chunk_id * is_last
     | Quit_cmd
 
   type ds_to_ds =
