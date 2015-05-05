@@ -66,6 +66,8 @@ module File = struct
       { id; size; nodes }
     let dummy (id: chunk_id): t =
       { id; size = None; nodes = NodeSet.empty }
+    let get_id (c: t): chunk_id =
+      c.id
     let get_size (c: t): int64 option =
       c.size
     let compare (c1: t) (c2: t): int =
@@ -148,6 +150,11 @@ module File = struct
     f.chunks
   let get_nb_chunks (f: t): int =
     f.nb_chunks
+  let is_last_chunk (c: Chunk.t) (f: t): bool =
+    Chunk.(match c.size with
+        | Some _s -> true
+        | None -> (c.id = f.nb_chunks - 1)
+      )
 end
 
 (* the status of the "filesystem" is just a set of files *)
