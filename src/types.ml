@@ -5,6 +5,15 @@ exception Loop_end
 
 module FU = FileUtil
 
+(* we might need a cli_rank in the future, and assume there are at most
+   as many CLIs as there are DSs *)
+(* some type aliases to make signatures more readable *)
+type ds_rank = int
+type filename = string
+type chunk_id = int
+type chunk_data = string
+type is_last = bool
+
 module Node = struct
   (* the rank allows to uniquely identify a node; a la MPI *)
   type t = { rank: int    ;
@@ -48,22 +57,22 @@ let _ = RNG.self_init ()
 
 module File = struct
   module Chunk = struct
-    type t = { rank:  int          ;
+    type t = { id:    chunk_id     ;
                size:  int64 option ; (* None if default_size; (Some x) else *)
                nodes: NodeSet.t    } (* which nodes have this chunk
                                         in their datastore *)
-    let create rank size node =
+    let create id size node =
       let nodes = NodeSet.singleton node in
-      { rank; size; nodes }
+      { id; size; nodes }
     let compare c1 c2 =
-      BatInt.compare c1.rank c2.rank
+      BatInt.compare c1.id c2.id
     let to_string c =
       let string_of_size = function
         | None -> ""
         | Some s -> sprintf "size: %Ld " s
       in
-      sprintf "rank: %d %snodes: %s"
-        c.rank (string_of_size c.size) (NodeSet.to_string c.nodes)
+      sprintf "id: %d %snodes: %s"
+        c.id (string_of_size c.size) (NodeSet.to_string c.nodes)
     exception Found of Node.t
     (* randomly select a DS having this chunk *)
     let select_source_rand (c: t): Node.t =
@@ -81,7 +90,10 @@ module File = struct
 
   module ChunkSet = struct
     include Set.Make(Chunk)
-    let create nb_chunks last_chunk_size node =
+    let create
+        (nb_chunks: int)
+        (last_chunk_size: int64 option)
+        (node: Node.t) =
       let rec loop acc i =
         if i = nb_chunks - 1 then
           add (Chunk.create i last_chunk_size node) acc
@@ -98,18 +110,38 @@ module File = struct
       Buffer.contents res
   end
 
-  type t = { name:      string     ;
+  type t = { name:      filename   ;
              size:      int64      ;
-             nb_chunks: int        ;
-             chunks:    ChunkSet.t }
-  let create name size nb_chunks last_chunk_size node =
-    let chunks = ChunkSet.create nb_chunks last_chunk_size node in
+             nb_chunks: int        ; (* when the file is complete *)
+             chunks:    ChunkSet.t } (* chunks currently available *)
+  (* complete chunkset of file f *)
+  let all_chunks
+      (nb_chunks: int)
+      (last_chunk_size: int64 option)
+      (node: Node.t): ChunkSet.t =
+    ChunkSet.create nb_chunks last_chunk_size node
+  let create
+      (name: filename)
+      (size: int64)
+      (nb_chunks: int)
+      (chunks: ChunkSet.t) =
     { name; size; nb_chunks ; chunks }
+  (* incoming chunk *)
+  let add_chunk (f: t) (c: Chunk.t) =
+    let prev_set = f.chunks in
+    let new_set = ChunkSet.add c prev_set in
+    if prev_set == new_set
+    then Log.error "duplicate chunk: f: %s chunk: %d" f.name Chunk.(c.id);
+    { f with chunks = new_set }
   let compare f1 f2 =
     String.compare f1.name f2.name
   let to_string f =
     sprintf "name: %s size: %Ld #chunks: %d\n%s"
       f.name f.size f.nb_chunks (ChunkSet.to_string f.chunks)
+  let get_chunks (f: t): ChunkSet.t =
+    f.chunks
+  let get_nb_chunks (f: t): int =
+    f.nb_chunks
 end
 
 (* the status of the "filesystem" is just a set of files *)
@@ -158,14 +190,6 @@ module Protocol = struct
      *_push: message that doesn't need an answer or whose answer will not
              be sent by the one receiving it
      *_cmd_*: related to a command from the CLI *)
-
-  (* we might need a cli_rank in the future, and assume there are at most
-     as many CLIs as there are DSs *)
-  type ds_rank = int
-  type filename = string
-  type chunk_id = int
-  type chunk_data = string
-  type is_last = bool
 
   type ds_to_mds =
     | Join_push of Node.t (* a DS registering itself with the MDS *)
