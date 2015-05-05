@@ -100,12 +100,11 @@ module File = struct
 
   type t = { name:      string     ;
              size:      int64      ;
-             stat:      FU.stat    ;
              nb_chunks: int        ;
              chunks:    ChunkSet.t }
-  let create name size stat nb_chunks last_chunk_size node =
+  let create name size nb_chunks last_chunk_size node =
     let chunks = ChunkSet.create nb_chunks last_chunk_size node in
-    { name; size; stat; nb_chunks ; chunks }
+    { name; size; nb_chunks ; chunks }
   let compare f1 f2 =
     String.compare f1.name f2.name
   let to_string f =
@@ -116,12 +115,10 @@ end
 (* the status of the "filesystem" is just a set of files *)
 module FileSet = struct
   include Set.Make(File)
-  let dummy_stat = FU.stat "/dev/null" (* should be private *)
   (* extend module with more operations *)
   let dummy_file fn =
     File.({ name = fn;
             size = Int64.zero;
-            stat = dummy_stat;
             nb_chunks = 0;
             chunks = ChunkSet.empty })
   let contains_fn fn s =
