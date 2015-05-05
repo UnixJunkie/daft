@@ -165,6 +165,7 @@ module Protocol = struct
   type filename = string
   type chunk_id = int
   type chunk_data = string
+  type is_last = bool
 
   type ds_to_mds =
     | Join_push of Node.t (* a DS registering itself with the MDS *)
@@ -178,7 +179,7 @@ module Protocol = struct
     | Quit_cmd
 
   type ds_to_ds =
-    | Chunk of filename * chunk_id * chunk_data
+    | Chunk of filename * chunk_id * is_last * chunk_data
 
   type cli_to_mds =
     | Ls_cmd_req
