@@ -206,7 +206,7 @@ let main () =
                     (DS_to_DS (Chunk (fn, chunk_id, is_last, chunk_data)))
                 in
                 begin match int2node.(ds_rank) with
-                  | (_node, Some to_node_i) -> Sock.send to_node_i to_send
+                  | (_node, Some to_ds_i) -> Sock.send to_ds_i to_send
                   | (_, None) -> assert(false)
                 end
               with Not_found ->
