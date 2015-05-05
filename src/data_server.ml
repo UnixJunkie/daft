@@ -14,6 +14,7 @@ module S = String
 module Node = Types.Node
 module File = Types.File
 module FileSet = Types.FileSet
+module ChunkSet = File.ChunkSet
 module Sock = ZMQ.Socket
 
 (* setup data server *)
@@ -68,7 +69,7 @@ let compute_chunks (size: int64) =
   (nb_chunks, last_chunk_size_opt)
 
 (* get the path of file 'fn' in the local datastore *)
-let fn_to_path (fn: filename): string =
+let fn_to_path (fn: Types.filename): string =
   !data_store_root ^
   if S.starts_with fn "/" then fn
   else "/" ^ fn
@@ -97,10 +98,8 @@ let add_file (fn: string): ds_to_cli =
         Fetch_file_cmd_nack (fn, Copy_failed)
       else begin (* update local state *)
         let nb_chunks, last_chunk_size = compute_chunks size in
-        (* we keep the stat struct from the original file *)
-        let new_file =
-          File.create fn size stat nb_chunks last_chunk_size !local_node
-        in
+        let all_chunks = File.all_chunks nb_chunks last_chunk_size !local_node in
+        let new_file = File.create fn size nb_chunks all_chunks in
         local_state := FileSet.add new_file !local_state;
         Fetch_file_cmd_ack fn
       end
@@ -192,22 +191,62 @@ let main () =
             encode (DS_to_CLI (Fetch_file_cmd_nack (fn, Already_here)))
           in
           Sock.send to_cli nack
-        | DS_to_DS (Chunk (fn, chunk, data)) -> (* ------------------- *)
-          Log.debug "got Chunk";
-          (* write chunk at the right offset *)
-          let local_file = fn_to_path fn in
-          let offset = chunk * !chunk_size in
-          Utils.with_out_file_descr local_file
-            (fun out ->
-               assert(offset = Unix.(lseek out offset SEEK_SET));
-               let n = String.length data in
-               (* FBR: enforce chunk size *)
-               assert(n = Unix.write_substring out data 0 n));
-          (* FBR: update local state *)
-          (* FBR: once all chunks of a given file have been received,
-                  the DS must notify the CLI *)
-          (* notify MDS *)
-          abort "Chunk"
+        | DS_to_DS (Chunk (fn, chunk_id, is_last, data)) ->
+          begin
+            Log.debug "got Chunk";
+            let size = String.length data in
+            let size64 = Int64.of_int size in
+            let curr_chunk_size =
+              if size <> !chunk_size then Some size64 else None
+            in
+            if not is_last && Option.is_some curr_chunk_size then
+              Log.error "invalid chunk size: fn: %s id: %d size: %d"
+                fn chunk_id size
+            else begin
+              (* 1) write chunk at offset *)
+              let offset = chunk_id * !chunk_size in
+              let local_file = fn_to_path fn in
+              Utils.with_out_file_descr local_file (fun out ->
+                  assert(Unix.(lseek out offset SEEK_SET) = offset);
+                  assert(Unix.write_substring out data 0 size = size)
+                );
+              (* 2) update local state *)
+              let file =
+                try FileSet.find_fn fn !local_state (* retrieve it *)
+                with Not_found -> (* or create it *)
+                  let unknown_size = Int64.of_int (-1) in
+                  let unknown_total_chunks = -1 in
+                  File.create
+                    fn unknown_size unknown_total_chunks ChunkSet.empty
+              in
+              let prev_chunks = File.get_chunks file in
+              let curr_chunk =
+                File.Chunk.create chunk_id curr_chunk_size !local_node
+              in
+              (* only once we receive the last chunk can we finalize the file's
+                 description in local_state *)
+              let new_file =
+                if is_last then (* finalize file description *)
+                  let full_size = Int64.(of_int offset + size64) in
+                  let total_chunks = chunk_id + 1 in
+                  let curr_chunks = ChunkSet.add curr_chunk prev_chunks in
+                  File.create fn full_size total_chunks curr_chunks
+                else (* just update chunkset *)
+                  File.add_chunk file curr_chunk
+              in
+              local_state := FileSet.update_fn fn new_file !local_state;
+              (* 3) notify MDS *)
+              let got_chunk = encode (DS_to_MDS (Chunk_ack (fn, chunk_id))) in
+              Sock.send to_mds got_chunk;
+              (* 4) notify CLI if all file chunks have been received *)
+              let curr_chunks = File.get_chunks new_file in
+              let nb_chunks = File.get_nb_chunks new_file in
+              if ChunkSet.cardinal curr_chunks = nb_chunks then (
+                let got_file = encode (DS_to_CLI (Fetch_file_cmd_ack fn)) in
+                Sock.send to_cli got_file
+              );
+            end
+          end
         | CLI_to_DS (Fetch_file_cmd_req (fn, Local)) -> (* ----------- *)
           Log.debug "got Fetch_file_cmd_req:Local";
           let res = add_file fn in
