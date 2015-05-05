@@ -130,6 +130,8 @@ module FileSet = struct
     find (dummy_file fn) s
   let remove_fn fn s =
     remove (dummy_file fn) s
+  let update_fn fn latest s =
+    add latest (remove_fn fn s)
   let to_string fs =
     let res = Buffer.create 1024 in
     iter (fun f ->
