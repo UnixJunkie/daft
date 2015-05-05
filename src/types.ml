@@ -48,7 +48,6 @@ let _ = RNG.self_init ()
 
 module File = struct
   module Chunk = struct
-    let default_size = 1024 * 1024
     type t = { rank:  int          ;
                size:  int64 option ; (* None if default_size; (Some x) else *)
                nodes: NodeSet.t    } (* which nodes have this chunk
