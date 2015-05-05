@@ -7,6 +7,9 @@ let mds_in_blue = Utils.fg_cyan ^ "MDS" ^ Utils.fg_reset
 module A = Array
 module Ht = Hashtbl
 module FileSet = Types.FileSet
+module File = Types.File
+module ChunkSet = Types.File.ChunkSet
+module Chunk = Types.File.Chunk
 module L = List
 module Logger = Log (* !!! keep this one before Log alias !!! *)
 (* prefix all logs *)
@@ -111,15 +114,38 @@ let main () =
          let ls_ack = encode (MDS_to_CLI (Ls_cmd_ack !global_state)) in
          Sock.send to_cli ls_ack
        | CLI_to_MDS (Fetch_cmd_req (ds_rank, fn)) ->
-         Log.debug "got Fetch_cmd_req";
-         if FileSet.contains_fn fn !global_state then
-           (* for each chunk, ask a randomly selected chunk source
-              to send the chunk to the required DS *)
-           failwith "not implemented yet"
-         else
-           let nack = encode (MDS_to_CLI (Fetch_cmd_nack fn)) in
-           (* this assumes there is a single CLI; might be wrong in the future *)
-           Sock.send to_cli nack
+         begin
+           Log.debug "got Fetch_cmd_req";
+           try
+             let file = FileSet.find_fn fn !global_state in
+             let chunks = Types.File.get_chunks file in
+             (* randomized algorithm: for each chunk we ask a randomly selected
+                chunk source to send the chunk to destination *)
+             ChunkSet.iter (fun chunk ->
+                 if Utils.out_of_bounds ds_rank int2node then
+                   Log.error "Fetch_cmd_req: fn: %s invalid ds_rank: %d"
+                     fn ds_rank
+                 else
+                   let selected_src_node = Chunk.select_source_rand chunk in
+                   let chosen = Node.get_rank selected_src_node in
+                   begin match int2node.(chosen) with
+                     | (_node, Some to_ds_i) ->
+                       let chunk_id = Chunk.get_id chunk in
+                       let is_last = File.is_last_chunk chunk file in
+                       let send_order =
+                         encode
+                           (MDS_to_DS
+                              (Send_to_req (ds_rank, fn, chunk_id, is_last)))
+                       in
+                       Sock.send to_ds_i send_order
+                     | (_, None) -> assert(false)
+                   end
+               ) chunks
+           with Not_found ->
+             (* this assumes there is a single CLI; might be wrong in future *)
+             let nack = encode (MDS_to_CLI (Fetch_cmd_nack fn)) in
+             Sock.send to_cli nack
+         end
        | CLI_to_MDS Quit_cmd ->
          Log.debug "got Quit_cmd";
          let _ = Log.info "got Quit" in
