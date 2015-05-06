@@ -31,6 +31,13 @@ let sleep_ms ms =
 let out_of_bounds i a =
   i < 0 || i > (A.length a) - 1
 
+(* check existence of a file *)
+let file_or_link_exists fn =
+  try
+    let _ = Unix.lstat fn in
+    true
+  with _ -> false
+
 (* like `cmd` in shell
    TODO: use the one in batteries upon next release *)
 let run_and_read cmd =
