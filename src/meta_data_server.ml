@@ -106,9 +106,30 @@ let main () =
              let answer = encode (MDS_to_DS ack_or_nack) in
              Sock.send receiver answer
          end
-       | DS_to_MDS (Chunk_ack (_fn, _chunk)) ->
-         Log.debug "got Chunk_ack";
-         abort "Chunk_ack"
+       | DS_to_MDS (Chunk_ack (fn, chunk_id, ds_rank)) ->
+         begin
+           Log.debug "got Chunk_ack";
+           try
+             (* 1) do we have this file ? *)
+             let file = FileSet.find_fn fn !global_state in
+             try
+               (* 2) does it have this chunk ? *)
+               let prev_chunk = File.find_chunk_id chunk_id file in
+               (* 3) update global state: this chunk is owned by one more DS *)
+               if Utils.out_of_bounds ds_rank int2node then
+                 Log.warn
+                   "invalid ds_rank in Chunk_ack: fn: %s chunk_id: %d ds_rank: %d"
+                   fn chunk_id ds_rank
+               else
+                 let new_source = fst int2node.(ds_rank) in
+                 let new_chunk = Chunk.add_source prev_chunk new_source in
+                 let new_file = File.update_chunk file new_chunk in
+                 global_state := FileSet.update new_file !global_state
+             with Not_found ->
+               Log.error "Chunk_ack: unknown chunk: %s chunk_id: %d" fn chunk_id
+           with Not_found ->
+             Log.error "Chunk_ack: unknown file: %s chunk_id: %d" fn chunk_id
+         end
        | CLI_to_MDS Ls_cmd_req ->
          Log.debug "got Ls_cmd_req";
          let ls_ack = encode (MDS_to_CLI (Ls_cmd_ack !global_state)) in
