@@ -105,6 +105,22 @@ let add_file (fn: string): ds_to_cli =
         Fetch_file_cmd_ack fn
       end)
 
+(* same return type than add_file, to keep the protocol small *)
+let extract_file (src_fn: Types.filename) (dst_fn: Types.filename): ds_to_cli =
+  if FileSet.contains_fn src_fn !local_state then
+    if Utils.file_or_link_exists dst_fn then
+      Fetch_file_cmd_nack (dst_fn, Already_here)
+    else
+      let dest_dir = Fn.dirname dst_fn in
+      let in_data_store = fn_to_path src_fn in
+      (* create all necessary parent dirs *)
+      FU.mkdir ~parent:true ~mode:0o700 dest_dir;
+      (* only soft link for the moment since it's fast *)
+      Unix.symlink in_data_store dst_fn;
+      Fetch_file_cmd_ack dst_fn
+  else
+    Fetch_file_cmd_nack (src_fn, No_such_file)
+
 exception Invalid_ds_rank
 
 let main () =
@@ -192,8 +208,9 @@ let main () =
                         | None -> !chunk_size
                         | Some s -> Int64.to_int s
                       in
-                      (* WARNING: data copy here and allocation of 
+                      (* WARNING: data copy here and allocation of
                                   a fresh buffer each time *)
+                      (* FBR: use the Buffer module properly here *)
                       let buff = String.create curr_chunk_size in
                       assert(Unix.read input buff 0 curr_chunk_size =
                              curr_chunk_size);
@@ -317,6 +334,10 @@ let main () =
                 (CLI_to_MDS (Fetch_cmd_req (Node.get_rank !local_node, fn)))
             in
             Sock.send to_mds req
+        | CLI_to_DS (Extract_file_cmd_req (src_fn, dst_fn)) ->
+          let res = extract_file src_fn dst_fn in
+          let ans = encode (DS_to_CLI res) in
+          Sock.send to_cli ans
         | DS_to_CLI  _ -> Log.warn "DS_to_CLI"
         | MDS_to_CLI _ -> Log.warn "MDS_to_CLI"
         | DS_to_MDS  _ -> Log.warn "DS_to_MDS"
