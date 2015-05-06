@@ -45,7 +45,7 @@ let process_answer incoming =
     Log.info "%s: OK" fn
   | DS_to_CLI (Fetch_file_cmd_nack (fn, err)) ->
     Log.debug "got Fetch_file_cmd_nack";
-    Log.error "%s: %s" fn (string_of_fetch_error err)
+    Log.error "%s: %s" fn (string_of_error err)
   | DS_to_MDS _ -> Log.warn "DS_to_MDS"
   | MDS_to_DS _ -> Log.warn "MDS_to_DS"
   | DS_to_DS _ -> Log.warn "DS_to_DS"
