@@ -128,8 +128,6 @@ module File = struct
       Buffer.contents res
     let find_id (id: chunk_id) (cs: t): Chunk.t =
       find (Chunk.dummy id) cs
-    let mem_id (id: chunk_id) (cs: t): bool =
-      mem (Chunk.dummy id) cs
     let update (c: Chunk.t) (cs: t): t =
       add c (remove c cs)
   end
@@ -176,8 +174,6 @@ module File = struct
         | Some _s -> true
         | None -> (c.id = f.nb_chunks - 1)
       )
-  let contains_chunk_id (id: chunk_id) (f: t): bool =
-    ChunkSet.mem_id id f.chunks
 end
 
 (* the status of the "filesystem" is just a set of files *)
