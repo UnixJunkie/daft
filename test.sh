@@ -1,7 +1,5 @@
 # to run local tests
 
-# FBR: use xterm -e [cmd]
-
 function reset () {
     pkill daft_mds    # kill MDS
     pkill daft_ds     # kill all DSs
@@ -10,12 +8,12 @@ function reset () {
 
 reset
 
-./daft_mds -m machines -cli meleze.ens.fr:8000 & # one MDS
+xterm -e './daft_mds -m machines -cli meleze.ens.fr:8000' & # one MDS
 
 # 3 local DSs
-./daft_ds -m machines -r 0 -mds `hostname -f` -p 8083 -cli meleze.ens.fr:8000 & # one DS
-./daft_ds -m machines -r 1 -mds `hostname -f` -p 8084 -cli meleze.ens.fr:8000 & # one DS
-./daft_ds -m machines -r 2 -mds `hostname -f` -p 8085 -cli meleze.ens.fr:8000 & # one DS
+xterm -e './daft_ds -m machines -r 0 -mds `hostname -f` -p 8083 -cli meleze.ens.fr:8000' & # one DS
+xterm -e './daft_ds -m machines -r 1 -mds `hostname -f` -p 8084 -cli meleze.ens.fr:8000' & # one DS
+xterm -e './daft_ds -m machines -r 2 -mds `hostname -f` -p 8085 -cli meleze.ens.fr:8000' & # one DS
 
 # automatic tests
 sleep 1s
