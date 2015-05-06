@@ -91,7 +91,7 @@ let main () =
             | "put"
             | "fetch" ->
               begin match args with
-                | [] -> Log.error "put: no filename"
+                | [] -> Log.error "no filename"
                 | [fn] ->
                   let f_loc = match cmd with
                     | "put" -> Local
@@ -101,8 +101,18 @@ let main () =
                   let put = encode (CLI_to_DS (Fetch_file_cmd_req (fn, f_loc))) in
                   Sock.send for_DS put;
                   process_answer incoming
-                | _ -> Log.error "put: more than one filename"
+                | _ -> Log.error "more than one filename"
               end
+            | "extract" ->
+              begin match args with
+                | [] -> Log.error "no filename"
+                | [src_fn; dst_fn] ->
+                  let extract = encode (CLI_to_DS (Extract_file_cmd_req (src_fn, dst_fn))) in
+                  Sock.send for_DS extract;
+                  process_answer incoming
+                | _ -> Log.error "too many filenames"
+              end
+
             | "q" | "quit" | "exit" ->
               let quit_cmd = encode (CLI_to_MDS Quit_cmd) in
               Sock.send for_MDS quit_cmd;
