@@ -58,6 +58,11 @@ let process_answer incoming continuation =
   | CLI_to_MDS _ -> Log.warn "CLI_to_MDS"
   | CLI_to_DS _ -> Log.warn "CLI_to_DS"
 
+let extract_cmd src_fn dst_fn for_DS incoming =
+  let extract = encode (CLI_to_DS (Extract_file_cmd_req (src_fn, dst_fn))) in
+  Sock.send for_DS extract;
+  process_answer incoming do_nothing
+
 let main () =
   (* setup logger *)
   Logger.set_log_level Logger.DEBUG;
@@ -95,27 +100,36 @@ let main () =
           begin match cmd with
             | "" -> Log.error "cmd = \"\""
             | "put"
+            | "get"
             | "fetch" ->
               begin match args with
                 | [] -> Log.error "no filename"
-                | [fn] ->
+                | src_fn :: other_args ->
+                  if cmd <> "get" && other_args <> []
+                  then Log.warn "more than one filename";
                   let f_loc = match cmd with
                     | "put" -> Local
-                    | "fetch" -> Remote
+                    | "get" | "fetch" -> Remote
                     | _ -> assert(false)
                   in
-                  let put = encode (CLI_to_DS (Fetch_file_cmd_req (fn, f_loc))) in
+                  let put = encode (CLI_to_DS (Fetch_file_cmd_req (src_fn, f_loc))) in
                   Sock.send for_DS put;
-                  process_answer incoming do_nothing
-                | _ -> Log.error "more than one filename"
+                  (* get = extract . fetch *)
+                  let continuation = match cmd with
+                    | "get" ->
+                      (fun () ->
+                         match other_args with
+                         | [dst_fn] -> extract_cmd src_fn dst_fn for_DS incoming
+                         | _ -> Log.error "no dst_fn"
+                      )
+                    | _ -> do_nothing
+                  in
+                  process_answer incoming continuation
               end
             | "extract" ->
               begin match args with
                 | [] -> Log.error "no filename"
-                | [src_fn; dst_fn] ->
-                  let extract = encode (CLI_to_DS (Extract_file_cmd_req (src_fn, dst_fn))) in
-                  Sock.send for_DS extract;
-                  process_answer incoming do_nothing
+                | [src_fn; dst_fn] -> extract_cmd src_fn dst_fn for_DS incoming
                 | _ -> Log.error "too many filenames"
               end
             | "q" | "quit" | "exit" ->
