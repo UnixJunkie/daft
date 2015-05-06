@@ -1,8 +1,6 @@
 TODO
 ====
 
-- implement extract
-
 - then implement get as fetch (if needed) then extract
 
 - put incoming messages of the MDS into a priority queue
