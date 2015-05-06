@@ -92,7 +92,19 @@ module File = struct
           ) c.nodes;
         assert(false)
       with Found node -> node
+    (* a new node possess this chunk *)
+    let add_source (c: t) (n: Node.t): t =
+      let prev_set = c.nodes in
+      let new_set = NodeSet.add n c.nodes in
+      if prev_set == new_set then
+        Log.error "add_source: already known chunk_id: %d node: %s"
+          c.id (Node.to_string n)
+      ;
+      { c with nodes = new_set }
   end
+
+(* FBR: adhere to the JS Core convention: in module with type t, the first
+        param of each operation must be a t *)
 
   module ChunkSet = struct
     include Set.Make(Chunk)
@@ -116,6 +128,10 @@ module File = struct
       Buffer.contents res
     let find_id (id: chunk_id) (cs: t): Chunk.t =
       find (Chunk.dummy id) cs
+    let mem_id (id: chunk_id) (cs: t): bool =
+      mem (Chunk.dummy id) cs
+    let update (c: Chunk.t) (cs: t): t =
+      add c (remove c cs)
   end
 
   type t = { name:      filename   ;
@@ -138,9 +154,12 @@ module File = struct
   let add_chunk (f: t) (c: Chunk.t) =
     let prev_set = f.chunks in
     let new_set = ChunkSet.add c prev_set in
-    if prev_set == new_set
-    then Log.error "duplicate chunk: f: %s chunk: %d" f.name Chunk.(c.id);
+    if prev_set == new_set then
+      Log.error "duplicate chunk: f: %s chunk: %d" f.name Chunk.(c.id)
+    ;
     { f with chunks = new_set }
+  let update_chunk (f: t) (c: Chunk.t): t =
+    { f with chunks = ChunkSet.update c f.chunks }
   let compare f1 f2 =
     String.compare f1.name f2.name
   let to_string f =
@@ -148,6 +167,8 @@ module File = struct
       f.name f.size f.nb_chunks (ChunkSet.to_string f.chunks)
   let get_chunks (f: t): ChunkSet.t =
     f.chunks
+  let find_chunk_id (id: chunk_id) (f: t): Chunk.t =
+    ChunkSet.find_id id f.chunks
   let get_nb_chunks (f: t): int =
     f.nb_chunks
   let is_last_chunk (c: Chunk.t) (f: t): bool =
@@ -155,6 +176,8 @@ module File = struct
         | Some _s -> true
         | None -> (c.id = f.nb_chunks - 1)
       )
+  let contains_chunk_id (id: chunk_id) (f: t): bool =
+    ChunkSet.mem_id id f.chunks
 end
 
 (* the status of the "filesystem" is just a set of files *)
@@ -172,8 +195,8 @@ module FileSet = struct
     find (dummy_file fn) s
   let remove_fn fn s =
     remove (dummy_file fn) s
-  let update_fn fn latest s =
-    add latest (remove_fn fn s)
+  let update latest s =
+    add latest (remove_fn File.(latest.name) s)
   let to_string fs =
     let res = Buffer.create 1024 in
     iter (fun f ->
@@ -206,7 +229,7 @@ module Protocol = struct
 
   type ds_to_mds =
     | Join_push of Node.t (* a DS registering itself with the MDS *)
-    | Chunk_ack of filename * chunk_id
+    | Chunk_ack of filename * chunk_id * ds_rank
     | Add_file_req of ds_rank * File.t
 
   type mds_to_ds =
