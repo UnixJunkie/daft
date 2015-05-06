@@ -88,7 +88,7 @@ let main () =
         | cmd :: args ->
           begin match cmd with
             | "" -> Log.error "cmd = \"\""
-            | "put" (* ----------------------------------------------------- *)
+            | "put"
             | "fetch" ->
               begin match args with
                 | [] -> Log.error "put: no filename"
@@ -103,11 +103,11 @@ let main () =
                   process_answer incoming
                 | _ -> Log.error "put: more than one filename"
               end
-            | "q" | "quit" | "exit" -> (* ---------------------------------- *)
+            | "q" | "quit" | "exit" ->
               let quit_cmd = encode (CLI_to_MDS Quit_cmd) in
               Sock.send for_MDS quit_cmd;
               not_finished := false;
-            | "l" | "ls" -> (* --------------------------------------------- *)
+            | "l" | "ls" ->
               let ls_cmd = encode (CLI_to_MDS Ls_cmd_req) in
               Sock.send for_MDS ls_cmd;
               process_answer incoming
