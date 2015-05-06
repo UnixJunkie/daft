@@ -250,6 +250,7 @@ module Protocol = struct
 
   type cli_to_ds =
     | Fetch_file_cmd_req of filename * file_loc
+    | Extract_file_cmd_req of filename * filename
 
   type fetch_error = Already_here | Is_directory | Copy_failed | No_such_file
 
