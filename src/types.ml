@@ -252,11 +252,11 @@ module Protocol = struct
     | Fetch_file_cmd_req of filename * file_loc
     | Extract_file_cmd_req of filename * filename
 
-  type fetch_error = Already_here | Is_directory | Copy_failed | No_such_file
+  type error = Already_here | Is_directory | Copy_failed | No_such_file
 
   type ds_to_cli =
     | Fetch_file_cmd_ack of filename
-    | Fetch_file_cmd_nack of filename * fetch_error
+    | Fetch_file_cmd_nack of filename * error
 
   type t = DS_to_MDS of ds_to_mds
          | MDS_to_DS of mds_to_ds
@@ -279,7 +279,7 @@ module Protocol = struct
        maybe not when in Raw mode but other modes should do it *)
     (Marshal.from_string s 0: t)
 
-  let string_of_fetch_error = function
+  let string_of_error = function
     | Already_here -> "already here"
     | Is_directory -> "directory"
     | Copy_failed -> "copy failed"
