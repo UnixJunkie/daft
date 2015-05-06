@@ -278,9 +278,9 @@ let main () =
                 else (* just update chunkset *)
                   File.add_chunk file curr_chunk
               in
-              local_state := FileSet.update_fn fn new_file !local_state;
+              local_state := FileSet.update new_file !local_state;
               (* 3) notify MDS *)
-              let got_chunk = encode (DS_to_MDS (Chunk_ack (fn, chunk_id))) in
+              let got_chunk = encode (DS_to_MDS (Chunk_ack (fn, chunk_id, !ds_rank))) in
               Sock.send to_mds got_chunk;
               (* 4) notify CLI if all file chunks have been received *)
               let curr_chunks = File.get_chunks new_file in
