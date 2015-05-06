@@ -27,7 +27,7 @@ let abort msg =
   Log.fatal msg;
   exit 1
 
-let process_answer incoming =
+let process_answer incoming maybe_cont =
   Log.debug "waiting msg";
   let encoded = Sock.recv incoming in
   let message = decode encoded in
@@ -41,8 +41,13 @@ let process_answer incoming =
     Log.debug "got Fetch_cmd_nack";
     Log.error "no such file: %s" fn
   | DS_to_CLI (Fetch_file_cmd_ack fn) ->
-    Log.debug "got Fetch_file_cmd_ack";
-    Log.info "%s: OK" fn
+    begin
+      Log.debug "got Fetch_file_cmd_ack";
+      Log.info "%s: OK" fn;
+      match maybe_cont with
+      | None -> ()
+      | Some continuation -> continuation ()
+    end
   | DS_to_CLI (Fetch_file_cmd_nack (fn, err)) ->
     Log.debug "got Fetch_file_cmd_nack";
     Log.error "%s: %s" fn (string_of_error err)
@@ -100,7 +105,7 @@ let main () =
                   in
                   let put = encode (CLI_to_DS (Fetch_file_cmd_req (fn, f_loc))) in
                   Sock.send for_DS put;
-                  process_answer incoming
+                  process_answer incoming None
                 | _ -> Log.error "more than one filename"
               end
             | "extract" ->
@@ -109,10 +114,9 @@ let main () =
                 | [src_fn; dst_fn] ->
                   let extract = encode (CLI_to_DS (Extract_file_cmd_req (src_fn, dst_fn))) in
                   Sock.send for_DS extract;
-                  process_answer incoming
+                  process_answer incoming None
                 | _ -> Log.error "too many filenames"
               end
-
             | "q" | "quit" | "exit" ->
               let quit_cmd = encode (CLI_to_MDS Quit_cmd) in
               Sock.send for_MDS quit_cmd;
@@ -120,7 +124,7 @@ let main () =
             | "l" | "ls" ->
               let ls_cmd = encode (CLI_to_MDS Ls_cmd_req) in
               Sock.send for_MDS ls_cmd;
-              process_answer incoming
+              process_answer incoming None
             | _ -> Log.error "unknown command: %s" cmd
           end
       end
