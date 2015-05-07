@@ -1,7 +1,10 @@
 TODO
 ====
 
-- then implement get as fetch (if needed) then extract
+remote get (rget): the CLI asks a remote DS to get
+
+remote put (rput):
+rput = rget . put
 
 - put incoming messages of the MDS into a priority queue
   - initial queue size is 3 times the number of DSs
