@@ -308,6 +308,7 @@ let main () =
               let nb_chunks = File.get_nb_chunks new_file in
               if ChunkSet.cardinal curr_chunks = nb_chunks then (
                 let got_file = encode !do_compress (DS_to_CLI (Fetch_file_cmd_ack fn)) in
+                (* FBR: will crash in case of an rfetch command from a remote CLI ??? *)
                 Sock.send to_cli got_file
               );
             end
