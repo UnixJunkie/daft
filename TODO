@@ -17,6 +17,11 @@ rput = rget . put
 - all the ZMQ.send can be made asynchronous
   - only the receive must not be
 
+- command to test all files
+  - optionally all chunks also
+  It would compare their md5 to the one the MDS knows about.
+  This is for dev. tests only.
+
 COMMANDS SEMANTICS
 ==================
 
@@ -34,8 +39,22 @@ PERFORMANCE
 ===========
 
 - it will be cheap to encode/decode on the fly
+
+- provide a Huffman compression mode:
+  huffman compression with encrypted huffman tree
+  - this would be for people who don't want hardcore encryption
+    but also don't want to send their data in clear text
+
+- we can cache chunks coming in when not in raw mode
+  - so that we don't need to compress|sign|encrypt them once
+    more in the future
+
 - it may be cheap to implement a chunk-level binary cache on DSs
   - just check the checksum of incoming packets
+    - this is only interesting if some files share entire chunks
+  - more interesting would be a binary cache that doesn't rely on
+    chunk size (it uses a function to detect boundaries, I have seen that
+    in the past)
 
 - use LZ4 for on-the-fly compression
 
