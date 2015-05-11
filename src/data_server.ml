@@ -210,7 +210,7 @@ let main () =
                         | None -> !chunk_size
                         | Some s ->
                           let res = Int64.to_int s in
-                          assert(res < !chunk_size);
+                          assert(res > 0 && res < !chunk_size);
                           res
                       in
                       (* WARNING: data copy here and allocation of
