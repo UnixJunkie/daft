@@ -216,8 +216,7 @@ let main () =
                       (* WARNING: data copy here and allocation of
                                   a fresh buffer each time *)
                       let buff = String.create curr_chunk_size in
-                      assert(Unix.read input buff 0 curr_chunk_size =
-                             curr_chunk_size);
+                      Utils.really_read input buff curr_chunk_size;
                       buff
                     )
                 in
@@ -271,6 +270,9 @@ let main () =
               (* 1) write chunk at offset *)
               let offset = chunk_id * !chunk_size in
               let local_file = fn_to_path fn in
+              let dest_dir = Fn.dirname local_file in
+              (* mkdir creates all necessary parent dirs *)
+              FU.mkdir ~parent:true ~mode:0o700 dest_dir;
               Utils.with_out_file_descr local_file (fun out ->
                   assert(Unix.(lseek out offset SEEK_SET) = offset);
                   assert(Unix.write_substring out data 0 size = size)
@@ -308,7 +310,6 @@ let main () =
               let nb_chunks = File.get_nb_chunks new_file in
               if ChunkSet.cardinal curr_chunks = nb_chunks then (
                 let got_file = encode !do_compress (DS_to_CLI (Fetch_file_cmd_ack fn)) in
-                (* FBR: will crash in case of an rfetch command from a remote CLI ??? *)
                 Sock.send to_cli got_file
               );
             end
@@ -351,7 +352,8 @@ let main () =
     done;
     raise Types.Loop_end;
   with exn -> begin
-      let (_: int) = delete_data_store !data_store_root in
+      (* it's useful to see the local data store state for debug *)
+      (* let (_: int) = delete_data_store !data_store_root in *)
       ZMQ.Socket.close incoming;
       ZMQ.Socket.close to_mds;
       ZMQ.Socket.close to_cli;
