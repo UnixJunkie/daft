@@ -65,6 +65,10 @@ PERFORMANCE
 SECURITY
 ========
 
+- create executables that speak the same protocole at compile time ???
+  example: daft_cli_z means a daft CLI that speaks the
+           compressed-on-the-fly protocole
+
 - encryption of messages: if a message cannot be decrypted, then
   it is not from a member of the communication group (because it is from
   someone who doesn't know the group's secret)
