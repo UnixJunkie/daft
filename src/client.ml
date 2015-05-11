@@ -117,14 +117,13 @@ let main () =
                   let put = encode !do_compress (CLI_to_DS (Fetch_file_cmd_req (src_fn, f_loc))) in
                   Sock.send for_DS put;
                   (* get = extract . fetch *)
-                  let continuation = match cmd with
-                    | "get" ->
-                      (fun () ->
-                         match other_args with
+                  let continuation =
+                    if cmd <> "get" then do_nothing
+                    else
+                      (fun () -> match other_args with
                          | [dst_fn] -> extract_cmd src_fn dst_fn for_DS incoming
                          | _ -> Log.error "no dst_fn"
                       )
-                    | _ -> do_nothing
                   in
                   process_answer incoming continuation
               end
