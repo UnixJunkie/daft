@@ -11,7 +11,7 @@ function reset () {
 reset
 
 OPTS=""
-OPTS="-z" # to test on the fly compression of all communications
+# OPTS="-z" # to test on the fly compression of all communications
 
 ./daft_mds $OPTS -m machines -cli `hostname -f`:8000 & # one MDS
 
@@ -19,4 +19,5 @@ OPTS="-z" # to test on the fly compression of all communications
 ./daft_ds $OPTS -m machines -r 1 -mds `hostname -f` -p 8084 -cli `hostname -f`:8000 & # one DS
 ./daft_ds $OPTS -m machines -r 2 -mds `hostname -f` -p 8085 -cli `hostname -f`:8000 & # one DS
 
+sleep 1s
 echo quit | ./daft_cli $OPTS -ds `hostname -f`:8083
