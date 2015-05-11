@@ -22,6 +22,7 @@ let ds_port_in = ref Utils.default_ds_port_in
 let mds_host = ref "localhost"
 let mds_port_in = ref Utils.default_mds_port_in
 let cli_port_in = ref Utils.default_cli_port_in
+let do_compress = ref false
 
 let abort msg =
   Log.fatal msg;
@@ -59,7 +60,7 @@ let process_answer incoming continuation =
   | CLI_to_DS _ -> Log.warn "CLI_to_DS"
 
 let extract_cmd src_fn dst_fn for_DS incoming =
-  let extract = encode (CLI_to_DS (Extract_file_cmd_req (src_fn, dst_fn))) in
+  let extract = encode !do_compress (CLI_to_DS (Extract_file_cmd_req (src_fn, dst_fn))) in
   Sock.send for_DS extract;
   process_answer incoming do_nothing
 
@@ -74,7 +75,8 @@ let main () =
       "-mds", Arg.String (Utils.set_host_port mds_host mds_port_in),
       "<host:port> MDS";
       "-ds", Arg.String (Utils.set_host_port ds_host ds_port_in),
-      "<host:port> local DS" ]
+      "<host:port> local DS";
+      "-z", Arg.Set do_compress, " enable on the fly compression" ]
     (fun arg -> raise (Arg.Bad ("Bad argument: " ^ arg)))
     (sprintf "usage: %s <options>" Sys.argv.(0));
   (* check options *)
@@ -112,7 +114,7 @@ let main () =
                     | "get" | "fetch" -> Remote
                     | _ -> assert(false)
                   in
-                  let put = encode (CLI_to_DS (Fetch_file_cmd_req (src_fn, f_loc))) in
+                  let put = encode !do_compress (CLI_to_DS (Fetch_file_cmd_req (src_fn, f_loc))) in
                   Sock.send for_DS put;
                   (* get = extract . fetch *)
                   let continuation = match cmd with
@@ -133,11 +135,11 @@ let main () =
                 | _ -> Log.error "too many filenames"
               end
             | "q" | "quit" | "exit" ->
-              let quit_cmd = encode (CLI_to_MDS Quit_cmd) in
+              let quit_cmd = encode !do_compress (CLI_to_MDS Quit_cmd) in
               Sock.send for_MDS quit_cmd;
               not_finished := false;
             | "l" | "ls" ->
-              let ls_cmd = encode (CLI_to_MDS Ls_cmd_req) in
+              let ls_cmd = encode !do_compress (CLI_to_MDS Ls_cmd_req) in
               Sock.send for_MDS ls_cmd;
               process_answer incoming do_nothing
             | _ -> Log.error "unknown command: %s" cmd

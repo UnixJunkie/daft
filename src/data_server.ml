@@ -32,6 +32,7 @@ let chunk_size = ref Utils.default_chunk_size (* DAFT global constant *)
 let local_state = ref FileSet.empty
 let data_store_root = ref ""
 let local_node = ref (Node.dummy ()) (* this node *)
+let do_compress = ref false
 
 let abort msg =
   Log.fatal msg;
@@ -139,7 +140,8 @@ let main () =
       "-m", Arg.Set_string machine_file,
       "machine_file list of [user@]host:port (one per line)";
       "-mds", Arg.Set_string mds_host, "<server> MDS host";
-      "-mdsp", Arg.Set_int mds_port_in, "<port> MDS port" ]
+      "-mdsp", Arg.Set_int mds_port_in, "<port> MDS port" ;
+      "-z", Arg.Set do_compress, " enable on the fly compression" ]
     (fun arg -> raise (Arg.Bad ("Bad argument: " ^ arg)))
     (sprintf "usage: %s <options>" Sys.argv.(0))
   ;
@@ -179,7 +181,7 @@ let main () =
   (* register at the MDS *)
   Log.info "connecting to MDS %s:%d" !mds_host !mds_port_in;
   let to_mds = Utils.(zmq_socket Push ctx !mds_host !mds_port_in) in
-  let here_I_am = encode (DS_to_MDS (Join_push !local_node)) in
+  let here_I_am = encode !do_compress (DS_to_MDS (Join_push !local_node)) in
   Sock.send to_mds here_I_am;
   try (* loop on messages until quit command *)
     let not_finished = ref true in
@@ -219,7 +221,7 @@ let main () =
                 in
                 (* 4) send it *)
                 let to_send =
-                  encode
+                  encode !do_compress
                     (DS_to_DS (Chunk (fn, chunk_id, is_last, chunk_data)))
                 in
                 begin match int2node.(ds_rank) with
@@ -241,7 +243,7 @@ let main () =
         | MDS_to_DS (Add_file_ack fn) ->
           Log.debug "got Add_file_ack";
           (* forward the good news to the CLI *)
-          let ack = encode (DS_to_CLI (Fetch_file_cmd_ack fn)) in
+          let ack = encode !do_compress (DS_to_CLI (Fetch_file_cmd_ack fn)) in
           Sock.send to_cli ack
         | MDS_to_DS (Add_file_nack fn) ->
           Log.debug "got Add_file_nack";
@@ -249,7 +251,7 @@ let main () =
           (* quick and dirty but maybe OK: only rollback local state's view *)
           local_state := FileSet.remove_fn fn !local_state;
           let nack = (* forward nack to CLI *)
-            encode (DS_to_CLI (Fetch_file_cmd_nack (fn, Already_here)))
+            encode !do_compress (DS_to_CLI (Fetch_file_cmd_nack (fn, Already_here)))
           in
           Sock.send to_cli nack
         | DS_to_DS (Chunk (fn, chunk_id, is_last, data)) ->
@@ -297,13 +299,13 @@ let main () =
               in
               local_state := FileSet.update new_file !local_state;
               (* 3) notify MDS *)
-              let got_chunk = encode (DS_to_MDS (Chunk_ack (fn, chunk_id, !ds_rank))) in
+              let got_chunk = encode !do_compress (DS_to_MDS (Chunk_ack (fn, chunk_id, !ds_rank))) in
               Sock.send to_mds got_chunk;
               (* 4) notify CLI if all file chunks have been received *)
               let curr_chunks = File.get_chunks new_file in
               let nb_chunks = File.get_nb_chunks new_file in
               if ChunkSet.cardinal curr_chunks = nb_chunks then (
-                let got_file = encode (DS_to_CLI (Fetch_file_cmd_ack fn)) in
+                let got_file = encode !do_compress (DS_to_CLI (Fetch_file_cmd_ack fn)) in
                 Sock.send to_cli got_file
               );
             end
@@ -316,27 +318,27 @@ let main () =
               (* notify MDS about this new file *)
               let file = FileSet.find_fn fn !local_state in
               let add_file_req = Add_file_req (!ds_rank, file) in
-              let add_file_msg = encode (DS_to_MDS add_file_req) in
+              let add_file_msg = encode !do_compress (DS_to_MDS add_file_req) in
               Sock.send to_mds add_file_msg
             | Fetch_file_cmd_nack (fn, err) ->
-              let nack = encode (DS_to_CLI (Fetch_file_cmd_nack (fn, err))) in
+              let nack = encode !do_compress (DS_to_CLI (Fetch_file_cmd_nack (fn, err))) in
               Sock.send to_cli nack
           end
         | CLI_to_DS (Fetch_file_cmd_req (fn, Remote)) ->
           Log.debug "got Fetch_file_cmd_req:Remote";
           (* finish quickly in case file is already present locally *)
           if FileSet.contains_fn fn !local_state then
-            let ack = encode (DS_to_CLI (Fetch_file_cmd_ack fn)) in
+            let ack = encode !do_compress (DS_to_CLI (Fetch_file_cmd_ack fn)) in
             Log.info "%s already here" fn;
             Sock.send to_cli ack
           else (* forward request to MDS *)
-            let req = encode
+            let req = encode !do_compress
                 (CLI_to_MDS (Fetch_cmd_req (Node.get_rank !local_node, fn)))
             in
             Sock.send to_mds req
         | CLI_to_DS (Extract_file_cmd_req (src_fn, dst_fn)) ->
           let res = extract_file src_fn dst_fn in
-          let ans = encode (DS_to_CLI res) in
+          let ans = encode !do_compress (DS_to_CLI res) in
           Sock.send to_cli ans
         | DS_to_CLI  _ -> Log.warn "DS_to_CLI"
         | MDS_to_CLI _ -> Log.warn "MDS_to_CLI"

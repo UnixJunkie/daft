@@ -20,6 +20,7 @@ module Sock = ZMQ.Socket
 let global_state = ref FileSet.empty
 let cli_host = ref ""
 let cli_port_in = ref Utils.default_cli_port_in
+let do_compress = ref false
 
 let start_data_nodes _machine_fn =
   (* TODO: scp exe to each node *)
@@ -43,7 +44,8 @@ let main () =
       "-m", Arg.Set_string machine_file,
       "machine_file list of [user@]host:port (one per line)";
       "-cli", Arg.String (Utils.set_host_port cli_host cli_port_in),
-      "<host:port> CLI" ]
+      "<host:port> CLI";
+      "-z", Arg.Set do_compress, "enable on the fly compression" ]
     (fun arg -> raise (Arg.Bad ("Bad argument: " ^ arg)))
     (sprintf "usage: %s <options>" Sys.argv.(0));
   (* check options *)
@@ -103,7 +105,7 @@ let main () =
                  Add_file_ack f.name
                end
              in
-             let answer = encode (MDS_to_DS ack_or_nack) in
+             let answer = encode !do_compress (MDS_to_DS ack_or_nack) in
              Sock.send receiver answer
          end
        | DS_to_MDS (Chunk_ack (fn, chunk_id, ds_rank)) ->
@@ -132,7 +134,7 @@ let main () =
          end
        | CLI_to_MDS Ls_cmd_req ->
          Log.debug "got Ls_cmd_req";
-         let ls_ack = encode (MDS_to_CLI (Ls_cmd_ack !global_state)) in
+         let ls_ack = encode !do_compress (MDS_to_CLI (Ls_cmd_ack !global_state)) in
          Sock.send to_cli ls_ack
        | CLI_to_MDS (Fetch_cmd_req (ds_rank, fn)) ->
          begin
@@ -154,7 +156,7 @@ let main () =
                        let chunk_id = Chunk.get_id chunk in
                        let is_last = File.is_last_chunk chunk file in
                        let send_order =
-                         encode
+                         encode !do_compress
                            (MDS_to_DS
                               (Send_to_req (ds_rank, fn, chunk_id, is_last)))
                        in
@@ -164,13 +166,13 @@ let main () =
                ) chunks
            with Not_found ->
              (* this assumes there is a single CLI; might be wrong in future *)
-             let nack = encode (MDS_to_CLI (Fetch_cmd_nack fn)) in
+             let nack = encode !do_compress (MDS_to_CLI (Fetch_cmd_nack fn)) in
              Sock.send to_cli nack
          end
        | CLI_to_MDS Quit_cmd ->
          Log.debug "got Quit_cmd";
          let _ = Log.info "got Quit" in
-         let quit = encode (MDS_to_DS Quit_cmd) in
+         let quit = encode !do_compress (MDS_to_DS Quit_cmd) in
          (* send Quit to all DSs *)
          A.iteri (fun i (_ds, maybe_sock) -> match maybe_sock with
              | None -> Log.warn "DS %d missing" i

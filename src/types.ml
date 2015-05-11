@@ -266,11 +266,21 @@ module Protocol = struct
          | CLI_to_DS of cli_to_ds
          | DS_to_CLI of ds_to_cli
 
-  (* FBR: add to_string *)
+  (* FBR: add to_string for all messages *)
 
-  (* FBR: add mode parameter *)
-  let encode (m: t): string =
-    Marshal.to_string m [Marshal.No_sharing]
+  let compress (s: string) =
+    LZ4.Bytes.compress (Bytes.of_string s)
+
+  let uncompress (s: string) =
+    LZ4.Bytes.decompress (Bytes.of_string s)
+
+  let encode (do_compress: bool) (m: t): string =
+    let to_send = Marshal.to_string m [Marshal.No_sharing] in
+    let to_send =
+      if do_compress then compress to_send
+      else to_send
+    in
+    to_send
 
   (* FBR: add mode parameter *)
   let decode (s: string): t =
