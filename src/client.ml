@@ -127,6 +127,20 @@ let main () =
                   in
                   process_answer incoming continuation
               end
+            | "rfetch" ->
+              begin match args with
+                | [] -> Log.error "no filename"
+                | [src_fn; host_port] ->
+                  let put = encode !do_compress (CLI_to_DS (Fetch_file_cmd_req (src_fn, Remote))) in
+                  let host, port = ref "", ref 0 in
+                  Utils.set_host_port host port host_port;
+                  (* temp socket to remote DS *)
+                  let for_ds_i = Utils.(zmq_socket Push ctx !host !port) in
+                  Sock.send for_ds_i put;
+                  process_answer incoming do_nothing;
+                  ZMQ.Socket.close for_ds_i
+                | _ -> Log.error "rfetch: usage: rfetch fn host:port"
+              end
             | "extract" ->
               begin match args with
                 | [] -> Log.error "no filename"
