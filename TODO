@@ -2,6 +2,7 @@ TODO
 ====
 
 remote get (rget): the CLI asks a remote DS to get
+rget = rextract . rfetch
 
 remote put (rput):
 rput = rget . put
