@@ -97,6 +97,19 @@ let with_out_file_descr fn f =
   Unix.close output;
   res
 
+(* call Unix.read until length bytes were read *)
+let really_read
+    (input: Unix.file_descr)
+    (buff: string)
+    (length: int): unit =
+  assert(length <= String.length buff);
+  let was_read = ref 0 in
+  while !was_read <> length do
+    let to_read = length - !was_read in
+    let just_read = Unix.read input buff !was_read to_read in
+    was_read := !was_read + just_read
+  done
+
 type socket_type = Push | Pull
 
 let zmq_socket (t: socket_type) (context: ZMQ.Context.t) (host: string) (port: int) =
