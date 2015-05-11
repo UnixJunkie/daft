@@ -208,7 +208,10 @@ let main () =
                       assert(Unix.(lseek input offset SEEK_SET) = offset);
                       let curr_chunk_size = match Chunk.get_size chunk with
                         | None -> !chunk_size
-                        | Some s -> Int64.to_int s
+                        | Some s ->
+                          let res = Int64.to_int s in
+                          assert(res < !chunk_size);
+                          res
                       in
                       (* WARNING: data copy here and allocation of
                                   a fresh buffer each time *)
