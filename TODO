@@ -54,7 +54,7 @@ PERFORMANCE
     - this is only interesting if some files share entire chunks
   - more interesting would be a binary cache that doesn't rely on
     chunk size (it uses a function to detect boundaries, I have seen that
-    in the past)
+    in the past: StoreGPU article in HPDC 2008)
 
 - interesting worst case to test:
   many hosts ask for the same small file at the same time
