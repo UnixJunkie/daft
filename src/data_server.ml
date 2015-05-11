@@ -215,7 +215,6 @@ let main () =
                       in
                       (* WARNING: data copy here and allocation of
                                   a fresh buffer each time *)
-                      (* FBR: use the Buffer module properly here *)
                       let buff = String.create curr_chunk_size in
                       assert(Unix.read input buff 0 curr_chunk_size =
                              curr_chunk_size);
