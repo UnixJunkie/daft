@@ -56,8 +56,6 @@ PERFORMANCE
     chunk size (it uses a function to detect boundaries, I have seen that
     in the past)
 
-- use LZ4 for on-the-fly compression
-
 - interesting worst case to test:
   many hosts ask for the same small file at the same time
   (if there is no load balancing, then the system behaves badly)
