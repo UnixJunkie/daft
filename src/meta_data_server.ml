@@ -66,7 +66,7 @@ let main () =
     while !not_finished do
       Log.debug "waiting msg";
       let encoded = Sock.recv incoming in
-      let message = decode encoded in
+      let message = decode !do_compress encoded in
       Log.debug "got msg";
       begin match message with
        | DS_to_MDS (Join_push ds) ->

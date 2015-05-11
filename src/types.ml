@@ -268,11 +268,13 @@ module Protocol = struct
 
   (* FBR: add to_string for all messages *)
 
-  let compress (s: string) =
+  let compress (s: string): string =
     LZ4.Bytes.compress (Bytes.of_string s)
 
-  let uncompress (s: string) =
-    LZ4.Bytes.decompress (Bytes.of_string s)
+  let uncompress (s: string): string =
+    (* this allocates a fresh buffer each time, I notified the author
+       of the bindings *)
+    LZ4.Bytes.decompress ~length:1_572_864 (Bytes.of_string s)
 
   let encode (do_compress: bool) (m: t): string =
     let to_send = Marshal.to_string m [Marshal.No_sharing] in
@@ -282,12 +284,15 @@ module Protocol = struct
     in
     to_send
 
-  (* FBR: add mode parameter *)
-  let decode (s: string): t =
+  let decode (compressed: bool) (s: string): t =
     (* we should check the message is valid before unmarshalling it
        (or software can crash);
        maybe not when in Raw mode but other modes should do it *)
-    (Marshal.from_string s 0: t)
+    let received =
+      if compressed then uncompress s
+      else s
+    in
+    (Marshal.from_string received 0: t)
 
   let string_of_error = function
     | Already_here -> "already here"

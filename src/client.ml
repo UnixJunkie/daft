@@ -34,7 +34,7 @@ let do_nothing () =
 let process_answer incoming continuation =
   Log.debug "waiting msg";
   let encoded = Sock.recv incoming in
-  let message = decode encoded in
+  let message = decode !do_compress encoded in
   Log.debug "got msg";
   match message with
   | MDS_to_CLI (Ls_cmd_ack f) ->

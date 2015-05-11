@@ -187,7 +187,7 @@ let main () =
     let not_finished = ref true in
     while !not_finished do
       let encoded = Sock.recv incoming in
-      let message = decode encoded in
+      let message = decode !do_compress encoded in
       begin match message with
         | MDS_to_DS (Send_to_req (ds_rank, fn, chunk_id, is_last)) ->
           begin
