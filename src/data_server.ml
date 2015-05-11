@@ -335,7 +335,7 @@ let main () =
             Sock.send to_cli ack
           else (* forward request to MDS *)
             let req = encode !do_compress
-                (CLI_to_MDS (Fetch_cmd_req (Node.get_rank !local_node, fn)))
+                (DS_to_MDS (Fetch_file_req (Node.get_rank !local_node, fn)))
             in
             Sock.send to_mds req
         | CLI_to_DS (Extract_file_cmd_req (src_fn, dst_fn)) ->

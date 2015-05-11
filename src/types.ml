@@ -227,6 +227,7 @@ module Protocol = struct
     | Join_push of Node.t (* a DS registering itself with the MDS *)
     | Chunk_ack of filename * chunk_id * ds_rank
     | Add_file_req of ds_rank * File.t
+    | Fetch_file_req of ds_rank * filename
 
   type mds_to_ds =
     | Add_file_ack of filename
@@ -239,7 +240,6 @@ module Protocol = struct
 
   type cli_to_mds =
     | Ls_cmd_req
-    | Fetch_cmd_req of ds_rank * filename
     | Quit_cmd
 
   type mds_to_cli =

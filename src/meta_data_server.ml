@@ -136,7 +136,7 @@ let main () =
          Log.debug "got Ls_cmd_req";
          let ls_ack = encode !do_compress (MDS_to_CLI (Ls_cmd_ack !global_state)) in
          Sock.send to_cli ls_ack
-       | CLI_to_MDS (Fetch_cmd_req (ds_rank, fn)) ->
+       | DS_to_MDS (Fetch_file_req (ds_rank, fn)) ->
          begin
            Log.debug "got Fetch_cmd_req";
            try
