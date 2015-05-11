@@ -1,5 +1,7 @@
 # to run local tests
 
+set -x
+
 function reset () {
     pkill daft_mds    # kill MDS
     pkill daft_ds     # kill all DSs
@@ -8,26 +10,13 @@ function reset () {
 
 reset
 
-xterm -e './daft_mds -m machines -cli meleze.ens.fr:8000' & # one MDS
+OPTS=""
+OPTS="-z" # to test on the fly compression of all communications
 
-# 3 local DSs
-xterm -e './daft_ds -m machines -r 0 -mds `hostname -f` -p 8083 -cli meleze.ens.fr:8000' & # one DS
-xterm -e './daft_ds -m machines -r 1 -mds `hostname -f` -p 8084 -cli meleze.ens.fr:8000' & # one DS
-xterm -e './daft_ds -m machines -r 2 -mds `hostname -f` -p 8085 -cli meleze.ens.fr:8000' & # one DS
+./daft_mds $OPTS -m machines -cli `hostname -f`:8000 & # one MDS
 
-# automatic tests
-sleep 1s
-echo quit | ./daft_cli -ds meleze.ens.fr:8083
-## interactive tests
-# ./daft_cli -ds meleze.ens.fr:8083
+./daft_ds $OPTS -m machines -r 0 -mds `hostname -f` -p 8083 -cli `hostname -f`:8000 & # one DS
+./daft_ds $OPTS -m machines -r 1 -mds `hostname -f` -p 8084 -cli `hostname -f`:8000 & # one DS
+./daft_ds $OPTS -m machines -r 2 -mds `hostname -f` -p 8085 -cli `hostname -f`:8000 & # one DS
 
-# # to run all processes separately by hand
-# # FBR: find a way to fire each one in a different xterm so that logs
-# #      are not interlaced
-# ./daft_mds -m machines -cli meleze.ens.fr:8000
-
-# ./daft_ds -m machines -r 0 -mds `hostname -f` -p 8083 -cli meleze.ens.fr:8000
-# ./daft_ds -m machines -r 1 -mds `hostname -f` -p 8084 -cli meleze.ens.fr:8000
-# ./daft_ds -m machines -r 2 -mds `hostname -f` -p 8085 -cli meleze.ens.fr:8000
-
-# ./daft_cli -ds meleze.ens.fr:8083
+echo quit | ./daft_cli $OPTS -ds `hostname -f`:8083
