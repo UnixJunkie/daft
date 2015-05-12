@@ -7,8 +7,6 @@ rget = rextract . rfetch
 remote put (rput):
 rput = rget . put
 
-- make the client.ml display way smaller nodes list in the ls command output
-
 - put incoming messages of the MDS into a priority queue
   - initial queue size is 3 times the number of DSs
   - state updating messages must be processed with a higher priority
