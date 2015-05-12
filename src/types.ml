@@ -39,6 +39,23 @@ module Node = struct
     BatInt.compare n1.rank n2.rank
 end
 
+(* FBR: transform a set into a list of intervals *)
+
+module Interval = struct
+  type t = { lbound : int ;
+             rbound : int }
+  let create lbound rbound =
+    assert (lbound <= rbound);
+    { lbound ; rbound }
+  let to_string { lbound ; rbound } =
+    if lbound = rbound then
+      sprintf "[%d]" lbound
+    else if lbound + 1 = rbound then
+      sprintf "[%d;%d]" lbound rbound
+    else
+      sprintf "[%d..%d]" lbound rbound
+end
+
 module NodeSet = struct
   include Set.Make(Node)
   let to_string ns =
