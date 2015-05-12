@@ -96,7 +96,6 @@ let with_out_file_descr fn f =
   let res = f output in
   Unix.close output;
   res
-(* FBR: change the mode of a file in the local datastore once it is finalized *)
 
 (* call Unix.read until length bytes were read *)
 let really_read
