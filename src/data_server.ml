@@ -79,32 +79,38 @@ let fn_to_path (fn: Types.filename): string =
 let add_file (fn: string): ds_to_cli =
   if FileSet.contains_fn fn !local_state then
     Fetch_file_cmd_nack (fn, Already_here)
-  else if Sys.is_directory fn then
-    Fetch_file_cmd_nack (fn, Is_directory)
-  else
-    FU.(
-      let stat = FU.stat fn in
-      let size = FU.byte_of_size stat.size in
-      let dest_fn = fn_to_path fn in
-      let dest_dir = Fn.dirname dest_fn in
-      (* mkdir creates all necessary parent dirs *)
-      FU.mkdir ~parent:true ~mode:0o700 dest_dir;
-      FU.cp ~follow:FU.Follow ~force:FU.Force ~recurse:false [fn] dest_fn;
-      (* keep only read (and optionally exec) perms for the user *)
-      if Utils.is_executable fn
-      then Unix.chmod dest_fn 0o500
-      else Unix.chmod dest_fn 0o400;
-      (* check cp succeeded based on new file's size *)
-      let stat' = FU.stat dest_fn in
-      if stat'.size <> stat.size then
-        Fetch_file_cmd_nack (fn, Copy_failed)
-      else begin (* update local state *)
-        let nb_chunks, last_chunk_size = compute_chunks size in
-        let all_chunks = File.all_chunks nb_chunks last_chunk_size !local_node in
-        let new_file = File.create fn size nb_chunks all_chunks in
-        local_state := FileSet.add new_file !local_state;
-        Fetch_file_cmd_ack fn
-      end)
+  else begin
+    if not (Sys.file_exists fn) then
+      Fetch_file_cmd_nack (fn, No_such_file)
+    else begin
+      if Sys.is_directory fn then
+        Fetch_file_cmd_nack (fn, Is_directory)
+      else
+        FU.(
+          let stat = FU.stat fn in
+          let size = FU.byte_of_size stat.size in
+          let dest_fn = fn_to_path fn in
+          let dest_dir = Fn.dirname dest_fn in
+          (* mkdir creates all necessary parent dirs *)
+          FU.mkdir ~parent:true ~mode:0o700 dest_dir;
+          FU.cp ~follow:FU.Follow ~force:FU.Force ~recurse:false [fn] dest_fn;
+          (* keep only read (and optionally exec) perms for the user *)
+          if Utils.is_executable fn
+          then Unix.chmod dest_fn 0o500
+          else Unix.chmod dest_fn 0o400;
+          (* check cp succeeded based on new file's size *)
+          let stat' = FU.stat dest_fn in
+          if stat'.size <> stat.size then
+            Fetch_file_cmd_nack (fn, Copy_failed)
+          else begin (* update local state *)
+            let nb_chunks, last_chunk_size = compute_chunks size in
+            let all_chunks = File.all_chunks nb_chunks last_chunk_size !local_node in
+            let new_file = File.create fn size nb_chunks all_chunks in
+            local_state := FileSet.add new_file !local_state;
+            Fetch_file_cmd_ack fn
+          end)
+    end
+  end
 
 (* same return type than add_file, to keep the protocol small *)
 let extract_file (src_fn: Types.filename) (dst_fn: Types.filename): ds_to_cli =
