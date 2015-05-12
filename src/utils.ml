@@ -92,10 +92,11 @@ let with_out_file fn f =
 
 (* same as with_out_file but using a unix file descriptor *)
 let with_out_file_descr fn f =
-  let output = Unix.(openfile fn [O_WRONLY; O_CREAT] 0o400) in
+  let output = Unix.(openfile fn [O_WRONLY; O_CREAT] 0o600) in
   let res = f output in
   Unix.close output;
   res
+(* FBR: change the mode of a file in the local datastore once it is finalized *)
 
 (* call Unix.read until length bytes were read *)
 let really_read
