@@ -14,6 +14,39 @@ type chunk_id = int
 type chunk_data = string
 type is_last = bool
 
+(* module useful to transform a set of integers with holes
+   into a set of intervals *)
+module Interval = struct
+  type t = { lbound: int ;
+             rbound: int }
+  let create (lbound: int) (rbound: int): t =
+    assert (lbound <= rbound);
+    { lbound ; rbound }
+  let degenerate (x: int): t =
+    { lbound = x ; rbound = x }
+  (* compare lbounds *)
+  let compare (i1: t) (i2: t): int =
+    Int.compare i1.lbound i2.lbound
+  (* try to augment the right bound *)
+  let may_extend_right (itv: t) (i: int): t option =
+    if itv.rbound = i then
+      Some itv
+    else if itv.rbound + 1 = i then
+      Some { itv with rbound = i }
+    else
+      None
+  (* compact string representation *)
+  let to_string { lbound ; rbound } =
+    if lbound = rbound then
+      sprintf "[%d]" lbound
+    else if lbound + 1 = rbound then
+      sprintf "[%d;%d]" lbound rbound
+    else
+      sprintf "[%d..%d]" lbound rbound
+end
+
+module IntervalSet = Set.Make(Interval)
+
 module Node = struct
   (* the rank allows to uniquely identify a node; a la MPI *)
   type t = { rank: int    ;
@@ -39,40 +72,24 @@ module Node = struct
     BatInt.compare n1.rank n2.rank
 end
 
-(* FBR: transform a set into a list of intervals *)
-
-module Interval = struct
-  type t = { lbound : int ;
-             rbound : int }
-  let create (lbound: int) (rbound: int): t =
-    assert (lbound <= rbound);
-    { lbound ; rbound }
-  (* compare lbounds *)
-  let compare (i1: t) (i2: t): int =
-    Int.compare i1.lbound i2.lbound
-  (* let may_merge (i1: t) (i2: t): t option = *)
-  (*   if i1.rbound = i2.lbound then *)
-  (*     Some (create i1.lbound i2.rbound) *)
-  (*   else *)
-  (*     None *)
-  (* try to augment the right bound *)
-  let may_extend_right (itv: t) (i: int): t option =
-    if itv.rbound + 1 = i then
-      Some { itv with rbound = i }
-    else
-      None
-  (* compact string representation *)
-  let to_string { lbound ; rbound } =
-    if lbound = rbound then
-      sprintf "[%d]" lbound
-    else if lbound + 1 = rbound then
-      sprintf "[%d;%d]" lbound rbound
-    else
-      sprintf "[%d..%d]" lbound rbound
-end
-
 module NodeSet = struct
   include Set.Make(Node)
+  let to_interval_set ns =
+    let init = (None, IntervalSet.empty) in
+    let last, glob =
+      fold (fun node (loc_acc, glob_acc) ->
+          let curr = Node.get_rank node in
+          match loc_acc with
+          | None -> (Some (Interval.degenerate curr), glob_acc)
+          | Some x ->
+            match Interval.may_extend_right x curr with
+            | None -> (Some (Interval.degenerate curr), IntervalSet.add x glob_acc)
+            | Some new_acc -> (Some new_acc, glob_acc)
+        ) ns init
+    in
+    match last with
+    | None -> glob
+    | Some x -> IntervalSet.add x glob
   let to_string ns =
     let res = Buffer.create 1024 in
     Buffer.add_string res "[";
