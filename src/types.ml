@@ -244,7 +244,10 @@ module FileSet = struct
     add latest (remove_fn File.(latest.name) s)
   let to_string fs =
     let res = Buffer.create 1024 in
+    let first_time = ref true in
     iter (fun f ->
+        if !first_time then first_time := false
+        else Buffer.add_char res '\n';
         Buffer.add_string res (File.to_string f)
       ) fs;
     Buffer.contents res
