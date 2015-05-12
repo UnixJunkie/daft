@@ -39,8 +39,6 @@ module Interval = struct
   let to_string { lbound ; rbound } =
     if lbound = rbound then
       sprintf "[%d]" lbound
-    else if lbound + 1 = rbound then
-      sprintf "[%d;%d]" lbound rbound
     else
       sprintf "[%d..%d]" lbound rbound
 end
@@ -92,12 +90,10 @@ module NodeSet = struct
     | Some x -> IntervalSet.add x glob
   let to_string ns =
     let res = Buffer.create 1024 in
-    Buffer.add_string res "[";
-    iter (fun n ->
-        Buffer.add_string res (Node.to_string n);
-        Buffer.add_string res "; "
-      ) ns;
-    Buffer.add_string res "]";
+    let intervals = to_interval_set ns in
+    IntervalSet.iter (fun s ->
+        Buffer.add_string res (Interval.to_string s)
+      ) intervals;
     Buffer.contents res
 end
 
@@ -126,7 +122,7 @@ module File = struct
         | None -> ""
         | Some s -> sprintf "size: %Ld " s
       in
-      sprintf "id: %d %snodes: %s"
+      sprintf "cid: %d %snodes: %s"
         c.id (string_of_size c.size) (NodeSet.to_string c.nodes)
     exception Found of Node.t
     (* randomly select a DS having this chunk *)
@@ -172,8 +168,12 @@ module File = struct
       else loop empty 0
     let to_string cs =
       let res = Buffer.create 1024 in
-      iter (fun c -> Buffer.add_string res (Chunk.to_string c)
-           ) cs;
+      let first_time = ref true in
+      iter (fun c ->
+          if !first_time then first_time := false
+          else Buffer.add_char res '\n';
+          Buffer.add_string res (Chunk.to_string c)
+        ) cs;
       Buffer.contents res
     let find_id (id: chunk_id) (cs: t): Chunk.t =
       find (Chunk.dummy id) cs
@@ -210,7 +210,7 @@ module File = struct
   let compare f1 f2 =
     String.compare f1.name f2.name
   let to_string f =
-    sprintf "name: %s size: %Ld #chunks: %d\n%s"
+    sprintf "fn: %s size: %Ld #chunks: %d\n%s"
       f.name f.size f.nb_chunks (ChunkSet.to_string f.chunks)
   let get_chunks (f: t): ChunkSet.t =
     f.chunks
@@ -245,8 +245,7 @@ module FileSet = struct
   let to_string fs =
     let res = Buffer.create 1024 in
     iter (fun f ->
-        Buffer.add_string res (File.to_string f);
-        Buffer.add_string res "\n"
+        Buffer.add_string res (File.to_string f)
       ) fs;
     Buffer.contents res
 end

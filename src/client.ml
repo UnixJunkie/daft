@@ -40,7 +40,7 @@ let process_answer incoming continuation =
   | MDS_to_CLI (Ls_cmd_ack f) ->
     Log.debug "got Ls_cmd_ack";
     let listing = FileSet.to_string f in
-    Log.info "%s" listing
+    Log.info "\n%s" listing
   | MDS_to_CLI (Fetch_cmd_nack fn) ->
     Log.debug "got Fetch_cmd_nack";
     Log.error "no such file: %s" fn
