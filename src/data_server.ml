@@ -305,10 +305,12 @@ let main () =
               (* 3) notify MDS *)
               let got_chunk = encode !do_compress (DS_to_MDS (Chunk_ack (fn, chunk_id, !ds_rank))) in
               Sock.send to_mds got_chunk;
-              (* 4) notify CLI if all file chunks have been received *)
+              (* 4) notify CLI if all file chunks have been received and fix file perms
+                    in the local datastore *)
               let curr_chunks = File.get_chunks new_file in
               let nb_chunks = File.get_nb_chunks new_file in
               if ChunkSet.cardinal curr_chunks = nb_chunks then (
+                Unix.chmod local_file 0o400;
                 let got_file = encode !do_compress (DS_to_CLI (Fetch_file_cmd_ack fn)) in
                 Sock.send to_cli got_file
               );
