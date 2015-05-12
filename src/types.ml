@@ -44,9 +44,24 @@ end
 module Interval = struct
   type t = { lbound : int ;
              rbound : int }
-  let create lbound rbound =
+  let create (lbound: int) (rbound: int): t =
     assert (lbound <= rbound);
     { lbound ; rbound }
+  (* compare lbounds *)
+  let compare (i1: t) (i2: t): int =
+    Int.compare i1.lbound i2.lbound
+  (* let may_merge (i1: t) (i2: t): t option = *)
+  (*   if i1.rbound = i2.lbound then *)
+  (*     Some (create i1.lbound i2.rbound) *)
+  (*   else *)
+  (*     None *)
+  (* try to augment the right bound *)
+  let may_extend_right (itv: t) (i: int): t option =
+    if itv.rbound + 1 = i then
+      Some { itv with rbound = i }
+    else
+      None
+  (* compact string representation *)
   let to_string { lbound ; rbound } =
     if lbound = rbound then
       sprintf "[%d]" lbound
