@@ -59,33 +59,55 @@ let process_answer incoming continuation =
   | CLI_to_MDS _ -> Log.warn "CLI_to_MDS"
   | CLI_to_DS _ -> Log.warn "CLI_to_DS"
 
+(* FBR: make the diagnose more user friendly *)
+let get_one: 'a list -> 'a = function
+  | [x] -> x
+  | [] -> failwith "get_one: empty list"
+  | _ -> failwith "get_one: more than one"
+
+let get_two: 'a list -> ('a * 'a) = function
+  | [] -> failwith "get_two: empty list"
+  | [_] -> failwith "get_two: only one"
+  | [x; y] -> (x, y)
+  | _ -> failwith "get_two: more than two"
+
 module Command = struct
-  type t = Put
-         | Get
-         | Fetch
-         | Rfetch
-         | Extract
+  type filename = string
+  type t = Put of filename
+         | Get of filename * filename (* src_fn dst_fn *)
+         | Fetch of filename
+         | Rfetch of filename * string (* string format: host:port *)
+         | Extract of filename * filename
          | Quit
          | Ls
+         | Skip (* do nothing *)
   (* understand a command as soon as it is unambiguous; quick and dirty *)
-  let of_string: string -> t = function
-    | "p" | "pu" | "put" -> Put
-    | "g" | "ge" | "get" -> Get
-    | "f" | "fe" | "fet" | "fetc" | "fetch" -> Fetch
-    | "r" | "rf" | "rfe" | "rfet" | "rfetc" | "rfetch" -> Rfetch
-    | "e" | "ex" | "ext" | "extr" | "extra" | "extrac" | "extract" -> Extract
-    | "q" | "qu" | "qui" | "quit" -> Quit
-    | "l" | "ls" -> Ls
-    | "" -> abort "empty command"
-    | cmd -> abort ("unknown command: " ^ cmd)
+  let of_string: string list -> t = function
+    | [] -> Skip
+    | cmd :: args ->
+      begin match cmd with
+      | "p" | "pu" | "put" -> Put (get_one args)
+      | "g" | "ge" | "get" ->
+        let src_fn, dst_fn = get_two args in
+        Get (src_fn, dst_fn)
+      | "f" | "fe" | "fet" | "fetc" | "fetch" -> Fetch (get_one args)
+      | "r" | "rf" | "rfe" | "rfet" | "rfetc" | "rfetch" ->
+        let src_fn, dst_fn = get_two args in
+        Rfetch (src_fn, dst_fn)
+      | "e" | "ex" | "ext" | "extr" | "extra" | "extrac" | "extract" ->
+        let src_fn, dst_fn = get_two args in
+        Extract (src_fn, dst_fn)
+      | "q" | "qu" | "qui" | "quit" -> Quit
+      | "l" | "ls" -> Ls
+      | "" -> abort "empty command"
+      | cmd -> abort ("unknown command: " ^ cmd)
+      end
 end
 
 let extract_cmd src_fn dst_fn for_DS incoming =
   let extract = encode !do_compress (CLI_to_DS (Extract_file_cmd_req (src_fn, dst_fn))) in
   Sock.send for_DS extract;
   process_answer incoming do_nothing
-
-(* FBR: processing commands is a recursive function; just use one *)
 
 let main () =
   (* setup logger *)
@@ -116,71 +138,46 @@ let main () =
   let not_finished = ref true in
   try
     while !not_finished do
+      let open Command in
       let command_str = read_line () in
-      Log.info "command: %s" command_str;
-      let parsed_command = BatString.nsplit ~by:" " command_str in
-      begin match parsed_command with
-        | [] -> Log.error "empty command"
-        | cmd :: args ->
-          begin match cmd with
-            | "" -> Log.error "cmd = \"\""
-            | "put"
-            | "get"
-            | "fetch" ->
-              begin match args with
-                | [] -> Log.error "no filename"
-                | src_fn :: other_args ->
-                  if cmd <> "get" && other_args <> []
-                  then Log.warn "more than one filename";
-                  let f_loc = match cmd with
-                    | "put" -> Local
-                    | "get" | "fetch" -> Remote
-                    | _ -> assert(false)
-                  in
-                  let put = encode !do_compress (CLI_to_DS (Fetch_file_cmd_req (src_fn, f_loc))) in
-                  Sock.send for_DS put;
-                  (* get = extract . fetch *)
-                  let continuation =
-                    if cmd <> "get" then do_nothing
-                    else
-                      (fun () -> match other_args with
-                         | [dst_fn] -> extract_cmd src_fn dst_fn for_DS incoming
-                         | _ -> Log.error "no dst_fn"
-                      )
-                  in
-                  process_answer incoming continuation
-              end
-            | "rfetch" ->
-              begin match args with
-                | [] -> Log.error "no filename"
-                | [src_fn; host_port] ->
-                  let put = encode !do_compress (CLI_to_DS (Fetch_file_cmd_req (src_fn, Remote))) in
-                  let host, port = ref "", ref 0 in
-                  Utils.set_host_port host port host_port;
-                  (* temp socket to remote DS *)
-                  let for_ds_i = Utils.(zmq_socket Push ctx !host !port) in
-                  Sock.send for_ds_i put;
-                  process_answer incoming do_nothing;
-                  ZMQ.Socket.close for_ds_i
-                | _ -> Log.error "rfetch: usage: rfetch fn host:port"
-              end
-            | "extract" ->
-              begin match args with
-                | [] -> Log.error "no filename"
-                | [src_fn; dst_fn] -> extract_cmd src_fn dst_fn for_DS incoming
-                | _ -> Log.error "too many filenames"
-              end
-            | "q" | "quit" | "exit" ->
-              let quit_cmd = encode !do_compress (CLI_to_MDS Quit_cmd) in
-              Sock.send for_MDS quit_cmd;
-              not_finished := false;
-            | "l" | "ls" ->
-              let ls_cmd = encode !do_compress (CLI_to_MDS Ls_cmd_req) in
-              Sock.send for_MDS ls_cmd;
-              process_answer incoming do_nothing
-            | _ -> Log.error "unknown command: %s" cmd
-          end
-      end
+      Log.debug "command: '%s'" command_str;
+      let command_line = BatString.nsplit ~by:" " command_str in
+      let cmd = Command.of_string command_line in
+      match cmd with
+      | Skip -> Log.info "\nusage: put|get|fetch|rfetch|extract|quit|ls"
+      | Put src_fn ->
+        let put = encode !do_compress (CLI_to_DS (Fetch_file_cmd_req (src_fn, Local))) in
+        Sock.send for_DS put;
+        process_answer incoming do_nothing
+      | Get (src_fn, dst_fn) ->
+        (* get = extract . fetch *)
+        let get = encode !do_compress (CLI_to_DS (Fetch_file_cmd_req (src_fn, Remote))) in
+        Sock.send for_DS get;
+        let fetch_cont = (fun () -> extract_cmd src_fn dst_fn for_DS incoming) in
+        process_answer incoming fetch_cont
+      | Fetch src_fn ->
+        let fetch = encode !do_compress (CLI_to_DS (Fetch_file_cmd_req (src_fn, Remote))) in
+        Sock.send for_DS fetch;
+        process_answer incoming do_nothing
+      | Rfetch (src_fn, host_port) ->
+        let put = encode !do_compress (CLI_to_DS (Fetch_file_cmd_req (src_fn, Remote))) in
+        let host, port = ref "", ref 0 in
+        Utils.set_host_port host port host_port;
+        (* create temp socket to remote DS *)
+        let for_ds_i = Utils.(zmq_socket Push ctx !host !port) in
+        Sock.send for_ds_i put;
+        process_answer incoming do_nothing;
+        ZMQ.Socket.close for_ds_i
+      | Extract (src_fn, dst_fn) ->
+        extract_cmd src_fn dst_fn for_DS incoming
+      | Quit ->
+        let quit_cmd = encode !do_compress (CLI_to_MDS Quit_cmd) in
+        Sock.send for_MDS quit_cmd;
+        not_finished := false;
+      | Ls ->
+        let ls_cmd = encode !do_compress (CLI_to_MDS Ls_cmd_req) in
+        Sock.send for_MDS ls_cmd;
+        process_answer incoming do_nothing
     done;
     raise Types.Loop_end;
   with exn -> begin
