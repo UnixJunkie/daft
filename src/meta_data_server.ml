@@ -28,7 +28,7 @@ let start_data_nodes _machine_fn =
   ()
 
 let abort msg =
-  Log.fatal msg;
+  Log.fatal "%s" msg;
   exit 1
 
 let main () =

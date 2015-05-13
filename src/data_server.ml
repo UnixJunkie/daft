@@ -35,7 +35,7 @@ let local_node = ref (Node.dummy ()) (* this node *)
 let do_compress = ref false
 
 let abort msg =
-  Log.fatal msg;
+  Log.fatal "%s" msg;
   exit 1
 
 (* create local data store with unix UGO rights 700
