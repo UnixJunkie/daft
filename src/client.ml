@@ -25,7 +25,7 @@ let cli_port_in = ref Utils.default_cli_port_in
 let do_compress = ref false
 
 let abort msg =
-  Log.fatal msg;
+  Log.fatal "%s" msg;
   exit 1
 
 let do_nothing () =
@@ -59,10 +59,33 @@ let process_answer incoming continuation =
   | CLI_to_MDS _ -> Log.warn "CLI_to_MDS"
   | CLI_to_DS _ -> Log.warn "CLI_to_DS"
 
+module Command = struct
+  type t = Put
+         | Get
+         | Fetch
+         | Rfetch
+         | Extract
+         | Quit
+         | Ls
+  (* understand a command as soon as it is unambiguous; quick and dirty *)
+  let of_string: string -> t = function
+    | "p" | "pu" | "put" -> Put
+    | "g" | "ge" | "get" -> Get
+    | "f" | "fe" | "fet" | "fetc" | "fetch" -> Fetch
+    | "r" | "rf" | "rfe" | "rfet" | "rfetc" | "rfetch" -> Rfetch
+    | "e" | "ex" | "ext" | "extr" | "extra" | "extrac" | "extract" -> Extract
+    | "q" | "qu" | "qui" | "quit" -> Quit
+    | "l" | "ls" -> Ls
+    | "" -> abort "empty command"
+    | cmd -> abort ("unknown command: " ^ cmd)
+end
+
 let extract_cmd src_fn dst_fn for_DS incoming =
   let extract = encode !do_compress (CLI_to_DS (Extract_file_cmd_req (src_fn, dst_fn))) in
   Sock.send for_DS extract;
   process_answer incoming do_nothing
+
+(* FBR: processing commands is a recursive function; just use one *)
 
 let main () =
   (* setup logger *)
