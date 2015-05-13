@@ -59,17 +59,13 @@ let process_answer incoming continuation =
   | CLI_to_MDS _ -> Log.warn "CLI_to_MDS"
   | CLI_to_DS _ -> Log.warn "CLI_to_DS"
 
-(* FBR: make the diagnose more user friendly *)
-let get_one: 'a list -> 'a = function
-  | [x] -> x
-  | [] -> failwith "get_one: empty list"
-  | _ -> failwith "get_one: more than one"
+let get_one: 'a list -> 'a option = function
+  | [x] -> Some x
+  | _ -> None
 
-let get_two: 'a list -> ('a * 'a) = function
-  | [] -> failwith "get_two: empty list"
-  | [_] -> failwith "get_two: only one"
-  | [x; y] -> (x, y)
-  | _ -> failwith "get_two: more than two"
+let get_two: 'a list -> ('a * 'a) option = function
+  | [x; y] -> Some (x, y)
+  | _ -> None
 
 module Command = struct
   type filename = string
@@ -86,21 +82,35 @@ module Command = struct
     | [] -> Skip
     | cmd :: args ->
       begin match cmd with
-      | "p" | "pu" | "put" -> Put (get_one args)
-      | "g" | "ge" | "get" ->
-        let src_fn, dst_fn = get_two args in
-        Get (src_fn, dst_fn)
-      | "f" | "fe" | "fet" | "fetc" | "fetch" -> Fetch (get_one args)
-      | "r" | "rf" | "rfe" | "rfet" | "rfetc" | "rfetch" ->
-        let src_fn, dst_fn = get_two args in
-        Rfetch (src_fn, dst_fn)
-      | "e" | "ex" | "ext" | "extr" | "extra" | "extrac" | "extract" ->
-        let src_fn, dst_fn = get_two args in
-        Extract (src_fn, dst_fn)
-      | "q" | "qu" | "qui" | "quit" -> Quit
-      | "l" | "ls" -> Ls
-      | "" -> abort "empty command"
-      | cmd -> abort ("unknown command: " ^ cmd)
+        | "p" | "pu" | "put" ->
+          begin match get_one args with
+            | Some fn -> Put fn
+            | None -> Log.error "\nusage: put fn" ; Skip
+          end
+        | "g" | "ge" | "get" ->
+          begin match get_two args with
+            | Some (src_fn, dst_fn) -> Get (src_fn, dst_fn)
+            | None -> Log.error "\nusage: get src_fn dst_fn" ; Skip
+          end
+        | "f" | "fe" | "fet" | "fetc" | "fetch" ->
+          begin match get_one args with
+            | Some fn -> Fetch fn
+            | None -> Log.error "\nusage: fetch fn" ; Skip
+          end
+        | "r" | "rf" | "rfe" | "rfet" | "rfetc" | "rfetch" ->
+          begin match get_two args with
+            | Some (src_fn, dst_fn) -> Rfetch (src_fn, dst_fn)
+            | None -> Log.error "\nusage: rfetch src_fn dst_fn" ; Skip
+          end
+        | "e" | "ex" | "ext" | "extr" | "extra" | "extrac" | "extract" ->
+          begin match get_two args with
+            | Some (src_fn, dst_fn) -> Extract (src_fn, dst_fn)
+            | None -> Log.error "\nusage: extract src_fn dst_fn" ; Skip
+          end
+        | "q" | "qu" | "qui" | "quit" -> Quit
+        | "l" | "ls" -> Ls
+        | "" -> Log.error "empty command"; Skip
+        | cmd -> Log.error "unknown command: %s" cmd; Skip
       end
 end
 
