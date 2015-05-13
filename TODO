@@ -1,6 +1,8 @@
 TODO
 ====
 
+- use rec. fun in client.ml to process the commands
+
 remote get (rget): the CLI asks a remote DS to get
 rget = rextract . rfetch
 
