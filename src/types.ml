@@ -333,7 +333,7 @@ module Protocol = struct
     if do_compress then
       let res = compress to_send in
       let after_size = float_of_int (String.length res) in
-      Log.debug "z ratio: %f" (after_size /. before_size);
+      Log.debug "z ratio: %.2f" (after_size /. before_size);
       res
     else
       to_send
