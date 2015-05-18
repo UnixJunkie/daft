@@ -329,11 +329,14 @@ module Protocol = struct
 
   let encode (do_compress: bool) (m: t): string =
     let to_send = Marshal.to_string m [Marshal.No_sharing] in
-    let to_send =
-      if do_compress then compress to_send
-      else to_send
-    in
-    to_send
+    let before_size = float_of_int (String.length to_send) in
+    if do_compress then
+      let res = compress to_send in
+      let after_size = float_of_int (String.length res) in
+      Log.debug "z ratio: %f" (after_size /. before_size);
+      res
+    else
+      to_send
 
   let decode (compressed: bool) (s: string): t =
     (* we should check the message is valid before unmarshalling it
