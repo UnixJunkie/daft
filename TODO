@@ -1,6 +1,9 @@
 TODO
 ====
 
+- print sign ratio
+- print encrypt ratio
+
 - use rec. fun in client.ml to process the commands
 
 remote get (rget): the CLI asks a remote DS to get
