@@ -17,10 +17,10 @@ module Sock = ZMQ.Socket
 
 let uninitialized = -1
 
-let ds_host = ref (Utils.hostname ())
-let ds_port_in = ref Utils.default_ds_port_in
-let mds_host = ref "localhost"
-let mds_port_in = ref Utils.default_mds_port_in
+let ds_host = ref ""
+let ds_port_in = ref uninitialized
+let mds_host = ref ""
+let mds_port_in = ref uninitialized
 let cli_port_in = ref Utils.default_cli_port_in
 let do_compress = ref false
 
@@ -30,6 +30,12 @@ let abort msg =
 
 let do_nothing () =
   ()
+
+let getenv_or_fail variable_name =
+  try Sys.getenv variable_name
+  with Not_found ->
+    Log.fatal "getenv_or_fail: Sys.getenv: %s" variable_name;
+    exit 1
 
 let process_answer incoming continuation =
   Log.debug "waiting msg";
