@@ -9,6 +9,7 @@ if [ "$#" -ne 1 ] ; then
 fi
 
 scp \
+machines \
 dist/build/daft/daft \
 dist/build/daft_mds/daft_mds \
 dist/build/daft_ds/daft_ds $1:
