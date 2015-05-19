@@ -6,7 +6,7 @@ Synopsis: DAFT Allows File Transfers
 obuild-ver: 1
 
 # Command Line Interface (CLI)
-Executable daft_cli
+Executable daft
   oflags: -bin-annot -w +27 -warn-error +8 -g
   path: src
   build-deps: dolog, batteries, fileutils, ZMQ, cryptokit, lz4
