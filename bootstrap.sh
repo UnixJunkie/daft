@@ -13,6 +13,15 @@ mkdirhier $HOME/usr/zmq-4.0.4
 (make 2>&1) > zmq_make.log
 make install
 
-# # what needs to be appended to LD_LIBRARY_PATH
-# echo $HOME/usr/zmq-4.0.4/lib:
-# # FBR: add path to lz4's lib
+# source-based installer for LZ4
+if [ ! -f r129.tar.gz ] ; then
+    wget https://github.com/Cyan4973/lz4/archive/r129.tar.gz
+fi
+tar xzf r129.tar.gz
+cd lz4-r129
+mkdirhier $HOME/usr/lz4-r129
+make all
+cp -a lib $HOME/usr/lz4-r129/
+
+# LD_LIBRARY_PATH needs to be updated
+echo \~/usr/zmq-4.0.4/lib:\~/usr/lz4-r129/lib
