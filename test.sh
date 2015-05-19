@@ -20,4 +20,4 @@ OPTS=""
 ./daft_ds $OPTS -m machines -r 2 -mds `hostname -f` -p 8085 -cli `hostname -f`:8000 & # one DS
 
 sleep 1s
-echo quit | ./daft_cli $OPTS -ds `hostname -f`:8083
+echo quit | ./daft $OPTS -ds `hostname -f`:8083
