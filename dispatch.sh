@@ -10,6 +10,8 @@ fi
 
 scp \
 machines \
+bootstrap.sh \
 dist/build/daft/daft \
 dist/build/daft_mds/daft_mds \
-dist/build/daft_ds/daft_ds $1:
+dist/build/daft_ds/daft_ds \
+$1:
