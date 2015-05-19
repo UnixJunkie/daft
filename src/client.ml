@@ -105,8 +105,8 @@ module Command = struct
           end
         | "r" | "rf" | "rfe" | "rfet" | "rfetc" | "rfetch" ->
           begin match get_two args with
-            | Some (src_fn, dst_fn) -> Rfetch (src_fn, dst_fn)
-            | None -> Log.error "\nusage: rfetch src_fn dst_fn" ; Skip
+            | Some (src_fn, host_port) -> Rfetch (src_fn, host_port)
+            | None -> Log.error "\nusage: rfetch fn host:port" ; Skip
           end
         | "e" | "ex" | "ext" | "extr" | "extra" | "extrac" | "extract" ->
           begin match get_two args with
