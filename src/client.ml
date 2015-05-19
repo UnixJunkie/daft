@@ -34,8 +34,8 @@ let do_nothing () =
 let getenv_or_fail variable_name =
   try Sys.getenv variable_name
   with Not_found ->
-    Log.fatal "getenv_or_fail: Sys.getenv: %s" variable_name;
-    exit 1
+    Log.error "getenv_or_fail: Sys.getenv: %s" variable_name;
+    ""
 
 let process_answer incoming continuation =
   Log.debug "waiting msg";
@@ -141,8 +141,24 @@ let main () =
     (fun arg -> raise (Arg.Bad ("Bad argument: " ^ arg)))
     (sprintf "usage: %s <options>" Sys.argv.(0));
   (* check options *)
-  if !mds_host = "" || !mds_port_in = uninitialized then abort "-mds is mandatory";
-  if !ds_host  = "" || !ds_port_in  = uninitialized then abort "-ds is mandatory";
+  if !mds_host = "" && !mds_port_in = uninitialized then
+    begin
+      let daft_mds_env_var = getenv_or_fail "DAFT_MDS" in
+      if daft_mds_env_var = "" then
+        abort "-mds option or DAFT_MDS env. var. mandatory"
+      else
+        Utils.set_host_port mds_host mds_port_in daft_mds_env_var
+    end;
+  assert(!mds_host <> "" && !mds_port_in <> uninitialized);
+  if !ds_host = "" && !ds_port_in = uninitialized then
+    begin
+      let daft_ds_env_var = getenv_or_fail "DAFT_DS" in
+      if daft_ds_env_var = "" then
+        abort "-ds option or DAFT_DS env. var. mandatory"
+      else
+        Utils.set_host_port ds_host ds_port_in daft_ds_env_var
+    end;
+  assert(!ds_host <> "" && !ds_port_in <> uninitialized);
   let ctx = ZMQ.Context.create () in
   let for_MDS = Utils.(zmq_socket Push ctx !mds_host !mds_port_in) in
   Log.info "Client of MDS %s:%d" !mds_host !mds_port_in;
