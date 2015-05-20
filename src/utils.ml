@@ -130,11 +130,6 @@ let zmq_socket (t: socket_type) (context: ZMQ.Context.t) (host: string) (port: i
 
 open Batteries (* everything before uses Legacy IOs (fast) *)
 
-let hostname (): string =
-  let stat, res = run_and_read "hostname -f" in
-  assert(stat = Unix.WEXITED 0);
-  String.strip res (* rm trailing \n *)
-
 let string_to_host_port (s: string): string * int =
   let host, port_str = BatString.split ~by:":" s in
   (host, int_of_string port_str)

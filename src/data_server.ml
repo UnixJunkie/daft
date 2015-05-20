@@ -18,9 +18,22 @@ module Chunk = File.Chunk
 module ChunkSet = File.ChunkSet
 module Sock = ZMQ.Socket
 
+let hostname (): string = Unix.(
+    let host_entry = gethostbyname (gethostname ()) in
+    let n1 = host_entry.h_name in
+    let l1 = String.length n1 in
+    let n2 = host_entry.h_aliases.(0) in
+    let l2 = String.length n2 in
+    if l1 > l2 then n1
+    else begin
+      Log.warn "host alias (%s) longer than FQDN (%s)" n2 n1;
+      n2
+    end
+  )
+
 (* setup data server *)
 let ds_log_fn = ref ""
-let ds_host = Utils.hostname ()
+let ds_host = ref "localhost"
 let ds_port_in = ref Utils.default_ds_port_in
 let cli_host = ref ""
 let cli_port_in = ref Utils.default_cli_port_in
@@ -135,6 +148,7 @@ let main () =
   Logger.set_log_level Logger.DEBUG;
   Logger.set_output Legacy.stdout;
   Logger.color_on ();
+  ds_host := hostname ();
   (* options parsing *)
   Arg.parse
     [ "-cs", Arg.Set_int chunk_size, "<size> file chunk size";
@@ -176,7 +190,7 @@ let main () =
         A.set int2node i (node, Some sock)
     ) int2node;
   Log.info "read %d host(s)" (A.length int2node);
-  local_node := Node.create !ds_rank ds_host !ds_port_in;
+  local_node := Node.create !ds_rank !ds_host !ds_port_in;
   Log.info "Client of MDS %s:%d" !mds_host !mds_port_in;
   data_store_root := create_data_store ();
   (* setup server *)
