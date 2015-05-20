@@ -22,6 +22,8 @@ let ds_port_in = ref uninitialized
 let mds_host = ref ""
 let mds_port_in = ref uninitialized
 let cli_port_in = ref Utils.default_cli_port_in
+let single_command = ref ""
+let interactive = ref false
 let do_compress = ref false
 
 let abort msg =
@@ -82,9 +84,9 @@ module Command = struct
          | Extract of filename * filename
          | Quit
          | Ls
-         | Skip (* do nothing *)
+         | Skip
   (* understand a command as soon as it is unambiguous; quick and dirty *)
-  let of_string: string list -> t = function
+  let of_list: string list -> t = function
     | [] -> Skip
     | cmd :: args ->
       begin match cmd with
@@ -121,9 +123,22 @@ module Command = struct
 end
 
 let extract_cmd src_fn dst_fn for_DS incoming =
-  let extract = encode !do_compress (CLI_to_DS (Extract_file_cmd_req (src_fn, dst_fn))) in
+  let extract =
+    encode !do_compress (CLI_to_DS (Extract_file_cmd_req (src_fn, dst_fn)))
+  in
   Sock.send for_DS extract;
   process_answer incoming do_nothing
+
+let read_one_command is_interactive =
+  let command_line =
+    let command_str =
+      if is_interactive then read_line ()
+      else !single_command
+    in
+    Log.debug "command: '%s'" command_str;
+    BatString.nsplit ~by:" " command_str
+  in
+  Command.of_list command_line
 
 let main () =
   (* setup logger *)
@@ -132,7 +147,10 @@ let main () =
   Logger.color_on ();
   (* options parsing *)
   Arg.parse
-    [ "-cli", Arg.Set_int cli_port_in, "<port> where the CLI is listening";
+    [ "-i", Arg.Set interactive, " interactive mode of the CLI";
+      "-c", Arg.Set_string single_command,
+      "'command' execute a single command; use quotes if several words";
+      "-cli", Arg.Set_int cli_port_in, "<port> where the CLI is listening";
       "-mds", Arg.String (Utils.set_host_port mds_host mds_port_in),
       "<host:port> MDS";
       "-ds", Arg.String (Utils.set_host_port ds_host ds_port_in),
@@ -170,12 +188,9 @@ let main () =
   let not_finished = ref true in
   try
     while !not_finished do
+      not_finished := !interactive;
       let open Command in
-      let command_str = read_line () in
-      Log.debug "command: '%s'" command_str;
-      let command_line = BatString.nsplit ~by:" " command_str in
-      let cmd = Command.of_string command_line in
-      match cmd with
+      match read_one_command !interactive with
       | Skip -> Log.info "\nusage: put|get|fetch|rfetch|extract|quit|ls"
       | Put src_fn ->
         let put = encode !do_compress (CLI_to_DS (Fetch_file_cmd_req (src_fn, Local))) in
