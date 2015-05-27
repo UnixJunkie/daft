@@ -38,6 +38,23 @@ let getenv_or_fail variable_name =
   with Not_found ->
     Log.error "getenv_or_fail: Sys.getenv: %s" variable_name;
     ""
+let encode (do_compress: bool) (m: from_cli): string =
+  let to_send = Marshal.to_string m [Marshal.No_sharing] in
+  let before_size = float_of_int (String.length to_send) in
+  if do_compress then
+    let res = compress to_send in
+    let after_size = float_of_int (String.length res) in
+    Log.debug "z ratio: %.2f" (after_size /. before_size);
+    res
+  else
+    to_send
+
+let decode (compressed: bool) (s: string): to_cli =
+  let received =
+    if compressed then uncompress s
+    else s
+  in
+  (Marshal.from_string received 0: to_cli)
 
 let process_answer incoming continuation =
   Log.debug "waiting msg";
@@ -61,11 +78,6 @@ let process_answer incoming continuation =
   | DS_to_CLI (Fetch_file_cmd_nack (fn, err)) ->
     Log.debug "got Fetch_file_cmd_nack";
     Log.error "%s: %s" fn (string_of_error err)
-  | DS_to_MDS _ -> Log.warn "DS_to_MDS"
-  | MDS_to_DS _ -> Log.warn "MDS_to_DS"
-  | DS_to_DS _ -> Log.warn "DS_to_DS"
-  | CLI_to_MDS _ -> Log.warn "CLI_to_MDS"
-  | CLI_to_DS _ -> Log.warn "CLI_to_DS"
 
 let get_one: 'a list -> 'a option = function
   | [x] -> Some x

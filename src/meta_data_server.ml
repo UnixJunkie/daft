@@ -31,6 +31,24 @@ let abort msg =
   Log.fatal "%s" msg;
   exit 1
 
+let encode (do_compress: bool) (m: from_mds): string =
+  let to_send = Marshal.to_string m [Marshal.No_sharing] in
+  let before_size = float_of_int (String.length to_send) in
+  if do_compress then
+    let res = compress to_send in
+    let after_size = float_of_int (String.length res) in
+    Log.debug "z ratio: %.2f" (after_size /. before_size);
+    res
+  else
+    to_send
+
+let decode (compressed: bool) (s: string): to_mds =
+  let received =
+    if compressed then uncompress s
+    else s
+  in
+  (Marshal.from_string received 0: to_mds)
+
 let main () =
   (* setup logger *)
   Logger.set_log_level Logger.DEBUG;
@@ -179,11 +197,6 @@ let main () =
              | Some to_DS_i -> Sock.send to_DS_i quit
            ) int2node;
          not_finished := false
-       | DS_to_CLI  _ -> Log.warn "DS_to_CLI"
-       | MDS_to_DS  _ -> Log.warn "MDS_to_DS"
-       | MDS_to_CLI _ -> Log.warn "MDS_to_CLI"
-       | DS_to_DS   _ -> Log.warn "DS_to_DS"
-       | CLI_to_DS  _ -> Log.warn "CLI_to_DS"
       end
     done;
     raise Types.Loop_end;

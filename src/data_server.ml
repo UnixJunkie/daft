@@ -61,6 +61,24 @@ let abort msg =
   Log.fatal "%s" msg;
   exit 1
 
+let encode (do_compress: bool) (m: from_ds): string =
+  let to_send = Marshal.to_string m [Marshal.No_sharing] in
+  let before_size = float_of_int (String.length to_send) in
+  if do_compress then
+    let res = compress to_send in
+    let after_size = float_of_int (String.length res) in
+    Log.debug "z ratio: %.2f" (after_size /. before_size);
+    res
+  else
+    to_send
+
+let decode (compressed: bool) (s: string): to_ds =
+  let received =
+    if compressed then uncompress s
+    else s
+  in
+  (Marshal.from_string received 0: to_ds)
+
 (* create local data store with unix UGO rights 700
    we take into account the port so that several DSs can be started on one
    host at the same time, for tests *)
@@ -376,10 +394,6 @@ let main () =
           let res = extract_file src_fn dst_fn in
           let ans = encode !do_compress (DS_to_CLI res) in
           Sock.send to_cli ans
-        | DS_to_CLI  _ -> Log.warn "DS_to_CLI"
-        | MDS_to_CLI _ -> Log.warn "MDS_to_CLI"
-        | DS_to_MDS  _ -> Log.warn "DS_to_MDS"
-        | CLI_to_MDS _ -> Log.warn "CLI_to_MDS"
       end
     done;
     raise Types.Loop_end;
