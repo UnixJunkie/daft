@@ -309,15 +309,37 @@ module Protocol = struct
     | Fetch_file_cmd_ack of filename
     | Fetch_file_cmd_nack of filename * error
 
-  type t = DS_to_MDS of ds_to_mds
-         | MDS_to_DS of mds_to_ds
-         | DS_to_DS of ds_to_ds
+  (* all possible messages *)
+  type t =  DS_to_MDS of  ds_to_mds
+         | MDS_to_DS  of mds_to_ds
+         |  DS_to_DS  of  ds_to_ds
          | CLI_to_MDS of cli_to_mds
          | MDS_to_CLI of mds_to_cli
-         | CLI_to_DS of cli_to_ds
-         | DS_to_CLI of ds_to_cli
+         | CLI_to_DS  of cli_to_ds
+         |  DS_to_CLI of  ds_to_cli
+  (* more restrictive views of t *)
+  type to_cli =
+    | MDS_to_CLI of mds_to_cli
+    |  DS_to_CLI of  ds_to_cli
+  type from_cli =
+    | CLI_to_MDS of cli_to_mds
+    | CLI_to_DS  of cli_to_ds
+  type to_ds =
+    | MDS_to_DS of mds_to_ds
+    |  DS_to_DS of  ds_to_ds
+    | CLI_to_DS of cli_to_ds
+  type from_ds =
+    | DS_to_MDS of ds_to_mds
+    | DS_to_DS  of ds_to_ds
+    | DS_to_CLI of ds_to_cli
+  type to_mds =
+    |  DS_to_MDS of  ds_to_mds
+    | CLI_to_MDS of cli_to_mds
+  type from_mds =
+    | MDS_to_DS  of mds_to_ds
+    | MDS_to_CLI of mds_to_cli
 
-  (* FBR: add to_string for all messages *)
+  (* FBR: add to_string for all messages ??? *)
 
   let compress (s: string): string =
     LZ4.Bytes.compress (Bytes.of_string s)
@@ -326,27 +348,6 @@ module Protocol = struct
     (* this allocates a fresh buffer each time, I notified the author
        of the bindings *)
     LZ4.Bytes.decompress ~length:1_572_864 (Bytes.of_string s)
-
-  let encode (do_compress: bool) (m: t): string =
-    let to_send = Marshal.to_string m [Marshal.No_sharing] in
-    let before_size = float_of_int (String.length to_send) in
-    if do_compress then
-      let res = compress to_send in
-      let after_size = float_of_int (String.length res) in
-      Log.debug "z ratio: %.2f" (after_size /. before_size);
-      res
-    else
-      to_send
-
-  let decode (compressed: bool) (s: string): t =
-    (* we should check the message is valid before unmarshalling it
-       (or software can crash);
-       maybe not when in Raw mode but other modes should do it *)
-    let received =
-      if compressed then uncompress s
-      else s
-    in
-    (Marshal.from_string received 0: t)
 
   let string_of_error = function
     | Already_here -> "already here"
