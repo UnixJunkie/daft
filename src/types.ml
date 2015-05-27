@@ -309,15 +309,7 @@ module Protocol = struct
     | Fetch_file_cmd_ack of filename
     | Fetch_file_cmd_nack of filename * error
 
-  (* all possible messages *)
-  type t =  DS_to_MDS of  ds_to_mds
-         | MDS_to_DS  of mds_to_ds
-         |  DS_to_DS  of  ds_to_ds
-         | CLI_to_MDS of cli_to_mds
-         | MDS_to_CLI of mds_to_cli
-         | CLI_to_DS  of cli_to_ds
-         |  DS_to_CLI of  ds_to_cli
-  (* more restrictive views of t *)
+  (* restrictive views of all possible messages *)
   type to_cli =
     | MDS_to_CLI of mds_to_cli
     |  DS_to_CLI of  ds_to_cli
