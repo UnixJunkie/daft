@@ -24,4 +24,4 @@ export DAFT_MDS=`hostname -f`:8082
 export DAFT_DS=`hostname -f`:8083
 
 sleep 1s
-echo quit | ./daft $OPTS
+./daft $OPTS -c quit
