@@ -32,43 +32,16 @@ let receive (compression_flag: bool) (sock: [> `Pull] ZMQ.Socket.t) =
   decode encoded
 
 module CLI_socket = struct
-  let send
-      (compression_flag: bool)
-      (sock: [> `Push] ZMQ.Socket.t)
-      (m: from_cli): unit =
-    send compression_flag sock m
-
-  let receive
-      (compression_flag: bool)
-      (sock: [> `Pull] ZMQ.Socket.t): to_cli =
-    receive compression_flag sock
-
+  let send = send
+  let receive = receive
 end
 
 module MDS_socket = struct
-  let send
-      (compression_flag: bool)
-      (sock: [> `Push] ZMQ.Socket.t)
-      (m: from_mds): unit =
-    send compression_flag sock m
-
-  let receive
-      (compression_flag: bool)
-      (sock: [> `Pull] ZMQ.Socket.t): to_mds =
-    receive compression_flag sock
-
+  let send = send
+  let receive = receive
 end
 
 module DS_socket = struct
-  let send
-      (compression_flag: bool)
-      (sock: [> `Push] ZMQ.Socket.t)
-      (m: from_ds): unit =
-    send compression_flag sock m
-
-  let receive
-      (compression_flag: bool)
-      (sock: [> `Pull] ZMQ.Socket.t): to_ds =
-    receive compression_flag sock
-
+  let send = send
+  let receive = receive
 end
