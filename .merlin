@@ -1,7 +1,5 @@
 # where are .ml and .mli files
-S src
+S src/**
 # where are .cmi and .cmt files
-B dist/build/dft_ds
-B dist/build/dft_mds
-B dist/build/dft_cli
+B dist/build/**
 PKG batteries dolog ZMQ fileutils
