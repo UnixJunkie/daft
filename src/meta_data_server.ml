@@ -15,6 +15,7 @@ module Logger = Log (* !!! keep this one before Log alias !!! *)
 (* prefix all logs *)
 module Log = Log.Make (struct let section = mds_in_blue end)
 module Node = Types.Node
+module Socket = Socket_wrapper.MDS_socket
 
 let global_state = ref FileSet.empty
 let cli_host = ref ""
@@ -29,32 +30,6 @@ let start_data_nodes _machine_fn =
 let abort msg =
   Log.fatal "%s" msg;
   exit 1
-
-let send (sock: [> `Push] ZMQ.Socket.t) (m: from_mds): unit =
-  let encode (m: from_mds): string =
-    let to_send = Marshal.to_string m [Marshal.No_sharing] in
-    let before_size = float_of_int (String.length to_send) in
-    if !compression_flag then
-      let res = compress to_send in
-      let after_size = float_of_int (String.length res) in
-      Log.debug "z ratio: %.2f" (after_size /. before_size);
-      res
-    else
-      to_send
-  in
-  let encoded = encode m in
-  ZMQ.Socket.send sock encoded
-
-let receive (sock: [> `Pull] ZMQ.Socket.t): to_mds =
-  let decode (s: string): to_mds =
-    let received =
-      if !compression_flag then uncompress s
-      else s
-    in
-    (Marshal.from_string received 0: to_mds)
-  in
-  let encoded = ZMQ.Socket.recv sock in
-  decode encoded
 
 let main () =
   (* setup logger *)
@@ -90,7 +65,7 @@ let main () =
     let not_finished = ref true in
     while !not_finished do
       Log.debug "waiting msg";
-      let message = receive incoming in
+      let message = Socket.receive !compression_flag incoming in
       Log.debug "got msg";
       begin match message with
        | DS_to_MDS (Join_push ds) ->
@@ -129,7 +104,7 @@ let main () =
                  Add_file_ack f.name
                end
              in
-             send receiver (MDS_to_DS ack_or_nack)
+             Socket.send !compression_flag receiver (MDS_to_DS ack_or_nack)
          end
        | DS_to_MDS (Chunk_ack (fn, chunk_id, ds_rank)) ->
          begin
@@ -143,21 +118,24 @@ let main () =
                (* 3) update global state: this chunk is owned by one more DS *)
                if Utils.out_of_bounds ds_rank int2node then
                  Log.warn
-                   "invalid ds_rank in Chunk_ack: fn: %s chunk_id: %d ds_rank: %d"
-                   fn chunk_id ds_rank
+                   "invalid ds_rank in Chunk_ack: fn: %s chunk_id: %d \
+                    ds_rank: %d" fn chunk_id ds_rank
                else
                  let new_source = fst int2node.(ds_rank) in
                  let new_chunk = Chunk.add_source prev_chunk new_source in
                  let new_file = File.update_chunk file new_chunk in
                  global_state := FileSet.update new_file !global_state
              with Not_found ->
-               Log.error "Chunk_ack: unknown chunk: %s chunk_id: %d" fn chunk_id
+               Log.error "Chunk_ack: unknown chunk: %s chunk_id: %d"
+                 fn chunk_id
            with Not_found ->
-             Log.error "Chunk_ack: unknown file: %s chunk_id: %d" fn chunk_id
+             Log.error "Chunk_ack: unknown file: %s chunk_id: %d"
+               fn chunk_id
          end
        | CLI_to_MDS Ls_cmd_req ->
          Log.debug "got Ls_cmd_req";
-         send to_cli (MDS_to_CLI (Ls_cmd_ack !global_state))
+         Socket.send !compression_flag to_cli
+           (MDS_to_CLI (Ls_cmd_ack !global_state))
        | DS_to_MDS (Fetch_file_req (ds_rank, fn)) ->
          begin
            Log.debug "got Fetch_cmd_req";
@@ -181,13 +159,14 @@ let main () =
                          MDS_to_DS
                            (Send_to_req (ds_rank, fn, chunk_id, is_last))
                        in
-                       send to_ds_i send_order
+                       Socket.send !compression_flag to_ds_i send_order
                      | (_, None) -> assert(false)
                    end
                ) chunks
            with Not_found ->
              (* this assumes there is a single CLI; might be wrong in future *)
-             send to_cli (MDS_to_CLI (Fetch_cmd_nack fn))
+             Socket.send !compression_flag to_cli
+               (MDS_to_CLI (Fetch_cmd_nack fn))
          end
        | CLI_to_MDS Quit_cmd ->
          Log.debug "got Quit_cmd";
@@ -195,7 +174,8 @@ let main () =
          (* send Quit to all DSs *)
          A.iteri (fun i (_ds, maybe_sock) -> match maybe_sock with
              | None -> Log.warn "DS %d missing" i
-             | Some to_DS_i -> send to_DS_i (MDS_to_DS Quit_cmd)
+             | Some to_DS_i -> Socket.send !compression_flag to_DS_i
+                                 (MDS_to_DS Quit_cmd)
            ) int2node;
          not_finished := false
       end

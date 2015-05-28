@@ -13,6 +13,7 @@ module S = String
 module Node = Types.Node
 module File = Types.File
 module FileSet = Types.FileSet
+module Socket = Socket_wrapper.CLI_socket
 
 let uninitialized = -1
 
@@ -38,35 +39,9 @@ let getenv_or_fail variable_name =
     Log.error "getenv_or_fail: Sys.getenv: %s" variable_name;
     ""
 
-let send (sock: [> `Push] ZMQ.Socket.t) (m: from_cli): unit =
-  let encode (m: from_cli): string =
-    let to_send = Marshal.to_string m [Marshal.No_sharing] in
-    let before_size = float_of_int (String.length to_send) in
-    if !compression_flag then
-      let res = compress to_send in
-      let after_size = float_of_int (String.length res) in
-      Log.debug "z ratio: %.2f" (after_size /. before_size);
-      res
-    else
-      to_send
-  in
-  let encoded = encode m in
-  ZMQ.Socket.send sock encoded
-
-let receive (sock: [> `Pull] ZMQ.Socket.t): to_cli =
-  let decode (s: string): to_cli =
-    let received =
-      if !compression_flag then uncompress s
-      else s
-    in
-    (Marshal.from_string received 0: to_cli)
-  in
-  let encoded = ZMQ.Socket.recv sock in
-  decode encoded
-
 let process_answer incoming continuation =
   Log.debug "waiting msg";
-  let message = receive incoming in
+  let message = Socket.receive !compression_flag incoming in
   Log.debug "got msg";
   match message with
   | MDS_to_CLI (Ls_cmd_ack f) ->
@@ -142,7 +117,8 @@ module Command = struct
 end
 
 let extract_cmd src_fn dst_fn for_DS incoming =
-  send for_DS (CLI_to_DS (Extract_file_cmd_req (src_fn, dst_fn)));
+  Socket.send !compression_flag for_DS
+    (CLI_to_DS (Extract_file_cmd_req (src_fn, dst_fn)));
   process_answer incoming do_nothing
 
 let read_one_command is_interactive =
@@ -209,31 +185,39 @@ let main () =
       match read_one_command !interactive with
       | Skip -> Log.info "\nusage: put|get|fetch|rfetch|extract|quit|ls"
       | Put src_fn ->
-        send for_DS (CLI_to_DS (Fetch_file_cmd_req (src_fn, Local)));
+        Socket.send !compression_flag for_DS
+          (CLI_to_DS (Fetch_file_cmd_req (src_fn, Local)));
         process_answer incoming do_nothing
       | Get (src_fn, dst_fn) ->
         (* get = extract . fetch *)
-        send for_DS (CLI_to_DS (Fetch_file_cmd_req (src_fn, Remote)));
-        let fetch_cont = (fun () -> extract_cmd src_fn dst_fn for_DS incoming) in
+        Socket.send !compression_flag for_DS
+          (CLI_to_DS (Fetch_file_cmd_req (src_fn, Remote)));
+        let fetch_cont =
+          (fun () -> extract_cmd src_fn dst_fn for_DS incoming)
+        in
         process_answer incoming fetch_cont
       | Fetch src_fn ->
-        send for_DS (CLI_to_DS (Fetch_file_cmd_req (src_fn, Remote)));
+        Socket.send !compression_flag for_DS
+          (CLI_to_DS (Fetch_file_cmd_req (src_fn, Remote)));
         process_answer incoming do_nothing
       | Rfetch (src_fn, host_port) ->
         let host, port = ref "", ref 0 in
         Utils.set_host_port host port host_port;
         (* create temp socket to remote DS *)
         let for_ds_i = Utils.(zmq_socket Push ctx !host !port) in
-        send for_ds_i (CLI_to_DS (Fetch_file_cmd_req (src_fn, Remote)));
+        Socket.send !compression_flag for_ds_i
+          (CLI_to_DS (Fetch_file_cmd_req (src_fn, Remote)));
         process_answer incoming do_nothing;
         ZMQ.Socket.close for_ds_i
       | Extract (src_fn, dst_fn) ->
         extract_cmd src_fn dst_fn for_DS incoming
       | Quit ->
-        send for_MDS (CLI_to_MDS Quit_cmd);
+        Socket.send !compression_flag for_MDS
+          (CLI_to_MDS Quit_cmd);
         not_finished := false;
       | Ls ->
-        send for_MDS (CLI_to_MDS Ls_cmd_req);
+        Socket.send !compression_flag for_MDS
+          (CLI_to_MDS Ls_cmd_req);
         process_answer incoming do_nothing
     done;
     raise Types.Loop_end;
