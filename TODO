@@ -28,39 +28,12 @@ rput = rget . put
   It would compare their md5 to the one the MDS knows about.
   This is for dev. tests only.
 
-COMMANDS SEMANTICS
-==================
-
-1) get a file
-
-1') rget: get on a remote DS
-
-2) start
-   - then the MDS starts all DSs
-
-4) put a directory
-   TODO: recursive put file of all the content of the dir
-
 PERFORMANCE
 ===========
-
-- it will be cheap to encode/decode on the fly
-
-- provide a Huffman compression mode:
-  huffman compression with encrypted huffman tree
-  - this would be for people who don't want hardcore encryption
-    but also don't want to send their data in clear text
 
 - we can cache chunks coming in when not in raw mode
   - so that we don't need to compress|sign|encrypt them once
     more in the future
-
-- it may be cheap to implement a chunk-level binary cache on DSs
-  - just check the checksum of incoming packets
-    - this is only interesting if some files share entire chunks
-  - more interesting would be a binary cache that doesn't rely on
-    chunk size (it uses a function to detect boundaries, I have seen that
-    in the past: StoreGPU article in HPDC 2008)
 
 - interesting worst case to test:
   many hosts ask for the same small file at the same time
@@ -69,26 +42,9 @@ PERFORMANCE
 SECURITY
 ========
 
-- create executables that speak the same protocole at compile time ???
-  example: daft_cli_z means a daft CLI that speaks the
-           compressed-on-the-fly protocole
-
-- encryption of messages: if a message cannot be decrypted, then
-  it is not from a member of the communication group (because it is from
-  someone who doesn't know the group's secret)
-  encryption_key: symmetric key used to encrypt and decrypt
-  secret_key: int; prepended to all messages with salt
-  salt: int; random
-  to_encrypt = secret ^ salt ^ message
-  // the encryption_key plus the secret_key are shared between CLI, MDS and DS)
+- salt: a random int
+  to_encrypt = salt ^ message
   to_send = crypt (encryption_key, to_encrypt)
-
-- decryption of messages
-  to_check = decrypt (encryption_key, message)
-  if to_check starts_with secret_key then
-    OK
-  else
-    Fail
 
 - for signing messages, just use a MAC from cryptokit
   cryptokit-1.10/_build/src/api-cryptokit.docdir/Cryptokit.MAC.html
@@ -101,11 +57,7 @@ SECURITY
 
 - before executing a command from the CLI, a DS or MDS
   could verify the signature of the command.
-  only commands signed with the private key of the user
-  who started DAFT should be executed
-
-- the MDS will do queries based on file-names
-  - chunks should be stored in a data structure that is cheap to randomize
+  only commands properly signed should be executed
 
 PUBLIC RELATIONS
 ================
