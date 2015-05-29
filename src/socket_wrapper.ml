@@ -3,8 +3,7 @@
 
 open Types.Protocol
 
-module type Msg_pair =
-sig
+module type Msg_pair = sig
   type from_t
   type to_t
 end
@@ -12,8 +11,8 @@ end
 module Make (Pair: Msg_pair) = struct
 
   (* generic send (private) *)
-  let send (compression_flag: bool) (sock: [> `Push] ZMQ.Socket.t) m: unit =
-    let encode m: string =
+  let send (compression_flag: bool) (sock: [> `Push] ZMQ.Socket.t) (m: Pair.from_t): unit =
+    let encode (m: Pair.from_t): string =
       let to_send = Marshal.to_string m [Marshal.No_sharing] in
       let before_size = float_of_int (String.length to_send) in
       if compression_flag then
@@ -24,20 +23,18 @@ module Make (Pair: Msg_pair) = struct
       else
         to_send
     in
-    let encoded = encode m in
-    ZMQ.Socket.send sock encoded
+    ZMQ.Socket.send sock (encode m)
 
   (* generic receive (private) *)
-  let receive (compression_flag: bool) (sock: [> `Pull] ZMQ.Socket.t) =
-    let decode (s: string) =
+  let receive (compression_flag: bool) (sock: [> `Pull] ZMQ.Socket.t): Pair.to_t =
+    let decode (s: string): Pair.to_t =
       let received =
         if compression_flag then uncompress s
         else s
       in
-      Marshal.from_string received 0
+      (Marshal.from_string received 0: Pair.to_t)
     in
-    let encoded = ZMQ.Socket.recv sock in
-    decode encoded
+    decode (ZMQ.Socket.recv sock)
 
 end
 
