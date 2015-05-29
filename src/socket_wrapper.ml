@@ -10,7 +10,6 @@ end
 
 module Make (Pair: Msg_pair) = struct
 
-  (* generic send (private) *)
   let send (compression_flag: bool) (sock: [> `Push] ZMQ.Socket.t) (m: Pair.from_t): unit =
     let encode (m: Pair.from_t): string =
       let to_send = Marshal.to_string m [Marshal.No_sharing] in
@@ -25,7 +24,6 @@ module Make (Pair: Msg_pair) = struct
     in
     ZMQ.Socket.send sock (encode m)
 
-  (* generic receive (private) *)
   let receive (compression_flag: bool) (sock: [> `Pull] ZMQ.Socket.t): Pair.to_t =
     let decode (s: string): Pair.to_t =
       let received =
