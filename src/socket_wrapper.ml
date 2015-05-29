@@ -3,7 +3,14 @@
 
 open Types.Protocol
 
-module Make (Msg : sig type from_t type to_t end) = struct
+module type Msg_pair =
+sig
+  type from_t
+  type to_t
+end
+
+module Make (Pair: Msg_pair) = struct
+
   (* generic send (private) *)
   let send (compression_flag: bool) (sock: [> `Push] ZMQ.Socket.t) m: unit =
     let encode m: string =
@@ -31,10 +38,9 @@ module Make (Msg : sig type from_t type to_t end) = struct
     in
     let encoded = ZMQ.Socket.recv sock in
     decode encoded
+
 end
 
 module CLI_socket = Make (struct type from_t = from_cli type to_t = to_cli end)
-
 module MDS_socket = Make (struct type from_t = from_mds type to_t = to_mds end)
-
-module DS_socket = Make (struct type from_t = from_ds type to_t = to_ds end)
+module  DS_socket = Make (struct type from_t = from_ds  type to_t = to_ds  end)
