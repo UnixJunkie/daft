@@ -16,7 +16,7 @@ Executable daft
 Executable daft_mds
   oflags: -bin-annot -w +27 -warn-error +8 -g
   path: src
-  build-deps: dolog, batteries, fileutils, ZMQ, cryptokit, lz4
+  build-deps: dolog, batteries, fileutils, ZMQ, cryptokit, lz4, bitv
   main-is: meta_data_server.ml
 
 # Data Server (DS)
