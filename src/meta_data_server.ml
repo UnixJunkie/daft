@@ -8,7 +8,6 @@ module A = Array
 module Ht = Hashtbl
 module FileSet = Types.FileSet
 module File = Types.File
-module ChunkSet = Types.File.ChunkSet
 module Chunk = Types.File.Chunk
 module L = List
 module Logger = Log (* !!! keep this one before Log alias !!! *)
@@ -123,8 +122,7 @@ let main () =
                else
                  let new_source = fst int2node.(ds_rank) in
                  let new_chunk = Chunk.add_source prev_chunk new_source in
-                 let new_file = File.update_chunk file new_chunk in
-                 global_state := FileSet.update new_file !global_state
+                 File.update_chunk file new_chunk
              with Not_found ->
                Log.error "Chunk_ack: unknown chunk: %s chunk_id: %d"
                  fn chunk_id
@@ -142,9 +140,11 @@ let main () =
            try
              let file = FileSet.find_fn fn !global_state in
              let chunks = Types.File.get_chunks file in
+             (* FBR: code logic needs to moved into File 
+                File.get_rand_sources will send a list of (chunk_rank, src_node) *)
              (* randomized algorithm: for each chunk we ask a randomly selected
                 chunk source to send the chunk to destination *)
-             ChunkSet.iter (fun chunk ->
+             Array.iter (fun chunk ->
                  if Utils.out_of_bounds ds_rank int2node then
                    Log.error "Fetch_cmd_req: fn: %s invalid ds_rank: %d"
                      fn ds_rank

@@ -15,7 +15,7 @@ module Node = Types.Node
 module File = Types.File
 module FileSet = Types.FileSet
 module Chunk = File.Chunk
-module ChunkSet = File.ChunkSet
+module ChunksArray = File.ChunksArray
 module Socket = Socket_wrapper.DS_socket
 
 let count_char (c: char) (s: string): int =
@@ -130,7 +130,7 @@ let add_file (fn: string): ds_to_cli =
             let all_chunks =
               File.all_chunks nb_chunks last_chunk_size !local_node
             in
-            let new_file = File.create fn size nb_chunks all_chunks in
+            let new_file = File.create_complete_file fn size nb_chunks all_chunks in
             local_state := FileSet.add new_file !local_state;
             Fetch_file_cmd_ack fn
           end)
@@ -227,9 +227,8 @@ let main () =
               if Utils.out_of_bounds ds_rank int2node
               then raise Invalid_ds_rank;
               let file = FileSet.find_fn fn !local_state in
-              let chunks = File.get_chunks file in
               try (* 2) check we have this chunk *)
-                let chunk = ChunkSet.find_id chunk_id chunks in
+                let chunk = File.find_chunk_id chunk_id file in
                 (* 3) seek to it *)
                 let local_file = fn_to_path fn in
                 let chunk_data =
@@ -310,23 +309,23 @@ let main () =
                 with Not_found -> (* or create it *)
                   let unknown_size = Int64.of_int (-1) in
                   let unknown_total_chunks = -1 in
-                  File.create
-                    fn unknown_size unknown_total_chunks ChunkSet.empty
+                  File.start_file
+                    fn unknown_size unknown_total_chunks ChunksArray.empty
               in
-              let prev_chunks = File.get_chunks file in
               let curr_chunk =
                 File.Chunk.create chunk_id curr_chunk_size !local_node
               in
+              File.add_chunk file curr_chunk;
               (* only once we receive the last chunk can we finalize the file's
                  description in local_state *)
               let new_file =
                 if is_last then (* finalize file description *)
                   let full_size = Int64.(of_int offset + size64) in
                   let total_chunks = chunk_id + 1 in
-                  let curr_chunks = ChunkSet.add curr_chunk prev_chunks in
-                  File.create fn full_size total_chunks curr_chunks
-                else (* just update chunkset *)
-                  File.add_chunk file curr_chunk
+                  let chunks = File.get_chunks file in
+                  File.create_complete_file fn full_size total_chunks chunks
+                else
+                  file
               in
               local_state := FileSet.update new_file !local_state;
               (* 3) notify MDS *)
@@ -336,7 +335,7 @@ let main () =
                     and fix file perms in the local datastore *)
               let curr_chunks = File.get_chunks new_file in
               let nb_chunks = File.get_nb_chunks new_file in
-              if ChunkSet.cardinal curr_chunks = nb_chunks then (
+              if Array.length curr_chunks = nb_chunks then (
                 Unix.chmod local_file 0o400;
                 Socket.send !compression_flag to_cli
                   (DS_to_CLI (Fetch_file_cmd_ack fn))

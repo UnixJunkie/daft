@@ -14,6 +14,9 @@ type chunk_id = int
 type chunk_data = string
 type is_last = bool
 
+(* FBR: add module interfaces and hide as much operations as possible *)
+(*      make types abstract too *)
+
 (* module useful to transform a set of integers with holes
    into a set of intervals *)
 module Interval = struct
@@ -151,71 +154,96 @@ module File = struct
 (* FBR: adhere to the JS Core convention: in module with type t, the first
         param of each operation must be a t *)
 
-  module ChunkSet = struct
-    include Set.Make(Chunk)
+  module ChunksArray = struct
+    (* FBR: hide all array operations *)
+    type t = Chunk.t array
     let create
         (nb_chunks: int)
         (last_chunk_size: int64 option)
-        (node: Node.t) =
-      let rec loop acc i =
-        if i = nb_chunks - 1 then
-          add (Chunk.create i last_chunk_size node) acc
-        else
-          let new_acc = add (Chunk.create i None node) acc in
-          loop new_acc (i + 1)
-      in
-      if nb_chunks <= 0 then empty
-      else loop empty 0
-    let to_string cs =
+        (node: Node.t): t =
+      let res = Array.init nb_chunks (fun i -> Chunk.create i None node) in
+      if nb_chunks > 0 then
+        begin
+          let last = nb_chunks - 1 in
+          Array.set res last (Chunk.create last last_chunk_size node)
+        end;
+      res
+    let empty =
+      Array.create 0 (Chunk.dummy (-1))
+    let to_string ca =
       let res = Buffer.create 1024 in
       let first_time = ref true in
-      iter (fun c ->
+      Array.iter (fun c ->
           if !first_time then first_time := false
           else Buffer.add_char res '\n';
           Buffer.add_string res (Chunk.to_string c)
-        ) cs;
+        ) ca;
       Buffer.contents res
-    let find_id (id: chunk_id) (cs: t): Chunk.t =
-      find (Chunk.dummy id) cs
-    let update (c: Chunk.t) (cs: t): t =
-      add c (remove c cs)
+    (* let find_id (id: chunk_id) (ca: t): Chunk.t = *)
+    (*   Array.get ca id *)
+    let update (c: Chunk.t) (ca: t): unit =
+      Array.set ca Chunk.(c.id) c
   end
 
-  type t = { name:      filename   ;
-             size:      int64      ;
-             nb_chunks: int        ; (* when the file is complete *)
-             chunks:    ChunkSet.t } (* chunks currently available *)
-  (* complete chunkset of file f *)
+  type t = { name:         filename      ;
+             size:         int64         ;
+             nb_chunks:    int           ; (* when the file is complete *)
+             chunks_cache: Bitv.t        ;
+             chunks:       ChunksArray.t } (* chunks currently available *)
+  (* complete chunks array of file f *)
   let all_chunks
       (nb_chunks: int)
       (last_chunk_size: int64 option)
-      (node: Node.t): ChunkSet.t =
-    ChunkSet.create nb_chunks last_chunk_size node
-  let create
+      (node: Node.t): ChunksArray.t =
+    ChunksArray.create nb_chunks last_chunk_size node
+  (* new and complete file *)
+  let create_complete_file
       (name: filename)
       (size: int64)
       (nb_chunks: int)
-      (chunks: ChunkSet.t) =
-    { name; size; nb_chunks ; chunks }
+      (chunks: ChunksArray.t): t =
+    (* FBR: WRONG; we need to inspect chunks to know which chunks *)
+    (*      are here *)
+    (* which indicates we need an option Chunk.t array instead of the bitv *)
+    let chunks_cache = Bitv.create nb_chunks true in
+    { name; size; nb_chunks ; chunks_cache; chunks }
+  (* new file under construction with chunks arriving *)
+  let start_file
+      (name: filename)
+      (size: int64)
+      (nb_chunks: int)
+      (chunks: ChunksArray.t): t =
+    let chunks_cache = Bitv.create 0 false in
+    { name; size; nb_chunks; chunks_cache; chunks }
   (* incoming chunk *)
-  let add_chunk (f: t) (c: Chunk.t) =
-    let prev_set = f.chunks in
-    let new_set = ChunkSet.add c prev_set in
-    if prev_set == new_set then
-      Log.error "duplicate chunk: f: %s chunk: %d" f.name Chunk.(c.id)
-    ;
-    { f with chunks = new_set }
-  let update_chunk (f: t) (c: Chunk.t): t =
-    { f with chunks = ChunkSet.update c f.chunks }
+  let add_chunk (f: t) (c: Chunk.t): unit =
+    let cid = Chunk.(c.id) in
+    if Bitv.get f.chunks_cache cid then begin
+      Log.fatal "add_chunk: duplicate chunk: f: %s chunk: %d" f.name cid;
+      exit 1
+    end else begin
+      Bitv.set f.chunks_cache cid true;
+      ChunksArray.update c f.chunks;
+    end
+  let update_chunk (f: t) (c: Chunk.t): unit =
+    let cid = Chunk.(c.id) in
+    if not (Bitv.get f.chunks_cache cid) then
+      Log.error "update_chunk: never added: f: %s chunk: %d" f.name cid
+    else
+      ChunksArray.update c f.chunks
   let compare f1 f2 =
     String.compare f1.name f2.name
   let to_string f =
     sprintf "fn: %s size: %Ld #chunks: %d\n%s"
-      f.name f.size f.nb_chunks (ChunkSet.to_string f.chunks)
-  let get_chunks (f: t): ChunkSet.t =
+      f.name f.size f.nb_chunks (ChunksArray.to_string f.chunks)
+  (* FBR: hide this *)
+  let get_chunks (f: t): ChunksArray.t =
     f.chunks
   let find_chunk_id (id: chunk_id) (f: t): Chunk.t =
-    ChunkSet.find_id id f.chunks
+    if Bitv.get f.chunks_cache id then
+      Array.get f.chunks id
+    else
+      raise Not_found
   let get_nb_chunks (f: t): int =
     f.nb_chunks
   let is_last_chunk (c: Chunk.t) (f: t): bool =
@@ -228,12 +256,16 @@ end
 (* the status of the "filesystem" is just a set of files *)
 module FileSet = struct
   include Set.Make(File)
+  let add f fs =
+    assert(not (mem f fs)); (* it should not be there already *)
+    add f fs
   (* extend module with more operations *)
   let dummy_file fn =
     File.({ name = fn;
             size = Int64.zero;
             nb_chunks = 0;
-            chunks = ChunkSet.empty })
+            chunks_cache = Bitv.create 0 false;
+            chunks = ChunksArray.empty })
   let contains_fn fn s =
     mem (dummy_file fn) s
   let find_fn fn s =
@@ -241,6 +273,7 @@ module FileSet = struct
   let remove_fn fn s =
     remove (dummy_file fn) s
   let update latest s =
+    (* FBR: use faster one from batteries once available *)
     add latest (remove_fn File.(latest.name) s)
   let to_string fs =
     let res = Buffer.create 1024 in
