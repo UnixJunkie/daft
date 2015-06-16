@@ -9,14 +9,14 @@ let encryption_flag = true
 #else
 let encryption_flag = false
 *)
-let compression_flag = false
+let compression_flag = true
 let encryption_flag = false
 let signature_flag = true
 
 (* FBR: constant default keys for the moment
    in the future they will be asked interactively to the user at runtime *)
-let signing_key = "please_sign_this"
-let encryption_key = "please_crypt_this"
+let signing_key = "please_sign_this0123456789"
+let encryption_key = "please_crypt_this0123456789"
 
 (* prefix the message with its signature
    msg --> signature|msg ; length(signature) = 20B = 160bits *)
@@ -49,10 +49,13 @@ let check_sign (msg: string): string =
 let encode (m: 'a): string =
   let to_send =
     let tmp = Marshal.to_string m [Marshal.No_sharing] in
-    if signature_flag then
-      sign tmp
-    else
-      tmp
+    if signature_flag then 
+      let before_size = float_of_int (String.length tmp) in
+      let res = sign tmp in
+      let after_size = float_of_int (String.length res) in
+      Log.debug "s ratio: %.2f" (after_size /. before_size);
+      res
+    else tmp
   in
   let before_size = float_of_int (String.length to_send) in
   if compression_flag then
@@ -65,8 +68,12 @@ let encode (m: 'a): string =
 
 let decode (s: string): 'a =
   let received =
-    if compression_flag then uncompress s
-    else s
+    let tmp =
+      if compression_flag then uncompress s
+      else s
+    in
+    if signature_flag then check_sign tmp
+    else tmp
   in
   Marshal.from_string received 0
 
