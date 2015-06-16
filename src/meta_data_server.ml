@@ -31,7 +31,6 @@ let abort msg =
 
 let fetch_mds fn ds_rank int2node to_cli=
   begin
-    Log.debug "got Fetch_cmd_req";
     try
       let file = FileSet.find_fn fn !global_state in
       let chunks = Types.File.get_chunks file in
@@ -70,7 +69,7 @@ let fetch_mds fn ds_rank int2node to_cli=
 let bcast_mds (fn: Types.filename) root int2node =
   Log.debug "coucou, tu veux voir mes bits ?";
   Array.iteri ( fun i _ -> 
-    if i != root then
+    if i <> root then
       begin
 	Log.debug "Envoi a DS %d" i;
 	fetch_mds fn i int2node None
@@ -177,6 +176,7 @@ let main () =
                fn chunk_id
          end
        | DS_to_MDS (Fetch_file_req (ds_rank, fn)) ->
+	 Log.debug "got Fetch_file_req";
 	 fetch_mds fn ds_rank int2node ( Some to_cli )
        | DS_to_MDS (Bcast_file_req (ds_rank, fn)) ->
 	 bcast_mds fn ds_rank int2node
