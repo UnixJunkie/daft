@@ -19,7 +19,6 @@ module Socket = Socket_wrapper.MDS_socket
 let global_state = ref FileSet.empty
 let cli_host = ref ""
 let cli_port_in = ref Utils.default_cli_port_in
-let compression_flag = ref false
 
 let start_data_nodes _machine_fn =
   (* TODO: scp exe to each node *)
@@ -43,8 +42,7 @@ let main () =
       "-m", Arg.Set_string machine_file,
       "machine_file list of [user@]host:port (one per line)";
       "-cli", Arg.String (Utils.set_host_port cli_host cli_port_in),
-      "<host:port> CLI";
-      "-z", Arg.Set compression_flag, "enable on the fly compression" ]
+      "<host:port> CLI" ]
     (fun arg -> raise (Arg.Bad ("Bad argument: " ^ arg)))
     (sprintf "usage: %s <options>" Sys.argv.(0));
   (* check options *)
@@ -64,7 +62,7 @@ let main () =
     let not_finished = ref true in
     while !not_finished do
       Log.debug "waiting msg";
-      let message = Socket.receive !compression_flag incoming in
+      let message = Socket.receive incoming in
       Log.debug "got msg";
       begin match message with
        | DS_to_MDS (Join_push ds) ->
@@ -103,7 +101,7 @@ let main () =
                  Add_file_ack f.name
                end
              in
-             Socket.send !compression_flag receiver (MDS_to_DS ack_or_nack)
+             Socket.send receiver (MDS_to_DS ack_or_nack)
          end
        | DS_to_MDS (Chunk_ack (fn, chunk_id, ds_rank)) ->
          begin
@@ -132,7 +130,7 @@ let main () =
          end
        | CLI_to_MDS Ls_cmd_req ->
          Log.debug "got Ls_cmd_req";
-         Socket.send !compression_flag to_cli
+         Socket.send to_cli
            (MDS_to_CLI (Ls_cmd_ack !global_state))
        | DS_to_MDS (Fetch_file_req (ds_rank, fn)) ->
          begin
@@ -159,13 +157,13 @@ let main () =
                          MDS_to_DS
                            (Send_to_req (ds_rank, fn, chunk_id, is_last))
                        in
-                       Socket.send !compression_flag to_ds_i send_order
+                       Socket.send to_ds_i send_order
                      | (_, None) -> assert(false)
                    end
                ) chunks
            with Not_found ->
              (* this assumes there is a single CLI; might be wrong in future *)
-             Socket.send !compression_flag to_cli
+             Socket.send to_cli
                (MDS_to_CLI (Fetch_cmd_nack fn))
          end
        | CLI_to_MDS Quit_cmd ->
@@ -174,8 +172,7 @@ let main () =
          (* send Quit to all DSs *)
          A.iteri (fun i (_ds, maybe_sock) -> match maybe_sock with
              | None -> Log.warn "DS %d missing" i
-             | Some to_DS_i -> Socket.send !compression_flag to_DS_i
-                                 (MDS_to_DS Quit_cmd)
+             | Some to_DS_i -> Socket.send to_DS_i (MDS_to_DS Quit_cmd)
            ) int2node;
          not_finished := false
       end

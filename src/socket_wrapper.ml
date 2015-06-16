@@ -3,7 +3,11 @@
 
 open Types.Protocol
 
-let encode (compression_flag: bool) (m: 'a): string =
+let compression_flag = false
+let encryption_flag = false
+let signature_flag = true (* FBR: doing this one *)
+
+let encode (m: 'a): string =
   let to_send = Marshal.to_string m [Marshal.No_sharing] in
   let before_size = float_of_int (String.length to_send) in
   if compression_flag then
@@ -14,7 +18,7 @@ let encode (compression_flag: bool) (m: 'a): string =
   else
     to_send
 
-let decode (compression_flag: bool) (s: string): 'a =
+let decode (s: string): 'a =
   let received =
     if compression_flag then uncompress s
     else s
@@ -24,7 +28,6 @@ let decode (compression_flag: bool) (s: string): 'a =
 module CLI_socket = struct
 
   let send
-      (compression_flag: bool)
       (sock: [> `Push] ZMQ.Socket.t)
       (m: from_cli): unit =
     (* marshalling + type translation so that message is OK to unmarshall
@@ -32,59 +35,57 @@ module CLI_socket = struct
     let translate_type: from_cli -> string = function
       | CLI_to_MDS x ->
         let to_send: to_mds = CLI_to_MDS x in
-        encode compression_flag to_send
+        encode to_send
       | CLI_to_DS x ->
         let to_send: to_ds = CLI_to_DS x in
-        encode compression_flag to_send
+        encode to_send
     in
     ZMQ.Socket.send sock (translate_type m)
 
-  let receive (compression_flag: bool) (sock: [> `Pull] ZMQ.Socket.t): to_cli =
-    decode compression_flag (ZMQ.Socket.recv sock)
+  let receive (sock: [> `Pull] ZMQ.Socket.t): to_cli =
+    decode (ZMQ.Socket.recv sock)
 
 end
 
 module MDS_socket = struct
 
   let send
-      (compression_flag: bool)
       (sock: [> `Push] ZMQ.Socket.t)
       (m: from_mds): unit =
     let translate_type: from_mds -> string = function
       | MDS_to_DS x ->
         let to_send: to_ds = MDS_to_DS x in
-        encode compression_flag to_send
+        encode to_send
       | MDS_to_CLI x ->
         let to_send: to_cli = MDS_to_CLI x in
-        encode compression_flag to_send
+        encode to_send
     in
     ZMQ.Socket.send sock (translate_type m)
 
-  let receive (compression_flag: bool) (sock: [> `Pull] ZMQ.Socket.t): to_mds =
-    decode compression_flag (ZMQ.Socket.recv sock)
+  let receive (sock: [> `Pull] ZMQ.Socket.t): to_mds =
+    decode (ZMQ.Socket.recv sock)
 
 end
 
 module DS_socket = struct
 
   let send
-      (compression_flag: bool)
       (sock: [> `Push] ZMQ.Socket.t)
       (m: from_ds): unit =
     let translate_type: from_ds -> string = function
       | DS_to_MDS x ->
         let to_send: to_mds = DS_to_MDS x in
-        encode compression_flag to_send
+        encode to_send
       | DS_to_DS x ->
         let to_send: to_ds = DS_to_DS x in
-        encode compression_flag to_send
+        encode to_send
       | DS_to_CLI x ->
         let to_send: to_cli = DS_to_CLI x in
-        encode compression_flag to_send
+        encode to_send
     in
     ZMQ.Socket.send sock (translate_type m)
 
-  let receive (compression_flag: bool) (sock: [> `Pull] ZMQ.Socket.t): to_ds =
-    decode compression_flag (ZMQ.Socket.recv sock)
+  let receive (sock: [> `Pull] ZMQ.Socket.t): to_ds =
+    decode (ZMQ.Socket.recv sock)
 
 end

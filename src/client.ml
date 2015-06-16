@@ -24,7 +24,6 @@ let mds_port_in = ref uninitialized
 let cli_port_in = ref Utils.default_cli_port_in
 let single_command = ref ""
 let interactive = ref false
-let compression_flag = ref false
 
 let abort msg =
   Log.fatal "%s" msg;
@@ -41,7 +40,7 @@ let getenv_or_fail variable_name =
 
 let process_answer incoming continuation =
   Log.debug "waiting msg";
-  let message = Socket.receive !compression_flag incoming in
+  let message = Socket.receive incoming in
   Log.debug "got msg";
   match message with
   | MDS_to_CLI (Ls_cmd_ack f) ->
@@ -117,7 +116,7 @@ module Command = struct
 end
 
 let extract_cmd src_fn dst_fn for_DS incoming =
-  Socket.send !compression_flag for_DS
+  Socket.send for_DS
     (CLI_to_DS (Extract_file_cmd_req (src_fn, dst_fn)));
   process_answer incoming do_nothing
 
@@ -146,8 +145,7 @@ let main () =
       "-mds", Arg.String (Utils.set_host_port mds_host mds_port_in),
       "<host:port> MDS";
       "-ds", Arg.String (Utils.set_host_port ds_host ds_port_in),
-      "<host:port> local DS";
-      "-z", Arg.Set compression_flag, " enable on the fly compression" ]
+      "<host:port> local DS" ]
     (fun arg -> raise (Arg.Bad ("Bad argument: " ^ arg)))
     (sprintf "usage: %s <options>" Sys.argv.(0));
   (* check options *)
@@ -185,19 +183,19 @@ let main () =
       match read_one_command !interactive with
       | Skip -> Log.info "\nusage: put|get|fetch|rfetch|extract|quit|ls"
       | Put src_fn ->
-        Socket.send !compression_flag for_DS
+        Socket.send for_DS
           (CLI_to_DS (Fetch_file_cmd_req (src_fn, Local)));
         process_answer incoming do_nothing
       | Get (src_fn, dst_fn) ->
         (* get = extract . fetch *)
-        Socket.send !compression_flag for_DS
+        Socket.send for_DS
           (CLI_to_DS (Fetch_file_cmd_req (src_fn, Remote)));
         let fetch_cont =
           (fun () -> extract_cmd src_fn dst_fn for_DS incoming)
         in
         process_answer incoming fetch_cont
       | Fetch src_fn ->
-        Socket.send !compression_flag for_DS
+        Socket.send for_DS
           (CLI_to_DS (Fetch_file_cmd_req (src_fn, Remote)));
         process_answer incoming do_nothing
       | Rfetch (src_fn, host_port) ->
@@ -205,18 +203,18 @@ let main () =
         Utils.set_host_port host port host_port;
         (* create temp socket to remote DS *)
         let for_ds_i = Utils.(zmq_socket Push ctx !host !port) in
-        Socket.send !compression_flag for_ds_i
+        Socket.send for_ds_i
           (CLI_to_DS (Fetch_file_cmd_req (src_fn, Remote)));
         process_answer incoming do_nothing;
         ZMQ.Socket.close for_ds_i
       | Extract (src_fn, dst_fn) ->
         extract_cmd src_fn dst_fn for_DS incoming
       | Quit ->
-        Socket.send !compression_flag for_MDS
+        Socket.send for_MDS
           (CLI_to_MDS Quit_cmd);
         not_finished := false;
       | Ls ->
-        Socket.send !compression_flag for_MDS
+        Socket.send for_MDS
           (CLI_to_MDS Ls_cmd_req);
         process_answer incoming do_nothing
     done;
