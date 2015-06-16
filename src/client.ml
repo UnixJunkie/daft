@@ -57,6 +57,11 @@ let process_answer incoming continuation =
       Log.info "%s: OK" fn;
       continuation ()
     end
+  | DS_to_CLI Bcast_file_ack ->
+    begin
+      Log.debug "got Bcast_file_ack";
+      continuation ()
+    end
   | DS_to_CLI (Fetch_file_cmd_nack (fn, err)) ->
     Log.debug "got Fetch_file_cmd_nack";
     Log.error "%s: %s" fn (string_of_error err)
@@ -76,6 +81,7 @@ module Command = struct
          | Fetch of filename
          | Rfetch of filename * string (* string format: host:port *)
          | Extract of filename * filename
+	 | Bcast of filename
          | Quit
          | Ls
          | Skip
@@ -108,6 +114,11 @@ module Command = struct
           begin match get_two args with
             | Some (src_fn, dst_fn) -> Extract (src_fn, dst_fn)
             | None -> Log.error "\nusage: extract src_fn dst_fn" ; Skip
+          end
+        | "b" | "bc" | "bcast" | "broadcast" ->
+          begin match get_one args with
+            | Some fn -> Bcast fn
+            | None -> Log.error "\nusage: bcast fn" ; Skip
           end
         | "q" | "qu" | "qui" | "quit" -> Quit
         | "l" | "ls" -> Ls
@@ -143,8 +154,6 @@ let main () =
       "-c", Arg.Set_string single_command,
       "'command' execute a single command; use quotes if several words";
       "-cli", Arg.Set_int cli_port_in, "<port> where the CLI is listening";
-      "-m", Arg.Set_string machine_file,
-      "machine_file list of [user@]host:port (one per line)";
       "-mds", Arg.String (Utils.set_host_port mds_host mds_port_in),
       "<host:port> MDS";
       "-ds", Arg.String (Utils.set_host_port ds_host ds_port_in),
@@ -170,9 +179,6 @@ let main () =
         Utils.set_host_port ds_host ds_port_in daft_ds_env_var
     end;
   assert(!ds_host <> "" && !ds_port_in <> uninitialized);
-  if !machine_file = "" then abort "-m is mandatory";
-  let nodes = Utils.parse_machine_file !machine_file in
-  let local_ds_rank = Utils.get_ds_rank !ds_host !ds_port_in nodes in
   let ctx = ZMQ.Context.create () in
   let for_MDS = Utils.(zmq_socket Push ctx !mds_host !mds_port_in) in
   Log.info "Client of MDS %s:%d" !mds_host !mds_port_in;
@@ -187,7 +193,7 @@ let main () =
       not_finished := !interactive;
       let open Command in
       match read_one_command !interactive with
-      | Skip -> Log.info "\nusage: put|get|fetch|rfetch|extract|quit|ls"
+      | Skip -> Log.info "\nusage: put|get|fetch|rfetch|extract|quit|ls|bcast"
       | Put src_fn ->
         Socket.send for_DS
           (CLI_to_DS (Fetch_file_cmd_req (src_fn, Local)));
@@ -197,7 +203,7 @@ let main () =
         Socket.send for_DS
           (CLI_to_DS (Fetch_file_cmd_req (src_fn, Remote)));
         let fetch_cont =
-          (fun () -> extract_cmd src_fn dst_fn for_DS incoming)
+          (fun () -> extract_cmd src_fn dst_fn for_DS incoming) 
         in
         process_answer incoming fetch_cont
       | Fetch src_fn ->
@@ -222,6 +228,10 @@ let main () =
       | Ls ->
         Socket.send for_MDS
           (CLI_to_MDS Ls_cmd_req);
+        process_answer incoming do_nothing
+      | Bcast src_fn ->
+        Socket.send for_DS
+          (CLI_to_DS (Bcast_file_cmd_req src_fn));
         process_answer incoming do_nothing
     done;
     raise Types.Loop_end;
