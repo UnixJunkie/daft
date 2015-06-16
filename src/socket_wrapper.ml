@@ -3,6 +3,12 @@
 
 open Types.Protocol
 
+(* FBR: one day, position those flags with (cppo) preprocessor directives; e.g.
+#ifndef DAFT_NO_CRYPT
+let encryption_flag = true
+#else
+let encryption_flag = false
+*)
 let compression_flag = false
 let encryption_flag = false
 let signature_flag = true (* FBR: doing this one *)
