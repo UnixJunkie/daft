@@ -252,7 +252,9 @@ let main () =
                   | (_node, Some to_ds_i) ->
                     Socket.send to_ds_i
                       (DS_to_DS (Chunk (fn, chunk_id, is_last, chunk_data)))
-                  | (_, None) -> assert(false)
+                  | (_, None) -> 
+		    Log.debug "%d rang demande %d" (Node.get_rank !local_node) ds_rank ;
+		    assert(false)
                 end
               with Not_found ->
                 Log.error "no such chunk: fn: %s id: %d" fn chunk_id
@@ -352,7 +354,24 @@ let main () =
             | Fetch_file_cmd_nack (fn, err) ->
               Socket.send to_cli
                 (DS_to_CLI (Fetch_file_cmd_nack (fn, err)))
+            | Bcast_file_ack ->
+	      failwith "Bcast_file_ack" 
           end
+        | CLI_to_DS (Bcast_file_cmd_req fn) ->
+          Log.debug "got Bcast_file_cmd_req"; (* FBR will factor the code *)
+          let res = add_file fn in
+          begin match res with
+            | Fetch_file_cmd_ack fn ->
+	      (* here starts the true business of the broadcast *)
+              let bcast_file_req = Bcast_file_req (!ds_rank, fn) in
+	      Socket.send to_mds ( DS_to_MDS bcast_file_req );
+              Socket.send to_cli ( DS_to_CLI Bcast_file_ack )
+            | Fetch_file_cmd_nack  (fn, err) ->
+              Socket.send to_cli
+                (DS_to_CLI (Fetch_file_cmd_nack (fn, err)))
+            | Bcast_file_ack ->
+	      failwith "Bcast_file_ack" 
+	  end
         | CLI_to_DS (Fetch_file_cmd_req (fn, Remote)) ->
           Log.debug "got Fetch_file_cmd_req:Remote";
           (* finish quickly in case file is already present locally *)
@@ -366,6 +385,8 @@ let main () =
         | CLI_to_DS (Extract_file_cmd_req (src_fn, dst_fn)) ->
           let res = extract_file src_fn dst_fn in
           Socket.send to_cli (DS_to_CLI res)
+	| DS_to_DS ( Bcast_chunk (_, _, _, _, _) ) -> 
+	  failwith "DS to DS chunk movements not implemented yet. Coming soon, stay tuned!"
       end
     done;
     raise Types.Loop_end;

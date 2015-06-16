@@ -29,6 +29,53 @@ let abort msg =
   Log.fatal "%s" msg;
   exit 1
 
+let fetch_mds fn ds_rank int2node to_cli=
+  begin
+    try
+      let file = FileSet.find_fn fn !global_state in
+      let chunks = Types.File.get_chunks file in
+             (* FBR: code logic needs to moved into File 
+                File.get_rand_sources will send a list of (chunk_rank, src_node) *)
+             (* randomized algorithm: for each chunk we ask a randomly selected
+                chunk source to send the chunk to destination *)
+      Array.iter (fun chunk ->
+        if Utils.out_of_bounds ds_rank int2node then
+          Log.error "Fetch_cmd_req: fn: %s invalid ds_rank: %d"
+            fn ds_rank
+        else
+          let selected_src_node = Chunk.select_source_rand chunk in
+          let chosen = Node.get_rank selected_src_node in
+          begin match int2node.(chosen) with
+          | (_node, Some to_ds_i) ->
+            let chunk_id = Chunk.get_id chunk in
+            let is_last = File.is_last_chunk chunk file in
+            let send_order =
+              MDS_to_DS
+                (Send_to_req (ds_rank, fn, chunk_id, is_last))
+            in
+            Socket.send to_ds_i send_order
+          | (_, None) -> assert(false)
+          end
+      ) chunks
+    with Not_found ->
+      match to_cli with
+      | None -> ()
+      | Some sock ->
+      (* this assumes there is a single CLI; might be wrong in future *)
+	Socket.send  sock (MDS_to_CLI (Fetch_cmd_nack fn))
+  end
+    
+(* better done with only one MDS -> local DS communication *)
+let bcast_mds (fn: Types.filename) root int2node =
+  Log.debug "coucou, tu veux voir mes bits ?";
+  Array.iteri ( fun i _ -> 
+    if i <> root then
+      begin
+	Log.debug "Envoi a DS %d" i;
+	fetch_mds fn i int2node None
+      end
+  ) int2node
+
 let main () =
   (* setup logger *)
   Logger.set_log_level Logger.DEBUG;
@@ -128,44 +175,15 @@ let main () =
              Log.error "Chunk_ack: unknown file: %s chunk_id: %d"
                fn chunk_id
          end
+       | DS_to_MDS (Fetch_file_req (ds_rank, fn)) ->
+	 Log.debug "got Fetch_file_req";
+	 fetch_mds fn ds_rank int2node ( Some to_cli )
+       | DS_to_MDS (Bcast_file_req (ds_rank, fn)) ->
+	 bcast_mds fn ds_rank int2node
        | CLI_to_MDS Ls_cmd_req ->
          Log.debug "got Ls_cmd_req";
          Socket.send to_cli
            (MDS_to_CLI (Ls_cmd_ack !global_state))
-       | DS_to_MDS (Fetch_file_req (ds_rank, fn)) ->
-         begin
-           Log.debug "got Fetch_cmd_req";
-           try
-             let file = FileSet.find_fn fn !global_state in
-             let chunks = Types.File.get_chunks file in
-             (* FBR: code logic needs to moved into File 
-                File.get_rand_sources will send a list of (chunk_rank, src_node) *)
-             (* randomized algorithm: for each chunk we ask a randomly selected
-                chunk source to send the chunk to destination *)
-             Array.iter (fun chunk ->
-                 if Utils.out_of_bounds ds_rank int2node then
-                   Log.error "Fetch_cmd_req: fn: %s invalid ds_rank: %d"
-                     fn ds_rank
-                 else
-                   let selected_src_node = Chunk.select_source_rand chunk in
-                   let chosen = Node.get_rank selected_src_node in
-                   begin match int2node.(chosen) with
-                     | (_node, Some to_ds_i) ->
-                       let chunk_id = Chunk.get_id chunk in
-                       let is_last = File.is_last_chunk chunk file in
-                       let send_order =
-                         MDS_to_DS
-                           (Send_to_req (ds_rank, fn, chunk_id, is_last))
-                       in
-                       Socket.send to_ds_i send_order
-                     | (_, None) -> assert(false)
-                   end
-               ) chunks
-           with Not_found ->
-             (* this assumes there is a single CLI; might be wrong in future *)
-             Socket.send to_cli
-               (MDS_to_CLI (Fetch_cmd_nack fn))
-         end
        | CLI_to_MDS Quit_cmd ->
          Log.debug "got Quit_cmd";
          let _ = Log.info "got Quit" in

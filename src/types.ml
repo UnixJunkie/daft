@@ -311,6 +311,7 @@ module Protocol = struct
     | Join_push of Node.t (* a DS registering itself with the MDS *)
     | Chunk_ack of filename * chunk_id * ds_rank
     | Add_file_req of ds_rank * File.t
+    | Bcast_file_req of ds_rank * filename
     | Fetch_file_req of ds_rank * filename
 
   type mds_to_ds =
@@ -320,7 +321,8 @@ module Protocol = struct
     | Quit_cmd
 
   type ds_to_ds =
-    | Chunk of filename * chunk_id * is_last * chunk_data
+    | Chunk of filename * chunk_id * is_last * chunk_data 
+    | Bcast_chunk of filename * chunk_id * is_last * chunk_data * ds_rank  (* ds_rank is the root of the broadcast *)
 
   type cli_to_mds =
     | Ls_cmd_req
@@ -335,12 +337,14 @@ module Protocol = struct
   type cli_to_ds =
     | Fetch_file_cmd_req of filename * file_loc
     | Extract_file_cmd_req of filename * filename
+    | Bcast_file_cmd_req of filename
 
   type error = Already_here | Is_directory | Copy_failed | No_such_file
 
   type ds_to_cli =
     | Fetch_file_cmd_ack of filename
     | Fetch_file_cmd_nack of filename * error
+    | Bcast_file_ack
 
   (* restrictive views of all possible messages *)
   type to_cli =
