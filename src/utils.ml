@@ -157,6 +157,17 @@ let parse_machine_file (fn: string): Node.t list =
     );
   L.rev !res
 
+exception Found of int
+
+let get_ds_rank (host: string) (port: int) (nodes: Node.t list): int =
+  try
+    List.iter (fun n ->
+        if Node.get_host n = host && Node.get_port n = port then
+          raise (Found (Node.get_rank n))
+      ) nodes;
+    failwith (sprintf "get_ds_rank: no such ds: %s:%d" host port)
+  with Found i -> i
+
 let data_nodes_array (fn: string) =
   let machines = parse_machine_file fn in
   let len = L.length machines in
