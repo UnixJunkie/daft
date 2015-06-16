@@ -9,9 +9,9 @@ let encryption_flag = true
 #else
 let encryption_flag = false
 *)
-let compression_flag = true
+let compression_flag = false
 let encryption_flag = false
-let signature_flag = true
+let signature_flag = false
 
 (* FBR: constant default keys for the moment
    in the future they will be asked interactively to the user at runtime *)
