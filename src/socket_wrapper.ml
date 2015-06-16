@@ -46,33 +46,36 @@ let check_sign (msg: string): string =
   assert(curr_sign = prev_sign);
   String.sub msg 20 m
 
+(* full pipeline: compress then sign then encrypt *)
 let encode (m: 'a): string =
-  let to_send =
-    let tmp = Marshal.to_string m [Marshal.No_sharing] in
-    if signature_flag then 
-      let before_size = float_of_int (String.length tmp) in
-      let res = sign tmp in
-      let after_size = float_of_int (String.length res) in
-      Log.debug "s ratio: %.2f" (after_size /. before_size);
+  let to_send = Marshal.to_string m [Marshal.No_sharing] in
+  let tmp =
+    if compression_flag then
+      let before = float_of_int (String.length to_send) in
+      let res = compress to_send in
+      let after = float_of_int (String.length res) in
+      Log.debug "z ratio: %.2f" (after /. before);
       res
-    else tmp
+    else
+      to_send
   in
-  let before_size = float_of_int (String.length to_send) in
-  if compression_flag then
-    let res = compress to_send in
-    let after_size = float_of_int (String.length res) in
-    Log.debug "z ratio: %.2f" (after_size /. before_size);
+  if signature_flag then
+    let before = float_of_int (String.length tmp) in
+    let res = sign tmp in
+    let after = float_of_int (String.length res) in
+    Log.debug "s ratio: %.2f" (after /. before);
     res
   else
-    to_send
+    tmp
 
+(* full pipeline: decrypt then check signature then uncompress *)
 let decode (s: string): 'a =
+  let tmp =
+    if signature_flag then check_sign s
+    else s
+  in
   let received =
-    let tmp =
-      if compression_flag then uncompress s
-      else s
-    in
-    if signature_flag then check_sign tmp
+    if compression_flag then uncompress tmp
     else tmp
   in
   Marshal.from_string received 0
