@@ -13,6 +13,17 @@ let compression_flag = false
 let encryption_flag = false
 let signature_flag = true (* FBR: doing this one *)
 
+(* msg --> signature|msg ; length(signature) = 20B = 160bits *)
+let sign (key: string) (msg: string): string =
+  assert(String.length key >= 20);
+  let signing_object =
+    Cryptokit.MAC.hmac_ripemd160 key
+  in
+  signing_object#add_string msg;
+  let signature = signing_object#result in
+  assert(String.length signature = 20);
+  signature ^ msg
+
 let encode (m: 'a): string =
   let to_send = Marshal.to_string m [Marshal.No_sharing] in
   let before_size = float_of_int (String.length to_send) in
