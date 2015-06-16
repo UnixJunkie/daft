@@ -11,21 +11,49 @@ let encryption_flag = false
 *)
 let compression_flag = false
 let encryption_flag = false
-let signature_flag = true (* FBR: doing this one *)
+let signature_flag = true
 
-(* msg --> signature|msg ; length(signature) = 20B = 160bits *)
-let sign (key: string) (msg: string): string =
-  assert(String.length key >= 20);
+(* FBR: constant default keys for the moment
+   in the future they will be asked interactively to the user at runtime *)
+let signing_key = "please_sign_this"
+let encryption_key = "please_crypt_this"
+
+(* prefix the message with its signature
+   msg --> signature|msg ; length(signature) = 20B = 160bits *)
+let sign (msg: string): string =
   let signing_object =
-    Cryptokit.MAC.hmac_ripemd160 key
+    assert(String.length signing_key >= 20);
+    Cryptokit.MAC.hmac_ripemd160 signing_key
   in
   signing_object#add_string msg;
   let signature = signing_object#result in
   assert(String.length signature = 20);
   signature ^ msg
 
+(* return the message without the prefix signature or fail
+   if the signature is incorrect or anything strange was detectedd *)
+let check_sign (msg: string): string =
+  let n = String.length msg in
+  assert(n > 20); (* messages are not supposed to be empty *)
+  let m = n - 20 in
+  let prev_sign = String.sub msg 0 20 in
+  let signing_object =
+    assert(String.length signing_key >= 20);
+    Cryptokit.MAC.hmac_ripemd160 signing_key
+  in
+  signing_object#add_substring msg 20 m;
+  let curr_sign = signing_object#result in
+  assert(curr_sign = prev_sign);
+  String.sub msg 20 m
+
 let encode (m: 'a): string =
-  let to_send = Marshal.to_string m [Marshal.No_sharing] in
+  let to_send =
+    let tmp = Marshal.to_string m [Marshal.No_sharing] in
+    if signature_flag then
+      sign tmp
+    else
+      tmp
+  in
   let before_size = float_of_int (String.length to_send) in
   if compression_flag then
     let res = compress to_send in
