@@ -24,6 +24,7 @@ let mds_port_in = ref uninitialized
 let cli_port_in = ref Utils.default_cli_port_in
 let single_command = ref ""
 let interactive = ref false
+let machine_file = ref ""
 
 let abort msg =
   Log.fatal "%s" msg;
@@ -142,6 +143,8 @@ let main () =
       "-c", Arg.Set_string single_command,
       "'command' execute a single command; use quotes if several words";
       "-cli", Arg.Set_int cli_port_in, "<port> where the CLI is listening";
+      "-m", Arg.Set_string machine_file,
+      "machine_file list of [user@]host:port (one per line)";
       "-mds", Arg.String (Utils.set_host_port mds_host mds_port_in),
       "<host:port> MDS";
       "-ds", Arg.String (Utils.set_host_port ds_host ds_port_in),
@@ -167,6 +170,9 @@ let main () =
         Utils.set_host_port ds_host ds_port_in daft_ds_env_var
     end;
   assert(!ds_host <> "" && !ds_port_in <> uninitialized);
+  if !machine_file = "" then abort "-m is mandatory";
+  let nodes = Utils.parse_machine_file !machine_file in
+  let local_ds_rank = Utils.get_ds_rank !ds_host !ds_port_in nodes in
   let ctx = ZMQ.Context.create () in
   let for_MDS = Utils.(zmq_socket Push ctx !mds_host !mds_port_in) in
   Log.info "Client of MDS %s:%d" !mds_host !mds_port_in;
