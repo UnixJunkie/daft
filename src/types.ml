@@ -311,7 +311,7 @@ module Protocol = struct
     | Join_push of Node.t (* a DS registering itself with the MDS *)
     | Chunk_ack of filename * chunk_id * ds_rank
     | Add_file_req of ds_rank * File.t
-    | Bcast_file_req of ds_rank * filename
+    | Bcast_file_req of ds_rank * File.t
     | Fetch_file_req of ds_rank * filename
 
   type mds_to_ds =
