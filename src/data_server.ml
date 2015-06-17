@@ -363,8 +363,10 @@ let main () =
           begin match res with
             | Fetch_file_cmd_ack fn ->
 	      (* here starts the true business of the broadcast *)
-              let bcast_file_req = Bcast_file_req (!ds_rank, fn) in
+              let file = FileSet.find_fn fn !local_state in
+              let bcast_file_req = Bcast_file_req (!ds_rank, file) in
 	      Socket.send to_mds ( DS_to_MDS bcast_file_req );
+              (* unlock the CLI *)
               Socket.send to_cli ( DS_to_CLI Bcast_file_ack )
             | Fetch_file_cmd_nack  (fn, err) ->
               Socket.send to_cli
