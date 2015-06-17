@@ -4,14 +4,43 @@
 open Types.Protocol
 
 (* FBR: one day, position those flags with (cppo) preprocessor directives; e.g.
-#ifndef DAFT_NO_CRYPT
-let encryption_flag = true
-#else
+#ifdef NO_CRYPTO
 let encryption_flag = false
+#else
+let encryption_flag = true
 *)
 let compression_flag = false
 let encryption_flag = false
 let signature_flag = false
+
+module Buffer = struct
+  type t = { data:           string ;
+             mutable offset: int    ;
+             mutable length: int    }
+  let create data =
+    { data; offset = 0; length = String.length data }
+  let set_offset buff new_offset =
+    let prev_offset = buff.offset in
+    let delta = new_offset - prev_offset in
+    buff.offset <- new_offset;
+    buff.length <- buff.length + delta
+end
+
+let maybe_do cond f x =
+  if cond then f x
+  else x
+
+let chain f = function
+  | None -> None
+  | Some x -> Some (f x)
+
+let compress (s: string): string =
+  LZ4.Bytes.compress (Bytes.of_string s)
+
+let uncompress (s: string): string =
+  (* this allocates a fresh buffer each time, I notified the author
+     of the bindings *)
+  LZ4.Bytes.decompress ~length:1_572_864 (Bytes.of_string s)
 
 (* FBR: constant default keys for the moment
    in the future they will be asked interactively to the user at runtime *)
