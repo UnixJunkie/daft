@@ -344,14 +344,6 @@ module Protocol = struct
 
   (* FBR: add to_string for all messages ??? *)
 
-  let compress (s: string): string =
-    LZ4.Bytes.compress (Bytes.of_string s)
-
-  let uncompress (s: string): string =
-    (* this allocates a fresh buffer each time, I notified the author
-       of the bindings *)
-    LZ4.Bytes.decompress ~length:1_572_864 (Bytes.of_string s)
-
   let string_of_error = function
     | Already_here -> "already here"
     | Is_directory -> "directory"
