@@ -26,9 +26,9 @@ module Buffer = struct
     buff.length <- buff.length + delta
 end
 
-let maybe_do cond f x =
+let may_do cond f x default =
   if cond then f x
-  else x
+  else default
 
 let chain f = function
   | None -> None
@@ -38,12 +38,12 @@ let compress (s: string): string =
   LZ4.Bytes.compress (Bytes.of_string s)
 
 let uncompress (s: string): string =
-  (* this allocates a fresh buffer each time, I notified the author
-     of the bindings *)
+  (* WARNING: this allocates a fresh buffer each time *)
   LZ4.Bytes.decompress ~length:1_572_864 (Bytes.of_string s)
 
 (* FBR: constant default keys for the moment
-   in the future they will be asked interactively to the user at runtime *)
+        in the future they will be asked interactively
+        to the user at runtime *)
 let signing_key = "please_sign_this0123456789"
 let encryption_key = "please_crypt_this0123456789"
 
@@ -61,19 +61,21 @@ let sign (msg: string): string =
 
 (* return the message without the prefix signature or fail
    if the signature is incorrect or anything strange was detectedd *)
-let check_sign (msg: string): string =
+let check_sign (msg: string): string option =
+  (* FBR: use Buffer in here *)
   let n = String.length msg in
-  assert(n > 20); (* messages are not supposed to be empty *)
-  let m = n - 20 in
-  let prev_sign = String.sub msg 0 20 in
-  let signing_object =
-    assert(String.length signing_key >= 20);
-    Cryptokit.MAC.hmac_ripemd160 signing_key
-  in
-  signing_object#add_substring msg 20 m;
-  let curr_sign = signing_object#result in
-  assert(curr_sign = prev_sign);
-  String.sub msg 20 m
+  if n <= 20 then None (* messages are not supposed to be empty *)
+  else
+    let m = n - 20 in
+    let prev_sign = String.sub msg 0 20 in
+    let signing_object =
+      assert(String.length signing_key >= 20);
+      Cryptokit.MAC.hmac_ripemd160 signing_key
+    in
+    signing_object#add_substring msg 20 m;
+    let curr_sign = signing_object#result in
+    if curr_sign = prev_sign then Some (String.sub msg 20 m) (* FBR: copy *)
+    else None
 
 (* FBR: TODO: full pipeline *)
 (* full pipeline: compress then salt then encrypt then sign *)
@@ -101,15 +103,9 @@ let encode (m: 'a): string =
 (* FBR: TODO: full pipeline *)
 (* full pipeline: check signature then decrypt then remove salt then uncompress *)
 let decode (s: string): 'a option =
-  let tmp =
-    if signature_flag then check_sign s
-    else s
-  in
-  let received =
-    if compression_flag then uncompress tmp
-    else tmp
-  in
-  Marshal.from_string received 0
+  let maybe_signed = may_do signature_flag check_sign s (Some s) in
+  let message = may_do compression_flag (chain uncompress) maybe_signed maybe_signed in
+  chain (fun x -> Marshal.from_string x 0) message
 
 module CLI_socket = struct
 
