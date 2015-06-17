@@ -82,23 +82,23 @@ let check_sign (msg: string): string option =
 let encode (m: 'a): string =
   let to_send = Marshal.to_string m [Marshal.No_sharing] in
   let tmp =
-    if compression_flag then
-      let before = float_of_int (String.length to_send) in
-      let res = compress to_send in
-      let after = float_of_int (String.length res) in
-      Log.debug "z ratio: %.2f" (after /. before);
-      res
-    else
-      to_send
+    may_do compression_flag
+      (fun to_send ->
+         let before = float_of_int (String.length to_send) in
+         let res = compress to_send in
+         let after = float_of_int (String.length res) in
+         Log.debug "z ratio: %.2f" (after /. before);
+         res
+      ) to_send to_send
   in
-  if signature_flag then
-    let before = float_of_int (String.length tmp) in
-    let res = sign tmp in
-    let after = float_of_int (String.length res) in
-    Log.debug "s ratio: %.2f" (after /. before);
-    res
-  else
-    tmp
+  may_do signature_flag
+    (fun tmp ->
+       let before = float_of_int (String.length tmp) in
+       let res = sign tmp in
+       let after = float_of_int (String.length res) in
+       Log.debug "s ratio: %.2f" (after /. before);
+       res
+    ) tmp tmp
 
 (* FBR: TODO: full pipeline *)
 (* full pipeline: check signature then decrypt then remove salt then uncompress *)
