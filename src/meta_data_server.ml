@@ -118,7 +118,7 @@ let main () =
       let message' = Socket.receive incoming in
       Log.debug "got msg";
       match message' with
-      | None -> ()
+      | None -> Log.warn "junk"
       | Some message ->
         match message with
         | DS_to_MDS (Join_push ds) ->

@@ -39,32 +39,35 @@ let getenv_or_fail variable_name =
     Log.error "getenv_or_fail: Sys.getenv: %s" variable_name;
     ""
 
-let process_answer incoming continuation =
+let process_answer incoming continuation: unit =
   Log.debug "waiting msg";
-  let message = Socket.receive incoming in
+  let message' = Socket.receive incoming in
   Log.debug "got msg";
-  match message with
-  | MDS_to_CLI (Ls_cmd_ack f) ->
-    Log.debug "got Ls_cmd_ack";
-    let listing = FileSet.to_string f in
-    Log.info "\n%s" listing
-  | MDS_to_CLI (Fetch_cmd_nack fn) ->
-    Log.debug "got Fetch_cmd_nack";
-    Log.error "no such file: %s" fn
-  | DS_to_CLI (Fetch_file_cmd_ack fn) ->
-    begin
-      Log.debug "got Fetch_file_cmd_ack";
-      Log.info "%s: OK" fn;
-      continuation ()
-    end
-  | DS_to_CLI Bcast_file_ack ->
-    begin
-      Log.debug "got Bcast_file_ack";
-      continuation ()
-    end
-  | DS_to_CLI (Fetch_file_cmd_nack (fn, err)) ->
-    Log.debug "got Fetch_file_cmd_nack";
-    Log.error "%s: %s" fn (string_of_error err)
+  match message' with
+  | None -> Log.warn "junk"
+  | Some message ->
+    match message with
+    | MDS_to_CLI (Ls_cmd_ack f) ->
+      Log.debug "got Ls_cmd_ack";
+      let listing = FileSet.to_string f in
+      Log.info "\n%s" listing
+    | MDS_to_CLI (Fetch_cmd_nack fn) ->
+      Log.debug "got Fetch_cmd_nack";
+      Log.error "no such file: %s" fn
+    | DS_to_CLI (Fetch_file_cmd_ack fn) ->
+      begin
+        Log.debug "got Fetch_file_cmd_ack";
+        Log.info "%s: OK" fn;
+        continuation ()
+      end
+    | DS_to_CLI Bcast_file_ack ->
+      begin
+        Log.debug "got Bcast_file_ack";
+        continuation ()
+      end
+    | DS_to_CLI (Fetch_file_cmd_nack (fn, err)) ->
+      Log.debug "got Fetch_file_cmd_nack";
+      Log.error "%s: %s" fn (string_of_error err)
 
 let get_one: 'a list -> 'a option = function
   | [x] -> Some x

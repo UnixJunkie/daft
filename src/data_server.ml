@@ -217,7 +217,7 @@ let main () =
     while !not_finished do
       let message' = Socket.receive incoming in
       match message' with
-      | None -> ()
+      | None -> Log.warn "junk"
       | Some message ->
         match message with
         | MDS_to_DS (Send_to_req (ds_rank, fn, chunk_id, is_last)) ->
