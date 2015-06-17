@@ -75,7 +75,8 @@ let check_sign (msg: string): string =
   assert(curr_sign = prev_sign);
   String.sub msg 20 m
 
-(* full pipeline: compress then sign then encrypt *)
+(* FBR: TODO: full pipeline *)
+(* full pipeline: compress then salt then encrypt then sign *)
 let encode (m: 'a): string =
   let to_send = Marshal.to_string m [Marshal.No_sharing] in
   let tmp =
@@ -97,8 +98,9 @@ let encode (m: 'a): string =
   else
     tmp
 
-(* full pipeline: decrypt then check signature then uncompress *)
-let decode (s: string): 'a =
+(* FBR: TODO: full pipeline *)
+(* full pipeline: check signature then decrypt then remove salt then uncompress *)
+let decode (s: string): 'a option =
   let tmp =
     if signature_flag then check_sign s
     else s
@@ -126,7 +128,7 @@ module CLI_socket = struct
     in
     ZMQ.Socket.send sock (translate_type m)
 
-  let receive (sock: [> `Pull] ZMQ.Socket.t): to_cli =
+  let receive (sock: [> `Pull] ZMQ.Socket.t): to_cli option =
     decode (ZMQ.Socket.recv sock)
 
 end
@@ -146,7 +148,7 @@ module MDS_socket = struct
     in
     ZMQ.Socket.send sock (translate_type m)
 
-  let receive (sock: [> `Pull] ZMQ.Socket.t): to_mds =
+  let receive (sock: [> `Pull] ZMQ.Socket.t): to_mds option =
     decode (ZMQ.Socket.recv sock)
 
 end
@@ -169,7 +171,7 @@ module DS_socket = struct
     in
     ZMQ.Socket.send sock (translate_type m)
 
-  let receive (sock: [> `Pull] ZMQ.Socket.t): to_ds =
+  let receive (sock: [> `Pull] ZMQ.Socket.t): to_ds option =
     decode (ZMQ.Socket.recv sock)
 
 end

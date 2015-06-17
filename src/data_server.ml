@@ -215,8 +215,11 @@ let main () =
   try (* loop on messages until quit command *)
     let not_finished = ref true in
     while !not_finished do
-      let message = Socket.receive incoming in
-      begin match message with
+      let message' = Socket.receive incoming in
+      match message' with
+      | None -> ()
+      | Some message ->
+        match message with
         | MDS_to_DS (Send_to_req (ds_rank, fn, chunk_id, is_last)) ->
           begin
             Log.debug "got Send_to_req";
@@ -388,7 +391,6 @@ let main () =
           Socket.send to_cli (DS_to_CLI res)
 	| DS_to_DS ( Bcast_chunk (_, _, _, _, _) ) -> 
 	  failwith "DS to DS chunk movements not implemented yet. Coming soon, stay tuned!"
-      end
     done;
     raise Types.Loop_end;
   with exn -> begin
