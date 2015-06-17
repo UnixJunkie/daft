@@ -20,10 +20,11 @@ module Buffer = struct
   let create data =
     { data; offset = 0; length = String.length data }
   let set_offset buff new_offset =
-    let prev_offset = buff.offset in
-    let delta = new_offset - prev_offset in
+    assert(buff.offset = 0); (* don't move the offset, just set it *)
     buff.offset <- new_offset;
-    buff.length <- buff.length + delta
+    buff.length <- buff.length - new_offset
+  let to_string buff =
+    String.sub buff.data buff.offset buff.length
 end
 
 let may_do cond f x default =
@@ -37,9 +38,10 @@ let chain f = function
 let compress (s: string): string =
   LZ4.Bytes.compress (Bytes.of_string s)
 
-let uncompress (s: string): string =
-  (* WARNING: this allocates a fresh buffer each time *)
-  LZ4.Bytes.decompress ~length:1_572_864 (Bytes.of_string s)
+let uncompress (s: Buffer.t): string =
+  (* WARNING: data copy *)
+  (* FBR: use a BigArray as a buffer if LZ4 can *)
+  LZ4.Bytes.decompress ~length:1_572_864 (Buffer.to_string s)
 
 (* FBR: constant default keys for the moment
         in the future they will be asked interactively
@@ -59,23 +61,31 @@ let sign (msg: string): string =
   assert(String.length signature = 20);
   signature ^ msg
 
-(* return the message without the prefix signature or fail
-   if the signature is incorrect or anything strange was detectedd *)
-let check_sign (msg: string): string option =
-  (* FBR: use Buffer in here *)
-  let n = String.length msg in
-  if n <= 20 then None (* messages are not supposed to be empty *)
+(* optionally return the message without its prefix signature or None
+   if the signature is incorrect or anything strange was found *)
+let check_sign (msg: string): Buffer.t option =
+  let res = Buffer.create msg in
+  let n = Buffer.(res.length) in
+  if n <= 20 then
+    begin
+      Log.error "check_sign: message too short: %d" n;
+      None
+    end
   else
-    let m = n - 20 in
     let prev_sign = String.sub msg 0 20 in
     let signing_object =
       assert(String.length signing_key >= 20);
       Cryptokit.MAC.hmac_ripemd160 signing_key
     in
-    signing_object#add_substring msg 20 m;
+    signing_object#add_substring msg 20 (n - 20);
     let curr_sign = signing_object#result in
-    if curr_sign = prev_sign then Some (String.sub msg 20 m) (* FBR: copy *)
-    else None
+    if curr_sign <> prev_sign then begin
+      Log.error "check_sign: bad signature";
+      None
+    end else begin
+      Buffer.set_offset res 20;
+      Some res
+    end
 
 (* FBR: TODO: full pipeline *)
 (* full pipeline: compress then salt then encrypt then sign *)
@@ -92,9 +102,9 @@ let encode (m: 'a): string =
       ) to_send to_send
   in
   may_do signature_flag
-    (fun tmp ->
-       let before = float_of_int (String.length tmp) in
-       let res = sign tmp in
+    (fun x ->
+       let before = float_of_int (String.length x) in
+       let res = sign x in
        let after = float_of_int (String.length res) in
        Log.debug "s ratio: %.2f" (after /. before);
        res
@@ -103,8 +113,11 @@ let encode (m: 'a): string =
 (* FBR: TODO: full pipeline *)
 (* full pipeline: check signature then decrypt then remove salt then uncompress *)
 let decode (s: string): 'a option =
-  let maybe_signed = may_do signature_flag check_sign s (Some s) in
-  let message = may_do compression_flag (chain uncompress) maybe_signed maybe_signed in
+  let maybe_signed = may_do signature_flag check_sign s (Some (Buffer.create s)) in
+  let message =
+    may_do compression_flag (chain uncompress)
+      maybe_signed (chain Buffer.to_string maybe_signed)
+  in
   chain (fun x -> Marshal.from_string x 0) message
 
 module CLI_socket = struct
