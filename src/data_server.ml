@@ -15,7 +15,7 @@ module Node = Types.Node
 module File = Types.File
 module FileSet = Types.FileSet
 module Chunk = File.Chunk
-module ChunksArray = File.ChunksArray
+module ChunkSet = File.ChunkSet
 module Socket = Socket_wrapper.DS_socket
 
 let count_char (c: char) (s: string): int =
@@ -129,7 +129,7 @@ let add_file (fn: string): ds_to_cli =
             let all_chunks =
               File.all_chunks nb_chunks last_chunk_size !local_node
             in
-            let new_file = File.create_complete_file fn size nb_chunks all_chunks in
+            let new_file = File.create fn size nb_chunks all_chunks in
             local_state := FileSet.add new_file !local_state;
             Fetch_file_cmd_ack fn
           end)
@@ -309,13 +309,12 @@ let main () =
                 with Not_found -> (* or create it *)
                   let unknown_size = Int64.of_int (-1) in
                   let unknown_total_chunks = -1 in
-                  File.start_file
-                    fn unknown_size unknown_total_chunks ChunksArray.empty
+                  File.create
+                    fn unknown_size unknown_total_chunks ChunkSet.empty
               in
               let curr_chunk =
                 File.Chunk.create chunk_id curr_chunk_size !local_node
               in
-              File.add_chunk file curr_chunk;
               (* only once we receive the last chunk can we finalize the file's
                  description in local_state *)
               let new_file =
@@ -323,9 +322,9 @@ let main () =
                   let full_size = Int64.(of_int offset + size64) in
                   let total_chunks = chunk_id + 1 in
                   let chunks = File.get_chunks file in
-                  File.create_complete_file fn full_size total_chunks chunks
+                  File.create fn full_size total_chunks chunks
                 else
-                  file
+                  File.add_chunk file curr_chunk;
               in
               local_state := FileSet.update new_file !local_state;
               (* 3) notify MDS *)
@@ -335,7 +334,7 @@ let main () =
                     and fix file perms in the local datastore *)
               let curr_chunks = File.get_chunks new_file in
               let nb_chunks = File.get_nb_chunks new_file in
-              if Array.length curr_chunks = nb_chunks then (
+              if ChunkSet.cardinal curr_chunks = nb_chunks then (
                 Unix.chmod local_file 0o400;
                 Socket.send to_cli
                   (DS_to_CLI (Fetch_file_cmd_ack fn))
