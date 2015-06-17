@@ -66,13 +66,18 @@ let fetch_mds fn ds_rank int2node to_cli=
   end
     
 (* better done with only one MDS -> local DS communication *)
-let bcast_mds f root int2node =
-  Log.debug "coucou, tu veux voir mes bits ?";
+let bcast_mds (f: File.t) root int2node =
+  Log.debug "got Bcast_file_req";
+  let fn = File.(f.name) in
+  if FileSet.contains_fn fn !global_state then
+    Log.warn "bcast_mds: file already added: %s" fn
+  else
+    global_state := FileSet.add f !global_state;
   Array.iteri ( fun i _ -> 
     if i <> root then
       begin
 	Log.debug "Envoi a DS %d" i;
-	fetch_mds Types.(f.name) i int2node None
+	fetch_mds fn i int2node None
       end
   ) int2node
 
