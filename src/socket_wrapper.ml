@@ -3,9 +3,6 @@
 
 open Types.Protocol
 
-module Crypto = Cryptokit.Cipher
-module Padd = Cryptokit.Padding
-
 (* FBR: one day, position those flags with (cppo) preprocessor directives; e.g.
 #ifdef NO_CRYPTO
 let encryption_flag = false
@@ -45,8 +42,8 @@ let uncompress (s: string option): string option =
 (* FBR: constant default keys for the moment
         in the future they will be asked interactively
         to the user at runtime *)
-let signing_key    = "362168746216876549684321684"
-let encryption_key = "651987216846519865465468465"
+let signing_key    = "sadkl;vjawfgipabvaskd;jf"
+let encryption_key = "asdfasdhfklarjbvfawejkna"
 
 let create_signer () =
   assert(String.length signing_key >= 20);
@@ -82,24 +79,28 @@ let check_sign (s: string option): string option =
       else
         Some (String.sub msg 20 m)
 
-let encrypt_or_decrypt mode =
-  assert(String.length encryption_key >= 16); (* 16B = 128bits *)
-  assert(encryption_key <> signing_key);
-  Crypto.blowfish
-    ~mode:Crypto.CBC ~pad:Padd.length encryption_key mode
-
-let enigma = encrypt_or_decrypt Crypto.Encrypt
-let turing = encrypt_or_decrypt Crypto.Decrypt
-
 let encrypt (msg: string): string =
-  enigma#put_string msg;
-  enigma#get_string
+  let enc =
+    new Cryptokit.Block.cipher_padded_encrypt Cryptokit.Padding.length
+      (new Cryptokit.Block.cbc_encrypt
+        (new Cryptokit.Block.blowfish_encrypt encryption_key))
+  in
+  enc#put_string msg;
+  enc#finish;
+  enc#get_string
 
-let decrypt = function
+let decrypt (s: string option): string option = 
+  match s with
   | None -> None
   | Some msg ->
-    turing#put_string msg;
-    Some (turing#get_string)
+    let dec =
+      new Cryptokit.Block.cipher_padded_decrypt Cryptokit.Padding.length
+        (new Cryptokit.Block.cbc_decrypt
+          (new Cryptokit.Block.blowfish_decrypt encryption_key))
+    in
+    dec#put_string msg;
+    dec#finish;
+    Some dec#get_string
 
 (* FBR: TODO: SALT *)
 (* full pipeline: compress --> salt --> encrypt --> sign *)
