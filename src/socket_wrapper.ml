@@ -52,7 +52,7 @@ let uncompress (s: Buffer.t): string =
 let signing_key    = "please_sign_this0123456789"
 let encryption_key = "please_crypt_this0123456789"
 
-let create_signing_object () =
+let create_signer () =
   assert(String.length signing_key >= 20);
   assert(encryption_key <> signing_key);
   Cryptokit.MAC.hmac_ripemd160 signing_key
@@ -64,7 +64,7 @@ let forget_first x y =
 (* prefix the message with its signature
    msg --> signature|msg ; length(signature) = 20B = 160bits *)
 let sign (msg: string): string =
-  let signer = create_signing_object () in
+  let signer = create_signer () in
   signer#add_string msg;
   let signature = signer#result in
   assert(String.length signature = 20);
@@ -79,7 +79,7 @@ let check_sign (msg: string): Buffer.t option =
     forget_first (Log.error "check_sign: message too short: %d" n) None
   else
     let prev_sign = String.sub msg 0 20 in
-    let signer = create_signing_object () in
+    let signer = create_signer () in
     signer#add_substring msg 20 (n - 20);
     let curr_sign = signer#result in
     if curr_sign <> prev_sign then
