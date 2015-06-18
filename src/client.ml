@@ -26,6 +26,8 @@ let single_command = ref ""
 let interactive = ref false
 let machine_file = ref ""
 
+(* FBR: pass the Log module around if that's possible *)
+
 let abort msg =
   Log.fatal "%s" msg;
   exit 1
