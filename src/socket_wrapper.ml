@@ -3,6 +3,9 @@
 
 open Types.Protocol
 
+module Crypto = Cryptokit.Block
+module Padd = Cryptokit.Padding
+
 (* FBR: one day, position those flags with (cppo) preprocessor directives; e.g.
 #ifdef NO_CRYPTO
 let encryption_flag = false
@@ -10,8 +13,8 @@ let encryption_flag = false
 let encryption_flag = true
 *)
 let compression_flag = false
-let encryption_flag = false
-let signature_flag = false
+let encryption_flag  = false
+let signature_flag   = false
 
 module Buffer = struct
   type t = { data:           string ;
@@ -46,7 +49,7 @@ let uncompress (s: Buffer.t): string =
 (* FBR: constant default keys for the moment
         in the future they will be asked interactively
         to the user at runtime *)
-let signing_key = "please_sign_this0123456789"
+let signing_key    = "please_sign_this0123456789"
 let encryption_key = "please_crypt_this0123456789"
 
 (* prefix the message with its signature
@@ -54,6 +57,7 @@ let encryption_key = "please_crypt_this0123456789"
 let sign (msg: string): string =
   let signing_object =
     assert(String.length signing_key >= 20);
+    assert(encryption_key <> signing_key);
     Cryptokit.MAC.hmac_ripemd160 signing_key
   in
   signing_object#add_string msg;
@@ -75,6 +79,7 @@ let check_sign (msg: string): Buffer.t option =
     let prev_sign = String.sub msg 0 20 in
     let signing_object =
       assert(String.length signing_key >= 20);
+      assert(encryption_key <> signing_key);
       Cryptokit.MAC.hmac_ripemd160 signing_key
     in
     signing_object#add_substring msg 20 (n - 20);
@@ -86,6 +91,17 @@ let check_sign (msg: string): Buffer.t option =
       Buffer.set_offset res 20;
       Some res
     end
+
+let encrypt_obj =
+  assert(String.length encryption_key >= 16); (* 16B = 128bits *)
+  assert(encryption_key <> signing_key);
+  new Crypto.cipher_padded_encrypt Padd._8000
+    (new Crypto.cbc_encrypt
+      (new Crypto.blowfish_encrypt encryption_key))
+
+let encrypt (msg: string): string =
+  encrypt_obj#put_string msg;
+  encrypt_obj#get_string
 
 (* FBR: TODO: full pipeline *)
 (* full pipeline: compress then salt then encrypt then sign *)
