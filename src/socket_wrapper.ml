@@ -3,7 +3,7 @@
 
 open Types.Protocol
 
-module Crypto = Cryptokit.Block
+module Crypto = Cryptokit.Cipher
 module Padd = Cryptokit.Padding
 
 (* FBR: one day, position those flags with (cppo) preprocessor directives; e.g.
@@ -14,11 +14,11 @@ let encryption_flag = true
 *)
 
 (* DAFT modes       z     c      s   *)
-let fast_mode    = (true, false, false)
-let regular_mode = (true, false, true )
-let parano_mode  = (true, true , true )
+let fast_mode    = (true ,false, false)
+let regular_mode = (true ,false, true )
+let parano_mode  = (true ,true , true )
 
-let compression_flag, encryption_flag, signature_flag = regular_mode
+let compression_flag, encryption_flag, signature_flag = fast_mode
 
 let may_do cond f x =
   if cond then f x else x
@@ -45,8 +45,8 @@ let uncompress (s: string option): string option =
 (* FBR: constant default keys for the moment
         in the future they will be asked interactively
         to the user at runtime *)
-let signing_key    = "please_sign_this0123456789"
-let encryption_key = "please_crypt_this0123456789"
+let signing_key    = "362168746216876549684321684"
+let encryption_key = "651987216846519865465468465"
 
 let create_signer () =
   assert(String.length signing_key >= 20);
@@ -82,19 +82,14 @@ let check_sign (s: string option): string option =
       else
         Some (String.sub msg 20 m)
 
-let enigma =
+let encrypt_or_decrypt mode =
   assert(String.length encryption_key >= 16); (* 16B = 128bits *)
   assert(encryption_key <> signing_key);
-  (new Crypto.cipher_padded_encrypt Padd.length
-    (new Crypto.cbc_encrypt
-      (new Crypto.blowfish_encrypt encryption_key)))
+  Crypto.blowfish
+    ~mode:Crypto.CBC ~pad:Padd.length encryption_key mode
 
-let turing =
-  assert(String.length encryption_key >= 16); (* 16B = 128bits *)
-  assert(encryption_key <> signing_key);
-  (new Crypto.cipher_padded_decrypt Padd.length
-    (new Crypto.cbc_decrypt
-      (new Crypto.blowfish_decrypt encryption_key)))
+let enigma = encrypt_or_decrypt Crypto.Encrypt
+let turing = encrypt_or_decrypt Crypto.Decrypt
 
 let encrypt (msg: string): string =
   enigma#put_string msg;
