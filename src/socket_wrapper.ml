@@ -94,9 +94,20 @@ let enigma =
     (new Crypto.cbc_encrypt
       (new Crypto.blowfish_encrypt encryption_key)))
 
+let turing =
+  assert(String.length encryption_key >= 16); (* 16B = 128bits *)
+  assert(encryption_key <> signing_key);
+  (new Crypto.cipher_padded_decrypt Padd._8000
+    (new Crypto.cbc_decrypt
+      (new Crypto.blowfish_decrypt encryption_key)))
+
 let encrypt (msg: string): string =
   enigma#put_string msg;
   enigma#get_string
+
+let decrypt (msg: string): string =
+  turing#put_string msg;
+  turing#get_string
 
 (* FBR: TODO: full pipeline *)
 (* full pipeline: compress then salt then encrypt then sign *)
