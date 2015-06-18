@@ -52,16 +52,21 @@ let uncompress (s: Buffer.t): string =
 let signing_key    = "please_sign_this0123456789"
 let encryption_key = "please_crypt_this0123456789"
 
+let create_signing_object () =
+  assert(String.length signing_key >= 20);
+  assert(encryption_key <> signing_key);
+  Cryptokit.MAC.hmac_ripemd160 signing_key
+
+let forget_first x y =
+  let _ = x in
+  y
+
 (* prefix the message with its signature
    msg --> signature|msg ; length(signature) = 20B = 160bits *)
 let sign (msg: string): string =
-  let signing_object =
-    assert(String.length signing_key >= 20);
-    assert(encryption_key <> signing_key);
-    Cryptokit.MAC.hmac_ripemd160 signing_key
-  in
-  signing_object#add_string msg;
-  let signature = signing_object#result in
+  let signer = create_signing_object () in
+  signer#add_string msg;
+  let signature = signer#result in
   assert(String.length signature = 20);
   signature ^ msg
 
@@ -71,33 +76,23 @@ let check_sign (msg: string): Buffer.t option =
   let res = Buffer.create msg in
   let n = Buffer.(res.length) in
   if n <= 20 then
-    begin
-      Log.error "check_sign: message too short: %d" n;
-      None
-    end
+    forget_first (Log.error "check_sign: message too short: %d" n) None
   else
     let prev_sign = String.sub msg 0 20 in
-    let signing_object =
-      assert(String.length signing_key >= 20);
-      assert(encryption_key <> signing_key);
-      Cryptokit.MAC.hmac_ripemd160 signing_key
-    in
-    signing_object#add_substring msg 20 (n - 20);
-    let curr_sign = signing_object#result in
-    if curr_sign <> prev_sign then begin
-      Log.error "check_sign: bad signature";
-      None
-    end else begin
-      Buffer.set_offset res 20;
-      Some res
-    end
+    let signer = create_signing_object () in
+    signer#add_substring msg 20 (n - 20);
+    let curr_sign = signer#result in
+    if curr_sign <> prev_sign then
+      forget_first (Log.error "check_sign: bad signature") None
+    else
+      forget_first (Buffer.set_offset res 20) (Some res)
 
 let encrypt_obj =
   assert(String.length encryption_key >= 16); (* 16B = 128bits *)
   assert(encryption_key <> signing_key);
-  new Crypto.cipher_padded_encrypt Padd._8000
+  (new Crypto.cipher_padded_encrypt Padd._8000
     (new Crypto.cbc_encrypt
-      (new Crypto.blowfish_encrypt encryption_key))
+      (new Crypto.blowfish_encrypt encryption_key)))
 
 let encrypt (msg: string): string =
   encrypt_obj#put_string msg;
