@@ -12,39 +12,35 @@ let encryption_flag = false
 #else
 let encryption_flag = true
 *)
-let compression_flag = false
-let encryption_flag  = false
-let signature_flag   = false
 
-module Buffer = struct
-  type t = { data:           string ;
-             mutable offset: int    ;
-             mutable length: int    }
-  let create data =
-    { data; offset = 0; length = String.length data }
-  let set_offset buff new_offset =
-    assert(buff.offset = 0); (* don't move the offset, just set it *)
-    buff.offset <- new_offset;
-    buff.length <- buff.length - new_offset
-  let to_string buff =
-    String.sub buff.data buff.offset buff.length
-end
+(* DAFT modes       z     c      s   *)
+let fast_mode    = (true, false, false)
+let regular_mode = (true, false, true )
+let parano_mode  = (true, true , true )
 
-let may_do cond f x default =
-  if cond then f x
-  else default
+let compression_flag, encryption_flag, signature_flag = regular_mode
+
+let may_do cond f x =
+  if cond then f x else x
 
 let chain f = function
   | None -> None
-  | Some x -> Some (f x)
+  | Some x -> f x
+
+let ignore_first x y =
+  ignore(x);
+  y
 
 let compress (s: string): string =
   LZ4.Bytes.compress (Bytes.of_string s)
 
-let uncompress (s: Buffer.t): string =
-  (* WARNING: data copy *)
-  (* FBR: use a BigArray as a buffer if LZ4 can *)
-  LZ4.Bytes.decompress ~length:1_572_864 (Buffer.to_string s)
+let uncompress (s: string option): string option =
+  match s with
+  | None -> None
+  | Some compressed ->
+    (* FBR: use a BigArray as a buffer if LZ4 can *)
+    try Some (LZ4.Bytes.decompress ~length:1_572_864 compressed)
+    with LZ4.Corrupted -> ignore_first (Log.error "uncompress: corrupted") None
 
 (* FBR: constant default keys for the moment
         in the future they will be asked interactively
@@ -57,10 +53,6 @@ let create_signer () =
   assert(encryption_key <> signing_key);
   Cryptokit.MAC.hmac_ripemd160 signing_key
 
-let forget_first x y =
-  let _ = x in
-  y
-
 (* prefix the message with its signature
    msg --> signature|msg ; length(signature) = 20B = 160bits *)
 let sign (msg: string): string =
@@ -72,32 +64,35 @@ let sign (msg: string): string =
 
 (* optionally return the message without its prefix signature or None
    if the signature is incorrect or anything strange was found *)
-let check_sign (msg: string): Buffer.t option =
-  let res = Buffer.create msg in
-  let n = Buffer.(res.length) in
-  if n <= 20 then
-    forget_first (Log.error "check_sign: message too short: %d" n) None
-  else
-    let prev_sign = String.sub msg 0 20 in
-    let signer = create_signer () in
-    signer#add_substring msg 20 (n - 20);
-    let curr_sign = signer#result in
-    if curr_sign <> prev_sign then
-      forget_first (Log.error "check_sign: bad signature") None
+let check_sign (s: string option): string option =
+  match s with
+  | None -> None
+  | Some msg ->
+    let n = String.length msg in
+    if n <= 20 then
+      ignore_first (Log.error "check_sign: message too short: %d" n) None
     else
-      forget_first (Buffer.set_offset res 20) (Some res)
+      let prev_sign = String.sub msg 0 20 in
+      let signer = create_signer () in
+      let m = n - 20 in
+      signer#add_substring msg 20 m;
+      let curr_sign = signer#result in
+      if curr_sign <> prev_sign then
+        ignore_first (Log.error "check_sign: bad signature") None
+      else
+        Some (String.sub msg 20 m)
 
 let enigma =
   assert(String.length encryption_key >= 16); (* 16B = 128bits *)
   assert(encryption_key <> signing_key);
-  (new Crypto.cipher_padded_encrypt Padd._8000
+  (new Crypto.cipher_padded_encrypt Padd.length
     (new Crypto.cbc_encrypt
       (new Crypto.blowfish_encrypt encryption_key)))
 
 let turing =
   assert(String.length encryption_key >= 16); (* 16B = 128bits *)
   assert(encryption_key <> signing_key);
-  (new Crypto.cipher_padded_decrypt Padd._8000
+  (new Crypto.cipher_padded_decrypt Padd.length
     (new Crypto.cbc_decrypt
       (new Crypto.blowfish_decrypt encryption_key)))
 
@@ -105,42 +100,55 @@ let encrypt (msg: string): string =
   enigma#put_string msg;
   enigma#get_string
 
-let decrypt (msg: string): string =
-  turing#put_string msg;
-  turing#get_string
+let decrypt = function
+  | None -> None
+  | Some msg ->
+    turing#put_string msg;
+    Some (turing#get_string)
 
-(* FBR: TODO: full pipeline *)
-(* full pipeline: compress then salt then encrypt then sign *)
+(* FBR: TODO: SALT *)
+(* full pipeline: compress --> salt --> encrypt --> sign *)
 let encode (m: 'a): string =
-  let to_send = Marshal.to_string m [Marshal.No_sharing] in
-  let tmp =
+  let plain_text = Marshal.to_string m [Marshal.No_sharing] in
+  let maybe_compressed =
     may_do compression_flag
-      (fun to_send ->
-         let before = float_of_int (String.length to_send) in
-         let res = compress to_send in
-         let after = float_of_int (String.length res) in
-         Log.debug "z ratio: %.2f" (after /. before);
+      (fun x ->
+         let before = String.length x in
+         let res = compress x in
+         let after = String.length res in
+         Log.debug "z: %d -> %d" before after;
          res
-      ) to_send to_send
+      ) plain_text
+  in
+  let maybe_encrypted =
+    may_do encryption_flag
+      (fun x ->
+         let before = String.length x in
+         let res = encrypt x in
+         let after = String.length res in
+         Log.debug "c: %d -> %d" before after;
+         res
+      ) maybe_compressed
   in
   may_do signature_flag
     (fun x ->
-       let before = float_of_int (String.length x) in
+       let before = String.length x in
        let res = sign x in
-       let after = float_of_int (String.length res) in
-       Log.debug "s ratio: %.2f" (after /. before);
+       let after = String.length res in
+       Log.debug "s: %d -> %d" before after;
        res
-    ) tmp tmp
+    ) maybe_encrypted
 
-(* FBR: TODO: full pipeline *)
-(* full pipeline: check signature then decrypt then remove salt then uncompress *)
+let unmarshall (x: string): 'a option =
+  Some (Marshal.from_string x 0)
+
+(* FBR: TODO: REMOVE SALT *)
+(* full pipeline: check signature --> decrypt --> remove salt --> uncompress *)
 let decode (s: string): 'a option =
-  let maybe_signed = may_do signature_flag check_sign s (Some (Buffer.create s)) in
-  let message =
-    may_do compression_flag (chain uncompress)
-      maybe_signed (chain Buffer.to_string maybe_signed)
-  in
-  chain (fun x -> Marshal.from_string x 0) message
+  let sign_OK = may_do signature_flag check_sign (Some s) in
+  let cipher_OK = may_do encryption_flag decrypt sign_OK in
+  let compression_OK = may_do compression_flag uncompress cipher_OK in
+  chain unmarshall compression_OK
 
 module CLI_socket = struct
 
