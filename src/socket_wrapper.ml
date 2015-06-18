@@ -87,7 +87,7 @@ let check_sign (msg: string): Buffer.t option =
     else
       forget_first (Buffer.set_offset res 20) (Some res)
 
-let encrypt_obj =
+let enigma =
   assert(String.length encryption_key >= 16); (* 16B = 128bits *)
   assert(encryption_key <> signing_key);
   (new Crypto.cipher_padded_encrypt Padd._8000
@@ -95,8 +95,8 @@ let encrypt_obj =
       (new Crypto.blowfish_encrypt encryption_key)))
 
 let encrypt (msg: string): string =
-  encrypt_obj#put_string msg;
-  encrypt_obj#get_string
+  enigma#put_string msg;
+  enigma#get_string
 
 (* FBR: TODO: full pipeline *)
 (* full pipeline: compress then salt then encrypt then sign *)
