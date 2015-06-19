@@ -417,8 +417,7 @@ let main () =
             | Fetch_file_cmd_nack (fn, err) ->
               Socket.send to_cli
                 (DS_to_CLI (Fetch_file_cmd_nack (fn, err)))
-            | Bcast_file_ack ->
-	      failwith "Bcast_file_ack"
+            | Bcast_file_ack -> assert(false)
           end
         | CLI_to_DS (Bcast_file_cmd_req fn) ->
           Log.debug "got Bcast_file_cmd_req"; (* FBR will factor the code *)
@@ -453,8 +452,7 @@ let main () =
             | Fetch_file_cmd_nack (fn, err) ->
               Socket.send to_cli
                 (DS_to_CLI (Fetch_file_cmd_nack (fn, err)))
-            | Bcast_file_ack ->
-	      failwith "Bcast_file_ack"
+            | Bcast_file_ack -> assert(false)
 	  end
         | CLI_to_DS (Fetch_file_cmd_req (fn, Remote)) ->
           Log.debug "got Fetch_file_cmd_req:Remote";
