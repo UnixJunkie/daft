@@ -203,7 +203,7 @@ let extract_file (src_fn: Types.filename) (dst_fn: Types.filename): ds_to_cli =
   else
     Fetch_file_cmd_nack (src_fn, No_such_file)
 
-exception Invalid_ds_rank
+exception Invalid_rank
 
 let send_to int2node ds_rank something =
   match int2node.(ds_rank) with
@@ -211,6 +211,43 @@ let send_to int2node ds_rank something =
   | (_, None) ->
     Log.fatal "send_to: no socket for DS %d" ds_rank;
     exit 1
+
+let send_chunk to_rank int2node fn chunk_id is_last =
+  try (* 1) check we have this file *)
+    (* enforce to_rank bounds because array access soon *)
+    if Utils.out_of_bounds to_rank int2node
+    then raise Invalid_rank;
+    let file = FileSet.find_fn fn !local_state in
+    try (* 2) check we have this chunk *)
+      let chunk = File.find_chunk_id chunk_id file in
+      (* 3) seek to it *)
+      let local_file = fn_to_path fn in
+      let chunk_data =
+        Utils.with_in_file_descr local_file (fun input ->
+            let offset = chunk_id * !chunk_size in
+            assert(Unix.(lseek input offset SEEK_SET) = offset);
+            let curr_chunk_size = match Chunk.get_size chunk with
+              | None -> !chunk_size
+              | Some s ->
+                let res = Int64.to_int s in
+                assert(res > 0 && res < !chunk_size);
+                res
+            in
+            (* WARNING: data copy here and allocation of
+                        a fresh buffer each time *)
+            let buff = String.create curr_chunk_size in
+            Utils.really_read input buff curr_chunk_size;
+            buff
+          )
+      in
+      (* 4) send it *)
+      let chunk_msg = DS_to_DS (Chunk (fn, chunk_id, is_last, chunk_data)) in
+      send_to int2node to_rank chunk_msg
+    with Not_found ->
+      Log.error "no such chunk: fn: %s id: %d" fn chunk_id
+  with
+  | Not_found -> Log.error "Send_to_req: no such file: %s" fn
+  | Invalid_rank -> Log.error "Send_to_req: invalid rank: %d" to_rank
 
 let main () =
   (* setup logger *)
@@ -279,47 +316,9 @@ let main () =
       | None -> Log.warn "junk"
       | Some message ->
         match message with
-        | MDS_to_DS (Send_to_req (ds_rank, fn, chunk_id, is_last)) ->
-          begin
-            Log.debug "got Send_to_req";
-            try (* 1) check we have this file *)
-              (* enforce ds_rank bounds because array access soon *)
-              if Utils.out_of_bounds ds_rank int2node
-              then raise Invalid_ds_rank;
-              let file = FileSet.find_fn fn !local_state in
-              try (* 2) check we have this chunk *)
-                let chunk = File.find_chunk_id chunk_id file in
-                (* 3) seek to it *)
-                let local_file = fn_to_path fn in
-                let chunk_data =
-                  Utils.with_in_file_descr local_file (fun input ->
-                      let offset = chunk_id * !chunk_size in
-                      assert(Unix.(lseek input offset SEEK_SET) = offset);
-                      let curr_chunk_size = match Chunk.get_size chunk with
-                        | None -> !chunk_size
-                        | Some s ->
-                          let res = Int64.to_int s in
-                          assert(res > 0 && res < !chunk_size);
-                          res
-                      in
-                      (* WARNING: data copy here and allocation of
-                                  a fresh buffer each time *)
-                      let buff = String.create curr_chunk_size in
-                      Utils.really_read input buff curr_chunk_size;
-                      buff
-                    )
-                in
-                (* 4) send it *)
-                let chunk_msg = DS_to_DS (Chunk (fn, chunk_id, is_last, chunk_data)) in
-                send_to int2node ds_rank chunk_msg
-              with Not_found ->
-                Log.error "no such chunk: fn: %s id: %d" fn chunk_id
-            with
-            | Not_found ->
-              Log.error "Send_to_req: no such file: %s" fn
-            | Invalid_ds_rank ->
-              Log.error "Send_to_req: invalid rank: %d" ds_rank
-          end
+        | MDS_to_DS (Send_to_req (to_rank, fn, chunk_id, is_last)) ->
+          Log.debug "got Send_to_req";
+          send_chunk to_rank int2node fn chunk_id is_last
         | MDS_to_DS Quit_cmd ->
           Log.debug "got Quit_cmd";
           let _ = Log.info "got Quit" in
