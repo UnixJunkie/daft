@@ -203,14 +203,50 @@ let extract_file (src_fn: Types.filename) (dst_fn: Types.filename): ds_to_cli =
   else
     Fetch_file_cmd_nack (src_fn, No_such_file)
 
-exception Invalid_rank
-
 let send_to int2node ds_rank something =
   match int2node.(ds_rank) with
   | (_node, Some to_ds_i) -> Socket.send to_ds_i something
   | (_, None) ->
     Log.fatal "send_to: no socket for DS %d" ds_rank;
     exit 1
+
+(* retrieve a chunk from disk *)
+let retrieve_chunk (fn: string) (chunk_id: int): string option =
+  try (* 1) check we have this file *)
+    let file = FileSet.find_fn fn !local_state in
+    try (* 2) check we have this chunk *)
+      let chunk = File.find_chunk_id chunk_id file in
+      (* 3) seek to it *)
+      let local_file = fn_to_path fn in
+      let chunk_data =
+        Utils.with_in_file_descr local_file (fun input ->
+            let offset = chunk_id * !chunk_size in
+            assert(Unix.(lseek input offset SEEK_SET) = offset);
+            let curr_chunk_size = match Chunk.get_size chunk with
+              | None -> !chunk_size
+              | Some s ->
+                let res = Int64.to_int s in
+                assert(res > 0 && res < !chunk_size);
+                res
+            in
+            (* WARNING: data copy here and allocation of
+                        a fresh buffer each time *)
+            let buff = String.create curr_chunk_size in
+            Utils.really_read input buff curr_chunk_size;
+            buff
+          )
+      in
+      Some chunk_data
+    with Not_found ->
+      Utils.ignore_first
+        (Log.error "retrieve_chunk: no such chunk: fn: %s id: %d" fn chunk_id)
+        None
+  with Not_found -> 
+    Utils.ignore_first
+      (Log.error "retrieve_chunk: no such file: %s" fn)
+      None
+
+exception Invalid_rank
 
 let send_chunk to_rank int2node fn chunk_id is_last =
   try (* 1) check we have this file *)
