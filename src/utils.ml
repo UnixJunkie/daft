@@ -181,3 +181,7 @@ let cleanup_data_nodes_array warn a =
       | Some s -> ZMQ.Socket.close s
       | None -> if warn then Log.warn "DS %d missing" i
     ) a
+
+let ignore_first x y =
+  ignore(x);
+  y

@@ -24,10 +24,6 @@ let chain f = function
   | None -> None
   | Some x -> f x
 
-let ignore_first x y =
-  ignore(x);
-  y
-
 (* hot toggable compression: never inflate messages *)
 let compress (s: string): string =
   let before = String.length s in
@@ -60,11 +56,11 @@ let uncompress (s: string option): string option =
         raise Invalid_first_char
     with
     | LZ4.Corrupted ->
-      ignore_first (Log.error "uncompress: corrupted") None
+      Utils.ignore_first (Log.error "uncompress: corrupted") None
     | Too_short ->
-      ignore_first (Log.error "uncompress: too short") None
+      Utils.ignore_first (Log.error "uncompress: too short") None
     | Invalid_first_char ->
-      ignore_first (Log.error "uncompress: invalid first char") None
+      Utils.ignore_first (Log.error "uncompress: invalid first char") None
 
 (* FBR: constant default keys for the moment
         in the future they will be asked interactively
@@ -94,7 +90,7 @@ let check_sign (s: string option): string option =
   | Some msg ->
     let n = String.length msg in
     if n <= 20 then
-      ignore_first (Log.error "check_sign: message too short: %d" n) None
+      Utils.ignore_first (Log.error "check_sign: message too short: %d" n) None
     else
       let prev_sign = String.sub msg 0 20 in
       let signer = create_signer () in
@@ -102,7 +98,7 @@ let check_sign (s: string option): string option =
       signer#add_substring msg 20 m;
       let curr_sign = signer#result in
       if curr_sign <> prev_sign then
-        ignore_first (Log.error "check_sign: bad signature") None
+        Utils.ignore_first (Log.error "check_sign: bad signature") None
       else
         Some (String.sub msg 20 m)
 
