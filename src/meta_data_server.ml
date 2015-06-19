@@ -66,7 +66,7 @@ let fetch_mds fn ds_rank int2node to_cli=
 	Socket.send  sock (MDS_to_CLI (Fetch_cmd_nack fn))
   end
 
-(* better done with only one MDS -> local DS communication *)
+(* CCO: better done with only one MDS -> local DS communication *)
 let bcast_mds (f: File.t) (root: Types.ds_rank) int2node algo =
   match algo with
   | `Seq ->
@@ -75,14 +75,10 @@ let bcast_mds (f: File.t) (root: Types.ds_rank) int2node algo =
       Log.warn "bcast_mds: file already added: %s" fn
     else
       global_state := FileSet.add f !global_state;
-    Array.iteri ( fun i _ -> 
-        if i <> root then
-          begin
-
-	    fetch_mds fn i int2node None
-          end
+    Array.iteri (fun i _ -> 
+        if i <> root then fetch_mds fn i int2node None
       ) int2node
-  | `Bino -> failwith "not implemented yet"
+  | _ -> failwith "bcast_mds: only `Seq algo"
 
 let main () =
   (* setup logger *)
