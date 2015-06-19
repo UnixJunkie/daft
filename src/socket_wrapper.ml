@@ -15,7 +15,7 @@ let fast_mode    = (true ,false, false)
 let regular_mode = (true ,false, true )
 let parano_mode  = (true ,true , true )
 
-let compression_flag, encryption_flag, signature_flag = fast_mode
+let compression_flag, encryption_flag, signature_flag = regular_mode
 
 let may_do cond f x =
   if cond then f x else x
@@ -28,16 +28,43 @@ let ignore_first x y =
   ignore(x);
   y
 
+(* hot toggable compression: never inflate messages *)
 let compress (s: string): string =
-  LZ4.Bytes.compress (Bytes.of_string s)
+  let before = String.length s in
+  let res = LZ4.Bytes.compress (Bytes.of_string s) in
+  let after = String.length res in
+  if after >= before then
+    "0" ^ res (* flag as not compressed *)
+  else
+    "1" ^ res (* flag as compressed *)
+
+exception Too_short
+exception Invalid_first_char
 
 let uncompress (s: string option): string option =
   match s with
   | None -> None
-  | Some compressed ->
-    (* FBR: use a BigArray as a buffer if LZ4 can *)
-    try Some (LZ4.Bytes.decompress ~length:1_572_864 compressed)
-    with LZ4.Corrupted -> ignore_first (Log.error "uncompress: corrupted") None
+  | Some maybe_compressed ->
+    try
+      let n = String.length maybe_compressed in
+      if n < 2 then
+        raise Too_short
+      else if String.get maybe_compressed 0 = '0' then
+        Some (String.sub maybe_compressed 1 (n - 1)) (* not compressed *)
+      else if String.get maybe_compressed 0 = '1' then
+        (* FBR: use a BigArray as a buffer; since LZ4 can nowadays *)
+        Some
+          (LZ4.Bytes.decompress ~length:1_572_864
+             (String.sub maybe_compressed 1 (n - 1)))
+      else
+        raise Invalid_first_char
+    with
+    | LZ4.Corrupted ->
+      ignore_first (Log.error "uncompress: corrupted") None
+    | Too_short ->
+      ignore_first (Log.error "uncompress: too short") None
+    | Invalid_first_char ->
+      ignore_first (Log.error "uncompress: invalid first char") None
 
 (* FBR: constant default keys for the moment
         in the future they will be asked interactively
@@ -89,7 +116,7 @@ let encrypt (msg: string): string =
   enc#finish;
   enc#get_string
 
-let decrypt (s: string option): string option = 
+let decrypt (s: string option): string option =
   match s with
   | None -> None
   | Some msg ->
