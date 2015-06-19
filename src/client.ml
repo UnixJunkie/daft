@@ -87,7 +87,8 @@ module Command = struct
          | Rfetch of filename * string (* string format: host:port *)
          | Extract of filename * filename
 	 | Bcast of filename
-         | Quit
+         | Exit (* just exit CLI *)
+         | Quit (* turn off whole system *)
          | Ls
          | Skip
   (* understand a command as soon as it is unambiguous; quick and dirty *)
@@ -120,11 +121,12 @@ module Command = struct
             | Some (src_fn, dst_fn) -> Extract (src_fn, dst_fn)
             | None -> Log.error "\nusage: extract src_fn dst_fn" ; Skip
           end
-        | "b" | "bc" | "bcast" | "broadcast" ->
+        | "b" | "bc" | "bca" | "bcas" | "bcast" ->
           begin match get_one args with
             | Some fn -> Bcast fn
             | None -> Log.error "\nusage: bcast fn" ; Skip
           end
+        | "x" | "exit" -> Exit
         | "q" | "qu" | "qui" | "quit" -> Quit
         | "l" | "ls" -> Ls
         | "" -> Log.error "empty command"; Skip
@@ -198,7 +200,7 @@ let main () =
       not_finished := !interactive;
       let open Command in
       match read_one_command !interactive with
-      | Skip -> Log.info "\nusage: put|get|fetch|rfetch|extract|quit|ls|bcast"
+      | Skip -> Log.info "\nusage: put|get|fetch|rfetch|extract|exit|quit|ls|bcast"
       | Put src_fn ->
         Socket.send for_DS
           (CLI_to_DS (Fetch_file_cmd_req (src_fn, Local)));
@@ -230,6 +232,8 @@ let main () =
         Socket.send for_MDS
           (CLI_to_MDS Quit_cmd);
         not_finished := false;
+      | Exit ->
+        not_finished := false
       | Ls ->
         Socket.send for_MDS
           (CLI_to_MDS Ls_cmd_req);
