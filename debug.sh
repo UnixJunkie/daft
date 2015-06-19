@@ -23,4 +23,5 @@ reset
 export DAFT_MDS=`hostname -f`:8082
 export DAFT_DS=`hostname -f`:8083
 
+sleep 1s
 ./daft.d -i
