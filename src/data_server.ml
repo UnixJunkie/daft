@@ -41,11 +41,11 @@ let hostname (): string =
   ;
   res
 
-let logbin a =
-  if a = 0.0 then -1.0
-  else log a /. log 2.0
-
 let compute_bino_children (my_rank: int) (max_rank: int): int list =
+  let logbin a =
+    if a = 0.0 then -1.0
+    else log a /. log 2.0
+  in
   (* Who are my children? *)
   let ds_rank_f = float_of_int my_rank in
   let max_rank_f = float_of_int max_rank in
