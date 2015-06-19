@@ -442,7 +442,12 @@ let main () =
                 | `Amoeba ->
                   match Amoeba.fork (!my_rank, 0, !my_rank, nb_nodes) with
                   | [], _ -> () (* job done *)
-                  | [i], _ -> failwith "do a regular send_chunk to him"
+                  | [to_rank], _ ->
+                    (* send all file chunks to him in the regular way *)
+                    let last_cid = (File.get_nb_chunks file) - 1 in
+                    for chunk_id = 0 to last_cid do
+                      send_chunk to_rank int2node fn chunk_id (chunk_id = last_cid)
+                    done
                   | [i; j], (root_rank, step_num, _, _) ->
                     (* iter over all chunks *)
                     (* send each chunk to the two guys in bcast moe *)
