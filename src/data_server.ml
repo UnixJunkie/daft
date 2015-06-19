@@ -443,7 +443,7 @@ let main () =
 	      (* here starts the true business of the broadcast *)
               let file = FileSet.find_fn fn !local_state in
               let last_cid = (File.get_nb_chunks file) - 1 in
-              let algo = `Amoeba in
+              let algo = `Seq in
               begin match algo with
                 | `Seq ->
                   begin
