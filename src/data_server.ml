@@ -98,7 +98,7 @@ let ds_host = ref "localhost"
 let ds_port_in = ref Utils.default_ds_port_in
 let cli_host = ref ""
 let cli_port_in = ref Utils.default_cli_port_in
-let ds_rank = ref Utils.uninitialized
+let my_rank = ref Utils.uninitialized
 let machine_file = ref ""
 let mds_host = ref "localhost"
 let mds_port_in = ref Utils.default_mds_port_in
@@ -225,7 +225,7 @@ let main () =
       "-cli", Arg.String (Utils.set_host_port cli_host cli_port_in),
       "<host:port> CLI";
       "-p", Arg.Set_int ds_port_in, "<port> where to listen";
-      "-r", Arg.Set_int ds_rank, "<rank> rank among other data nodes";
+      "-r", Arg.Set_int my_rank, "<rank> rank among other data nodes";
       "-m", Arg.Set_string machine_file,
       "machine_file list of [user@]host:port (one per line)";
       "-mds", Arg.Set_string mds_host, "<server> MDS host";
@@ -241,7 +241,7 @@ let main () =
   if !chunk_size = Utils.uninitialized then abort "-cs is mandatory";
   if !mds_host = "" then abort "-mds is mandatory";
   if !mds_port_in = Utils.uninitialized then abort "-sp is mandatory";
-  if !ds_rank = Utils.uninitialized then abort "-r is mandatory";
+  if !my_rank = Utils.uninitialized then abort "-r is mandatory";
   if !ds_port_in = Utils.uninitialized then abort "-p is mandatory";
   if !cli_host = "" then abort "-cli is mandatory";
   if !cli_port_in = Utils.uninitialized then abort "-cli is mandatory";
@@ -251,7 +251,7 @@ let main () =
   (* create a push socket for each DS, except the current one because we
      will never send to self *)
   A.iteri (fun i (node, _sock) ->
-      if i <> !ds_rank then
+      if i <> !my_rank then
         let sock =
           Utils.(zmq_socket Push ctx (Node.get_host node) (Node.get_port node))
         in
@@ -259,7 +259,7 @@ let main () =
     ) int2node;
   let nb_nodes = A.length int2node in
   Log.info "read %d host(s)" nb_nodes;
-  local_node := Node.create !ds_rank !ds_host !ds_port_in;
+  local_node := Node.create !my_rank !ds_host !ds_port_in;
   Log.info "Client of MDS %s:%d" !mds_host !mds_port_in;
   data_store_root := create_data_store ();
   (* setup server *)
@@ -385,7 +385,7 @@ let main () =
               local_state := FileSet.update new_file !local_state;
               (* 3) notify MDS *)
               Socket.send to_mds
-                (DS_to_MDS (Chunk_ack (fn, chunk_id, !ds_rank)));
+                (DS_to_MDS (Chunk_ack (fn, chunk_id, !my_rank)));
               (* 4) notify CLI if all file chunks have been received
                     and fix file perms in the local datastore *)
               let curr_chunks = File.get_chunks new_file in
@@ -404,7 +404,7 @@ let main () =
             | Fetch_file_cmd_ack fn ->
               (* notify MDS about this new file *)
               let file = FileSet.find_fn fn !local_state in
-              let add_file_req = Add_file_req (!ds_rank, file) in
+              let add_file_req = Add_file_req (!my_rank, file) in
               Socket.send to_mds (DS_to_MDS add_file_req)
             | Fetch_file_cmd_nack (fn, err) ->
               Socket.send to_cli
@@ -423,13 +423,13 @@ let main () =
               begin match algo with
                 | `Seq ->
                   begin
-                    let bcast_file_req = Bcast_file_req (!ds_rank, file) in
+                    let bcast_file_req = Bcast_file_req (!my_rank, file) in
 	            Socket.send to_mds ( DS_to_MDS bcast_file_req );
                     (* unlock the CLI *)
                     Socket.send to_cli ( DS_to_CLI Bcast_file_ack )
                   end
                 | `Bino ->
-                  match Amoeba.fork (!ds_rank, 0, !ds_rank, nb_nodes) with
+                  match Amoeba.fork (!my_rank, 0, !my_rank, nb_nodes) with
                   | [], _ -> () (* job done *)
                   | [i], _ -> failwith "do a regular send_chunk to him"
                   | [i; j], (root_rank, step_num, _, _) ->
