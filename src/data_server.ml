@@ -424,10 +424,11 @@ let main () =
           Log.debug "got Bcast_file_cmd_req"; (* FBR will factor the code *)
           let res = add_file fn in
           begin match res with
+            | Fetch_file_cmd_nack (fn, Already_here) (* allow bcast after put *)
             | Fetch_file_cmd_ack fn ->
 	      (* here starts the true business of the broadcast *)
               let file = FileSet.find_fn fn !local_state in
-              let algo = `Bino in
+              let algo = `Seq in
               begin match algo with
                 | `Seq ->
                   begin
@@ -436,7 +437,7 @@ let main () =
                     (* unlock the CLI *)
                     Socket.send to_cli ( DS_to_CLI Bcast_file_ack )
                   end
-                | `Bino ->
+                | `Amoeba ->
                   match Amoeba.fork (!my_rank, 0, !my_rank, nb_nodes) with
                   | [], _ -> () (* job done *)
                   | [i], _ -> failwith "do a regular send_chunk to him"
@@ -446,7 +447,7 @@ let main () =
                     failwith "do two send_chunk_bcast"
                   | _ -> assert(false)
               end
-            | Fetch_file_cmd_nack  (fn, err) ->
+            | Fetch_file_cmd_nack (fn, err) ->
               Socket.send to_cli
                 (DS_to_CLI (Fetch_file_cmd_nack (fn, err)))
             | Bcast_file_ack ->
