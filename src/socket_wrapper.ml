@@ -105,27 +105,27 @@ let check_sign (s: string option): string option =
         Some (String.sub msg 20 m)
 
 let encrypt (msg: string): string =
-  let enc =
+  let enigma =
     new Cryptokit.Block.cipher_padded_encrypt Cryptokit.Padding.length
       (new Cryptokit.Block.cbc_encrypt
         (new Cryptokit.Block.blowfish_encrypt encryption_key))
   in
-  enc#put_string msg;
-  enc#finish;
-  enc#get_string
+  enigma#put_string msg;
+  enigma#finish;
+  enigma#get_string
 
 let decrypt (s: string option): string option =
   match s with
   | None -> None
   | Some msg ->
-    let dec =
+    let turing =
       new Cryptokit.Block.cipher_padded_decrypt Cryptokit.Padding.length
         (new Cryptokit.Block.cbc_decrypt
           (new Cryptokit.Block.blowfish_decrypt encryption_key))
     in
-    dec#put_string msg;
-    dec#finish;
-    Some dec#get_string
+    turing#put_string msg;
+    turing#finish;
+    Some turing#get_string
 
 (* FBR: TODO: SALT *)
 (* full pipeline: compress --> salt --> encrypt --> sign *)
