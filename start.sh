@@ -22,3 +22,6 @@ OPTS=""
 # export env. vars. so that the cli invocation is simpler
 export DAFT_MDS=`hostname -f`:8082
 export DAFT_DS=`hostname -f`:8083
+
+sleep 1s
+./daft -i
