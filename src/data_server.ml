@@ -157,8 +157,7 @@ let add_file (fn: string): ds_to_cli =
     else begin
       if Sys.is_directory fn then
         Fetch_file_cmd_nack (fn, Is_directory)
-      else
-        FU.(
+      else FU.(
           let stat = FU.stat fn in
           let size = FU.byte_of_size stat.size in
           let dest_fn = fn_to_path fn in
@@ -202,19 +201,21 @@ let extract_file (src_fn: Types.filename) (dst_fn: Types.filename): ds_to_cli =
   else
     Fetch_file_cmd_nack (src_fn, No_such_file)
 
+exception Fatal (* throw this when we are doomed *)
+
 let send_to int2node ds_rank something =
   (* enforce ds_rank bounds because array access soon *)
   if Utils.out_of_bounds ds_rank int2node then
     begin
       Log.fatal "send_to: out of bounds rank: %d" ds_rank;
-      exit 1
+      raise Fatal
     end
   else match int2node.(ds_rank) with
     | (_node, Some to_ds_i) -> Socket.send to_ds_i something
     | (_, None) ->
       begin
         Log.fatal "send_to: no socket for DS %d" ds_rank;
-        exit 1
+        raise Fatal
       end
 
 (* retrieve a chunk from disk *)
@@ -244,20 +245,19 @@ let retrieve_chunk (fn: string) (chunk_id: int): string =
     with Not_found ->
       begin
         Log.fatal "retrieve_chunk: no such chunk: fn: %s id: %d" fn chunk_id;
-        exit 1
+        raise Fatal
       end
   with Not_found ->
     begin
       Log.fatal "retrieve_chunk: no such file: %s" fn;
-      exit 1
+      raise Fatal
     end
 
 let send_chunk to_rank int2node fn chunk_id is_last chunk_data =
   let chunk_msg = DS_to_DS (Chunk (fn, chunk_id, is_last, chunk_data)) in
   send_to int2node to_rank chunk_msg
 
-let bcast_chunk to_ranks int2node fn chunk_id is_last root_rank step_num =
-  let chunk_data = retrieve_chunk fn chunk_id in
+let bcast_chunk to_ranks int2node fn chunk_id is_last root_rank step_num chunk_data =
   let bcast_chunk_msg =
     DS_to_DS
       (Bcast_chunk (fn, chunk_id, is_last, chunk_data, root_rank, step_num))
@@ -458,23 +458,16 @@ let main () =
                 | `Amoeba ->
                   match Amoeba.fork (!my_rank, 0, !my_rank, nb_nodes) with
                   | [], _ -> () (* job done *)
-                  | [to_rank], _ ->
-                    (* send all file chunks to him in the regular way since
-                       this is the last broadcast step *)
-                    for chunk_id = 0 to last_cid do
-                      let chunk_data = retrieve_chunk fn chunk_id in
-                      let is_last = (chunk_id = last_cid) in
-                      send_chunk
-                        to_rank int2node fn chunk_id is_last chunk_data
-                    done
-                  | (([_; _] as to_ranks), (root_rank, step_num, _, _)) ->
-                    for chunk_id = 0 to last_cid do
-                      (* bcast each chunk to two nodes *)
-                      let is_last = (chunk_id = last_cid) in
-                      bcast_chunk to_ranks
-                        int2node fn chunk_id is_last root_rank step_num
-                    done
-                  | _ -> assert(false)
+                  | (to_ranks, (root_rank, step_num, _, _)) ->
+                    match to_ranks with
+                    | [_] | [_; _] -> (* one or two successors *)
+                      for chunk_id = 0 to last_cid do
+                        let chunk_data = retrieve_chunk fn chunk_id in
+                        let is_last = (chunk_id = last_cid) in
+                        bcast_chunk to_ranks int2node fn chunk_id is_last
+                          root_rank step_num chunk_data
+                      done
+                    | _ -> assert(false)
               end
             | Fetch_file_cmd_nack (fn, err) ->
               Socket.send to_cli
@@ -494,19 +487,19 @@ let main () =
         | CLI_to_DS (Extract_file_cmd_req (src_fn, dst_fn)) ->
           let res = extract_file src_fn dst_fn in
           Socket.send to_cli (DS_to_CLI res)
-	| DS_to_DS (Bcast_chunk (fn, cid, is_last, chunk_data, root_rank, step_num)) ->
+	| DS_to_DS
+            (Bcast_chunk
+               (fn, chunk_id, is_last, chunk_data, root_rank, step_num)) ->
           begin
-            store_chunk to_mds None fn cid is_last chunk_data;
+            store_chunk to_mds None fn chunk_id is_last chunk_data;
             match Amoeba.fork (root_rank, step_num, !my_rank, nb_nodes) with
             | ([], _) -> () (* job done *)
-            | ([to_rank], _) ->
-              (* send file chunk to him in the regular way since
-                 this is the last broadcast step *)
-              send_chunk to_rank int2node fn cid is_last chunk_data
-            | ([_; _] as to_ranks), (root_rank, step_num, _, _) ->
-              (* bcast chunk to two nodes *)
-              bcast_chunk to_ranks int2node fn cid is_last root_rank step_num
-            | _ -> assert(false)
+            | (to_ranks, (root_rank, step_num, _, _)) ->
+              match to_ranks with
+              | [_] | [_; _] -> (* one or two successors *)
+                bcast_chunk to_ranks int2node fn chunk_id is_last
+                  root_rank step_num chunk_data
+              | _ -> assert(false)
           end
     done;
     raise Types.Loop_end;
