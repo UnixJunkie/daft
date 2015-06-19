@@ -24,3 +24,5 @@ export DAFT_DS=`hostname -f`:8083
 
 sleep 1s
 ./daft $OPTS -c quit
+
+ps
