@@ -1,6 +1,9 @@
 # to run local tests
 
-set -x
+#set -x
+
+obuild configure --enable-executable-debugging
+obuild build
 
 function reset () {
     pkill daft_mds    # kill MDS
@@ -19,3 +22,5 @@ reset
 # export env. vars. so that the cli invocation is simpler
 export DAFT_MDS=`hostname -f`:8082
 export DAFT_DS=`hostname -f`:8083
+
+./daft.d -i
