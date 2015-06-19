@@ -296,7 +296,8 @@ module Protocol = struct
 
   type ds_to_ds =
     | Chunk of filename * chunk_id * is_last * chunk_data 
-    | Bcast_chunk of filename * chunk_id * is_last * chunk_data * ds_rank  (* ds_rank is the root of the broadcast *)
+    (* the last ds_rank is the root of the broadcast *)
+    | Bcast_chunk of filename * chunk_id * is_last * chunk_data * ds_rank
 
   type cli_to_mds =
     | Ls_cmd_req
