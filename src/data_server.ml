@@ -250,6 +250,7 @@ let retrieve_chunk (fn: string) (chunk_id: int): string option =
       (Log.error "retrieve_chunk: no such file: %s" fn)
       None
 
+(* FBR: ask chunk_data *)
 let send_chunk to_rank int2node fn chunk_id is_last =
   try match retrieve_chunk fn chunk_id with
     | None -> ()
@@ -257,6 +258,78 @@ let send_chunk to_rank int2node fn chunk_id is_last =
       let chunk_msg = DS_to_DS (Chunk (fn, chunk_id, is_last, chunk_data)) in
       send_to int2node to_rank chunk_msg
   with Invalid_rank r -> Log.error "Send_to_req: invalid rank: %d" r
+
+let bcast_chunk to_ranks int2node fn chunk_id is_last root_rank step_num =
+  try match retrieve_chunk fn chunk_id with
+    | None -> ()
+    | Some chunk_data ->
+      let bcast_chunk_msg =
+        DS_to_DS
+          (Bcast_chunk (fn, chunk_id, is_last, chunk_data, root_rank, step_num))
+      in
+      List.iter (fun to_rank ->
+          send_to int2node to_rank bcast_chunk_msg
+        ) to_ranks
+  with Invalid_rank r -> Log.error "Send_to_req: invalid rank: %d" r
+
+(* FBR: to_cli is optional; None when broadcasting *)
+let store_chunk to_mds to_cli fn chunk_id is_last data =
+  let size = String.length data in
+  let size64 = Int64.of_int size in
+  let curr_chunk_size =
+    if size <> !chunk_size then Some size64 else None
+  in
+  if not is_last && Option.is_some curr_chunk_size then
+    Log.error "invalid chunk size: fn: %s id: %d size: %d"
+      fn chunk_id size
+  else begin
+    (* 1) write chunk at offset *)
+    let offset = chunk_id * !chunk_size in
+    let local_file = fn_to_path fn in
+    let dest_dir = Fn.dirname local_file in
+    (* mkdir creates all necessary parent dirs *)
+    FU.mkdir ~parent:true ~mode:0o700 dest_dir;
+    Utils.with_out_file_descr local_file (fun out ->
+        assert(Unix.(lseek out offset SEEK_SET) = offset);
+        assert(Unix.write_substring out data 0 size = size)
+      );
+    (* 2) update local state *)
+    let file =
+      try FileSet.find_fn fn !local_state (* retrieve it *)
+      with Not_found -> (* or create it *)
+        let unknown_size = Int64.of_int (-1) in
+        let unknown_total_chunks = -1 in
+        File.create
+          fn unknown_size unknown_total_chunks ChunkSet.empty
+    in
+    let curr_chunk =
+      File.Chunk.create chunk_id curr_chunk_size !local_node
+    in
+    (* only once we receive the last chunk can we finalize the file's
+       description in local_state *)
+    let new_file =
+      if is_last then (* finalize file description *)
+        let full_size = Int64.(of_int offset + size64) in
+        let total_chunks = chunk_id + 1 in
+        let chunks = File.get_chunks file in
+        File.create fn full_size total_chunks chunks
+      else
+        File.add_chunk file curr_chunk;
+    in
+    local_state := FileSet.update new_file !local_state;
+    (* 3) notify MDS *)
+    Socket.send to_mds
+      (DS_to_MDS (Chunk_ack (fn, chunk_id, !my_rank)));
+    (* 4) notify CLI if all file chunks have been received
+          and fix file perms in the local datastore *)
+    let curr_chunks = File.get_chunks new_file in
+    let nb_chunks = File.get_nb_chunks new_file in
+    if ChunkSet.cardinal curr_chunks = nb_chunks then (
+      Unix.chmod local_file 0o400;
+      Socket.send to_cli
+        (DS_to_CLI (Fetch_file_cmd_ack fn))
+    )
+  end
 
 let main () =
   (* setup logger *)
@@ -346,65 +419,8 @@ let main () =
           Socket.send to_cli
             (DS_to_CLI (Fetch_file_cmd_nack (fn, Already_here)))
         | DS_to_DS (Chunk (fn, chunk_id, is_last, data)) ->
-          begin
-            Log.debug "got Chunk";
-            let size = String.length data in
-            let size64 = Int64.of_int size in
-            let curr_chunk_size =
-              if size <> !chunk_size then Some size64 else None
-            in
-            if not is_last && Option.is_some curr_chunk_size then
-              Log.error "invalid chunk size: fn: %s id: %d size: %d"
-                fn chunk_id size
-            else begin
-              (* 1) write chunk at offset *)
-              let offset = chunk_id * !chunk_size in
-              let local_file = fn_to_path fn in
-              let dest_dir = Fn.dirname local_file in
-              (* mkdir creates all necessary parent dirs *)
-              FU.mkdir ~parent:true ~mode:0o700 dest_dir;
-              Utils.with_out_file_descr local_file (fun out ->
-                  assert(Unix.(lseek out offset SEEK_SET) = offset);
-                  assert(Unix.write_substring out data 0 size = size)
-                );
-              (* 2) update local state *)
-              let file =
-                try FileSet.find_fn fn !local_state (* retrieve it *)
-                with Not_found -> (* or create it *)
-                  let unknown_size = Int64.of_int (-1) in
-                  let unknown_total_chunks = -1 in
-                  File.create
-                    fn unknown_size unknown_total_chunks ChunkSet.empty
-              in
-              let curr_chunk =
-                File.Chunk.create chunk_id curr_chunk_size !local_node
-              in
-              (* only once we receive the last chunk can we finalize the file's
-                 description in local_state *)
-              let new_file =
-                if is_last then (* finalize file description *)
-                  let full_size = Int64.(of_int offset + size64) in
-                  let total_chunks = chunk_id + 1 in
-                  let chunks = File.get_chunks file in
-                  File.create fn full_size total_chunks chunks
-                else
-                  File.add_chunk file curr_chunk;
-              in
-              local_state := FileSet.update new_file !local_state;
-              (* 3) notify MDS *)
-              Socket.send to_mds
-                (DS_to_MDS (Chunk_ack (fn, chunk_id, !my_rank)));
-              (* 4) notify CLI if all file chunks have been received
-                    and fix file perms in the local datastore *)
-              let curr_chunks = File.get_chunks new_file in
-              let nb_chunks = File.get_nb_chunks new_file in
-              if ChunkSet.cardinal curr_chunks = nb_chunks then (
-                Unix.chmod local_file 0o400;
-                Socket.send to_cli
-                  (DS_to_CLI (Fetch_file_cmd_ack fn))
-              );
-            end
-          end
+          Log.debug "got Chunk";
+          store_chunk to_mds to_cli fn chunk_id is_last data
         | CLI_to_DS (Fetch_file_cmd_req (fn, Local)) ->
           Log.debug "got Fetch_file_cmd_req:Local";
           let res = add_file fn in
@@ -427,6 +443,7 @@ let main () =
             | Fetch_file_cmd_ack fn ->
 	      (* here starts the true business of the broadcast *)
               let file = FileSet.find_fn fn !local_state in
+              let last_cid = (File.get_nb_chunks file) - 1 in
               let algo = `Seq in
               begin match algo with
                 | `Seq ->
@@ -443,15 +460,19 @@ let main () =
                   match Amoeba.fork (!my_rank, 0, !my_rank, nb_nodes) with
                   | [], _ -> () (* job done *)
                   | [to_rank], _ ->
-                    (* send all file chunks to him in the regular way *)
-                    let last_cid = (File.get_nb_chunks file) - 1 in
+                    (* send all file chunks to him in the regular way since
+                       this is the last broadcast step *)
                     for chunk_id = 0 to last_cid do
-                      send_chunk to_rank int2node fn chunk_id (chunk_id = last_cid)
+                      let is_last = (chunk_id = last_cid) in
+                      send_chunk to_rank int2node fn chunk_id is_last
                     done
-                  | [i; j], (root_rank, step_num, _, _) ->
-                    (* iter over all chunks *)
-                    (* send each chunk to the two guys in bcast moe *)
-                    failwith "do two send_chunk_bcast"
+                  | (([_; _] as to_ranks), (root_rank, step_num, _, _)) ->
+                    for chunk_id = 0 to last_cid do
+                      (* bcast each chunk to two nodes *)
+                      let is_last = (chunk_id = last_cid) in
+                      bcast_chunk to_ranks
+                        int2node fn chunk_id is_last root_rank step_num
+                    done
                   | _ -> assert(false)
               end
             | Fetch_file_cmd_nack (fn, err) ->
@@ -472,8 +493,20 @@ let main () =
         | CLI_to_DS (Extract_file_cmd_req (src_fn, dst_fn)) ->
           let res = extract_file src_fn dst_fn in
           Socket.send to_cli (DS_to_CLI res)
-	| DS_to_DS ( Bcast_chunk (_, _, _, _, _) ) ->
-	  failwith "DS to DS chunk movements not implemented yet. Coming soon, stay tuned!"
+	| DS_to_DS (Bcast_chunk (fn, cid, is_last, chunk_data, root_rank, step_num)) ->
+          begin
+            store_chunk to_mds to_cli fn cid is_last chunk_data;
+            match Amoeba.fork (root_rank, step_num, !my_rank, nb_nodes) with
+            | ([], _) -> () (* job done *)
+            | ([to_rank], _) ->
+              (* send file chunk to him in the regular way since
+                 this is the last broadcast step *)
+              send_chunk to_rank int2node fn cid is_last
+            | ([_; _] as to_ranks), (root_rank, step_num, _, _) ->
+              (* bcast chunk to two nodes *)
+              bcast_chunk to_ranks int2node fn cid is_last root_rank step_num
+            | _ -> assert(false)
+          end
     done;
     raise Types.Loop_end;
   with exn -> begin
