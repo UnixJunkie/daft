@@ -9,6 +9,8 @@ module FU = FileUtil
    as many CLIs as there are DSs *)
 (* some type aliases to make signatures more readable *)
 type ds_rank = int
+type root_node = int
+type step_number = int
 type filename = string
 type chunk_id = int
 type chunk_data = string
@@ -295,9 +297,10 @@ module Protocol = struct
     | Quit_cmd
 
   type ds_to_ds =
-    | Chunk of filename * chunk_id * is_last * chunk_data 
-    (* the last ds_rank is the root of the broadcast *)
-    | Bcast_chunk of filename * chunk_id * is_last * chunk_data * ds_rank
+    | Chunk of
+        filename * chunk_id * is_last * chunk_data
+    | Bcast_chunk of
+        filename * chunk_id * is_last * chunk_data * root_node * step_number
 
   type cli_to_mds =
     | Ls_cmd_req
