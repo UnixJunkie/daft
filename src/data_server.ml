@@ -41,20 +41,20 @@ let hostname (): string =
   ;
   res
 
-let compute_bino_children (my_rank: int) (max_rank: int): int list =
+let compute_children_bino (my_rank_i: int) (max_rank_i: int): int list =
   let logbin a =
     if a = 0.0 then -1.0
     else log a /. log 2.0
   in
   (* Who are my children? *)
-  let ds_rank_f = float_of_int my_rank in
-  let max_rank_f = float_of_int max_rank in
-  let baselog = ref (logbin ds_rank_f) in
+  let ds_rank = float_of_int my_rank_i in
+  let max_rank = float_of_int max_rank_i in
+  let baselog = ref (logbin ds_rank) in
   let children = ref [] in
-  let child = ref ds_rank_f in
-  while !child < max_rank_f do
+  let child = ref ds_rank in
+  while !child < max_rank do
     baselog := !baselog +. 1.0;
-    child := ds_rank_f +. 2. ** !baselog;
+    child := ds_rank +. 2. ** !baselog;
     children := (int_of_float !child) :: !children;
     (* Log.debug "next child: %f" !child; *)
   done;
@@ -396,7 +396,7 @@ let main () =
                     Socket.send to_cli ( DS_to_CLI Bcast_file_ack )
                   end
                 | `Bino ->
-                  let children = compute_bino_children !ds_rank (A.length int2node) in
+                  let children = compute_children_bino !ds_rank (A.length int2node) in
                   List.iter (fun _c ->
                       failwith "not implemented yet"
                         (* FBR: finish that *)
