@@ -30,9 +30,11 @@ let compress (s: string): string =
   let res = LZ4.Bytes.compress (Bytes.of_string s) in
   let after = String.length res in
   if after >= before then
-    "0" ^ res (* flag as not compressed *)
+    "0" ^ s (* flag as not compressed and keep as is *)
   else
-    "1" ^ res (* flag as compressed *)
+    Utils.ignore_first
+      (Log.debug "z: %d -> %d" before after)
+      ("1" ^ res) (* flag as compressed *)
 
 exception Too_short
 exception Invalid_first_char
@@ -129,16 +131,7 @@ let decrypt (s: string option): string option =
 (* full pipeline: compress --> salt --> encrypt --> sign *)
 let encode (m: 'a): string =
   let plain_text = Marshal.to_string m [Marshal.No_sharing] in
-  let maybe_compressed =
-    may_do compression_flag
-      (fun x ->
-         let before = String.length x in
-         let res = compress x in
-         let after = String.length res in
-         Log.debug "z: %d -> %d" before after;
-         res
-      ) plain_text
-  in
+  let maybe_compressed = may_do compression_flag compress plain_text in
   let maybe_encrypted =
     may_do encryption_flag
       (fun x ->
