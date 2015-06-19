@@ -137,9 +137,9 @@ let compute_chunks (size: int64) =
   let nb_chunks_i64 = Int64.of_int (int_of_float ratio) in
   let chunk_size_i64 = Int64.of_int !chunk_size in
   let last_chunk_size_i64 = Int64.(size - (nb_chunks_i64 * chunk_size_i64)) in
-  let last_chunk_size_opt = if last_chunk_size_i64 <> Int64.zero
-                            then Some last_chunk_size_i64
-                            else None
+  let last_chunk_size_opt =
+    if last_chunk_size_i64 <> Int64.zero then Some last_chunk_size_i64
+    else None
   in
   (nb_chunks, last_chunk_size_opt)
 
@@ -433,9 +433,12 @@ let main () =
                 | `Seq ->
                   begin
                     let bcast_file_req = Bcast_file_req (!my_rank, file) in
-	            Socket.send to_mds ( DS_to_MDS bcast_file_req );
-                    (* unlock the CLI *)
-                    Socket.send to_cli ( DS_to_CLI Bcast_file_ack )
+                    (* broadcasting a file is also adding it: we cannot start
+                       broadcasting right here: we first need the MDS to allow
+                       this new file *)
+	            Socket.send to_mds (DS_to_MDS bcast_file_req);
+                    (* unlock CLI *)
+                    Socket.send to_cli (DS_to_CLI Bcast_file_ack)
                   end
                 | `Amoeba ->
                   match Amoeba.fork (!my_rank, 0, !my_rank, nb_nodes) with
