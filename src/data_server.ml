@@ -177,8 +177,8 @@ let send_to int2node ds_rank something =
   match int2node.(ds_rank) with
   | (_node, Some to_ds_i) -> Socket.send to_ds_i something
   | (_, None) ->
-    Log.debug "%d rang demande %d" (Node.get_rank !local_node) ds_rank;
-    assert(false)
+    Log.fatal "send_to: no socket for DS %d" ds_rank;
+    exit 1
 
 let main () =
   (* setup logger *)
@@ -277,8 +277,8 @@ let main () =
                     )
                 in
                 (* 4) send it *)
-                let something = DS_to_DS (Chunk (fn, chunk_id, is_last, chunk_data)) in
-                send_to int2node ds_rank something
+                let chunk_msg = DS_to_DS (Chunk (fn, chunk_id, is_last, chunk_data)) in
+                send_to int2node ds_rank chunk_msg
               with Not_found ->
                 Log.error "no such chunk: fn: %s id: %d" fn chunk_id
             with
