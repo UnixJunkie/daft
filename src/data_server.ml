@@ -33,12 +33,11 @@ let hostname (): string =
   let res =
     if l1 > l2 then n1
     else
-      let _ = Log.warn "host alias (%s) longer than FQDN (%s)" n2 n1 in
-      n2
+      Utils.ignore_first
+        (Log.warn "hostname: host alias (%s) longer than FQDN (%s)" n2 n1)
+        n2
   in
-  if count_char '.' res <> 2 then
-    Log.warn "FQ hostname: %s" res
-  ;
+  if count_char '.' res <> 2 then Log.warn "hostname: FQ hostname: %s" res;
   res
 
 module Amoeba = struct
@@ -64,7 +63,7 @@ module Amoeba = struct
 end
 
 let compute_children_bino (my_rank_i: int) (max_rank_i: int): int list =
-  (* FBR: there is a bug: 9 appears two times as a dest
+  (* for CCO: there is a bug: 9 appears two times as a dest
      0 1
      0 2
      0 4
@@ -250,14 +249,9 @@ let retrieve_chunk (fn: string) (chunk_id: int): string option =
       (Log.error "retrieve_chunk: no such file: %s" fn)
       None
 
-(* FBR: ask chunk_data *)
-let send_chunk to_rank int2node fn chunk_id is_last =
-  try match retrieve_chunk fn chunk_id with
-    | None -> ()
-    | Some chunk_data ->
-      let chunk_msg = DS_to_DS (Chunk (fn, chunk_id, is_last, chunk_data)) in
-      send_to int2node to_rank chunk_msg
-  with Invalid_rank r -> Log.error "Send_to_req: invalid rank: %d" r
+let send_chunk to_rank int2node fn chunk_id is_last chunk_data =
+  let chunk_msg = DS_to_DS (Chunk (fn, chunk_id, is_last, chunk_data)) in
+  send_to int2node to_rank chunk_msg
 
 let bcast_chunk to_ranks int2node fn chunk_id is_last root_rank step_num =
   try match retrieve_chunk fn chunk_id with
@@ -270,9 +264,8 @@ let bcast_chunk to_ranks int2node fn chunk_id is_last root_rank step_num =
       List.iter (fun to_rank ->
           send_to int2node to_rank bcast_chunk_msg
         ) to_ranks
-  with Invalid_rank r -> Log.error "Send_to_req: invalid rank: %d" r
+  with Invalid_rank r -> Log.error "bcast_chunk: invalid rank: %d" r
 
-(* FBR: to_cli is optional; None when broadcasting *)
 let store_chunk to_mds to_cli fn chunk_id is_last data =
   let size = String.length data in
   let size64 = Int64.of_int size in
@@ -280,7 +273,7 @@ let store_chunk to_mds to_cli fn chunk_id is_last data =
     if size <> !chunk_size then Some size64 else None
   in
   if not is_last && Option.is_some curr_chunk_size then
-    Log.error "invalid chunk size: fn: %s id: %d size: %d"
+    Log.error "store_chunk: invalid chunk size: fn: %s id: %d size: %d"
       fn chunk_id size
   else begin
     (* 1) write chunk at offset *)
@@ -324,11 +317,14 @@ let store_chunk to_mds to_cli fn chunk_id is_last data =
           and fix file perms in the local datastore *)
     let curr_chunks = File.get_chunks new_file in
     let nb_chunks = File.get_nb_chunks new_file in
-    if ChunkSet.cardinal curr_chunks = nb_chunks then (
-      Unix.chmod local_file 0o400;
-      Socket.send to_cli
-        (DS_to_CLI (Fetch_file_cmd_ack fn))
-    )
+    if ChunkSet.cardinal curr_chunks = nb_chunks then
+      begin
+        Unix.chmod local_file 0o400;
+        match to_cli with
+        | None -> () (* in case of broadcast: no feedback to CLI *)
+        | Some cli_sock ->
+          Socket.send cli_sock (DS_to_CLI (Fetch_file_cmd_ack fn))
+      end
   end
 
 let main () =
@@ -399,8 +395,14 @@ let main () =
       | Some message ->
         match message with
         | MDS_to_DS (Send_to_req (to_rank, fn, chunk_id, is_last)) ->
-          Log.debug "got Send_to_req";
-          send_chunk to_rank int2node fn chunk_id is_last
+          begin
+            Log.debug "got Send_to_req";
+            try match retrieve_chunk fn chunk_id with
+              | None -> ()
+              | Some chunk_data ->
+                send_chunk to_rank int2node fn chunk_id is_last chunk_data
+            with Invalid_rank r -> Log.error "Send_to_req: invalid rank: %d" r
+          end
         | MDS_to_DS Quit_cmd ->
           Log.debug "got Quit_cmd";
           let _ = Log.info "got Quit" in
@@ -420,7 +422,7 @@ let main () =
             (DS_to_CLI (Fetch_file_cmd_nack (fn, Already_here)))
         | DS_to_DS (Chunk (fn, chunk_id, is_last, data)) ->
           Log.debug "got Chunk";
-          store_chunk to_mds to_cli fn chunk_id is_last data
+          store_chunk to_mds (Some to_cli) fn chunk_id is_last data
         | CLI_to_DS (Fetch_file_cmd_req (fn, Local)) ->
           Log.debug "got Fetch_file_cmd_req:Local";
           let res = add_file fn in
@@ -436,7 +438,7 @@ let main () =
             | Bcast_file_ack -> assert(false)
           end
         | CLI_to_DS (Bcast_file_cmd_req fn) ->
-          Log.debug "got Bcast_file_cmd_req"; (* FBR will factor the code *)
+          Log.debug "got Bcast_file_cmd_req"; (* FBR: factor this code *)
           let res = add_file fn in
           begin match res with
             | Fetch_file_cmd_nack (fn, Already_here) (* allow bcast after put *)
@@ -463,8 +465,14 @@ let main () =
                     (* send all file chunks to him in the regular way since
                        this is the last broadcast step *)
                     for chunk_id = 0 to last_cid do
-                      let is_last = (chunk_id = last_cid) in
-                      send_chunk to_rank int2node fn chunk_id is_last
+                      try match retrieve_chunk fn chunk_id with
+                        | None -> ()
+                        | Some chunk_data ->
+                          let is_last = (chunk_id = last_cid) in
+                          send_chunk
+                            to_rank int2node fn chunk_id is_last chunk_data
+                      with Invalid_rank r ->
+                        Log.error "Bcast_file_cmd_req: invalid rank: %d" r
                     done
                   | (([_; _] as to_ranks), (root_rank, step_num, _, _)) ->
                     for chunk_id = 0 to last_cid do
@@ -495,13 +503,13 @@ let main () =
           Socket.send to_cli (DS_to_CLI res)
 	| DS_to_DS (Bcast_chunk (fn, cid, is_last, chunk_data, root_rank, step_num)) ->
           begin
-            store_chunk to_mds to_cli fn cid is_last chunk_data;
+            store_chunk to_mds None fn cid is_last chunk_data;
             match Amoeba.fork (root_rank, step_num, !my_rank, nb_nodes) with
             | ([], _) -> () (* job done *)
             | ([to_rank], _) ->
               (* send file chunk to him in the regular way since
                  this is the last broadcast step *)
-              send_chunk to_rank int2node fn cid is_last
+              send_chunk to_rank int2node fn cid is_last chunk_data
             | ([_; _] as to_ranks), (root_rank, step_num, _, _) ->
               (* bcast chunk to two nodes *)
               bcast_chunk to_ranks int2node fn cid is_last root_rank step_num
