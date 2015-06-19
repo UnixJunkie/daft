@@ -41,6 +41,25 @@ let hostname (): string =
   ;
   res
 
+let logbin a =
+  if a = 0.0 then -1.0
+  else log a /. log 2.0
+
+let compute_bino_children (my_rank: int) (max_rank: int): int list =
+  (* Who are my children? *)
+  let ds_rank_f = float_of_int my_rank in
+  let max_rank_f = float_of_int max_rank in
+  let baselog = ref (logbin ds_rank_f) in
+  let children = ref [] in
+  let child = ref ds_rank_f in
+  while !child < max_rank_f do
+    baselog := !baselog +. 1.0;
+    child := ds_rank_f +. 2. ** !baselog;
+    children := (int_of_float !child) :: !children;
+    (* Log.debug "next child: %f" !child; *)
+  done;
+  !children
+
 (* setup data server *)
 let ds_log_fn = ref ""
 let ds_host = ref "localhost"
@@ -154,6 +173,13 @@ let extract_file (src_fn: Types.filename) (dst_fn: Types.filename): ds_to_cli =
 
 exception Invalid_ds_rank
 
+let send_to int2node ds_rank something =
+  match int2node.(ds_rank) with
+  | (_node, Some to_ds_i) -> Socket.send to_ds_i something
+  | (_, None) ->
+    Log.debug "%d rang demande %d" (Node.get_rank !local_node) ds_rank;
+    assert(false)
+
 let main () =
   (* setup logger *)
   Logger.set_log_level Logger.DEBUG;
@@ -251,14 +277,8 @@ let main () =
                     )
                 in
                 (* 4) send it *)
-                begin match int2node.(ds_rank) with
-                  | (_node, Some to_ds_i) ->
-                    Socket.send to_ds_i
-                      (DS_to_DS (Chunk (fn, chunk_id, is_last, chunk_data)))
-                  | (_, None) -> 
-		    Log.debug "%d rang demande %d" (Node.get_rank !local_node) ds_rank ;
-		    assert(false)
-                end
+                let something = DS_to_DS (Chunk (fn, chunk_id, is_last, chunk_data)) in
+                send_to int2node ds_rank something
               with Not_found ->
                 Log.error "no such chunk: fn: %s id: %d" fn chunk_id
             with
@@ -357,7 +377,7 @@ let main () =
               Socket.send to_cli
                 (DS_to_CLI (Fetch_file_cmd_nack (fn, err)))
             | Bcast_file_ack ->
-	      failwith "Bcast_file_ack" 
+	      failwith "Bcast_file_ack"
           end
         | CLI_to_DS (Bcast_file_cmd_req fn) ->
           Log.debug "got Bcast_file_cmd_req"; (* FBR will factor the code *)
@@ -366,15 +386,29 @@ let main () =
             | Fetch_file_cmd_ack fn ->
 	      (* here starts the true business of the broadcast *)
               let file = FileSet.find_fn fn !local_state in
-              let bcast_file_req = Bcast_file_req (!ds_rank, file) in
-	      Socket.send to_mds ( DS_to_MDS bcast_file_req );
-              (* unlock the CLI *)
-              Socket.send to_cli ( DS_to_CLI Bcast_file_ack )
+              let algo = `Bino in
+              begin match algo with
+                | `Seq ->
+                  begin
+                    let bcast_file_req = Bcast_file_req (!ds_rank, file) in
+	            Socket.send to_mds ( DS_to_MDS bcast_file_req );
+                    (* unlock the CLI *)
+                    Socket.send to_cli ( DS_to_CLI Bcast_file_ack )
+                  end
+                | `Bino ->
+                  let children = compute_bino_children !ds_rank (A.length int2node) in
+                  List.iter (fun _c ->
+                      failwith "not implemented yet"
+                        (* FBR: finish that *)
+                        (* send_to int2node c *)
+                        (* (DS_to_DS (Bcast_chunk (fn, chunk_id, is_last, chunk_data, !ds_rank))) *)
+                    ) children;
+              end
             | Fetch_file_cmd_nack  (fn, err) ->
               Socket.send to_cli
                 (DS_to_CLI (Fetch_file_cmd_nack (fn, err)))
             | Bcast_file_ack ->
-	      failwith "Bcast_file_ack" 
+	      failwith "Bcast_file_ack"
 	  end
         | CLI_to_DS (Fetch_file_cmd_req (fn, Remote)) ->
           Log.debug "got Fetch_file_cmd_req:Remote";
@@ -389,7 +423,7 @@ let main () =
         | CLI_to_DS (Extract_file_cmd_req (src_fn, dst_fn)) ->
           let res = extract_file src_fn dst_fn in
           Socket.send to_cli (DS_to_CLI res)
-	| DS_to_DS ( Bcast_chunk (_, _, _, _, _) ) -> 
+	| DS_to_DS ( Bcast_chunk (_, _, _, _, _) ) ->
 	  failwith "DS to DS chunk movements not implemented yet. Coming soon, stay tuned!"
     done;
     raise Types.Loop_end;

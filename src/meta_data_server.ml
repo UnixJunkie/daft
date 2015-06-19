@@ -70,7 +70,6 @@ let fetch_mds fn ds_rank int2node to_cli=
 let bcast_mds (f: File.t) (root: Types.ds_rank) int2node algo =
   match algo with
   | `Seq ->
-    Log.debug "got Bcast_file_req";
     let fn = File.(f.name) in
     if FileSet.contains_fn fn !global_state then
       Log.warn "bcast_mds: file already added: %s" fn
@@ -79,7 +78,7 @@ let bcast_mds (f: File.t) (root: Types.ds_rank) int2node algo =
     Array.iteri ( fun i _ -> 
         if i <> root then
           begin
-	    Log.debug "Envoi a DS %d" i;
+
 	    fetch_mds fn i int2node None
           end
       ) int2node
@@ -192,6 +191,7 @@ let main () =
 	  Log.debug "got Fetch_file_req";
 	  fetch_mds fn ds_rank int2node ( Some to_cli )
         | DS_to_MDS (Bcast_file_req (ds_rank, fn)) ->
+          Log.debug "got Bcast_file_req";
 	  bcast_mds fn ds_rank int2node `Seq
         | CLI_to_MDS Ls_cmd_req ->
           Log.debug "got Ls_cmd_req";
