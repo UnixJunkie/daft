@@ -1,6 +1,6 @@
 # to run local tests
 
-set -x
+#set -x
 
 function reset () {
     pkill daft_mds    # kill MDS
