@@ -41,7 +41,39 @@ let hostname (): string =
   ;
   res
 
+module Amoeba = struct
+  (* broadcasting technique:
+     compute two children per node and stop once we are looping *)
+  let incr_mod i nb_nodes =
+    (i + 1) mod nb_nodes
+  (* when you receive a chunk to broadcast: you call fork to know
+     if and to who you need to forward those chunks *)
+  let fork ((root_rank, step_num, my_rank, nb_nodes) as params) =
+    let i = (my_rank + step_num + 1) mod nb_nodes in
+    let j = incr_mod i nb_nodes in
+    if i = root_rank then ([], params)
+    else if j = root_rank then ([i], params)
+    else ([i; j], (root_rank, step_num + 1, incr_mod my_rank nb_nodes, nb_nodes))
+  (* ranks is for tests in the toplevel only *)
+  let rec ranks root_rank step_num my_rank nb_nodes acc =
+    match fork (root_rank, step_num, my_rank, nb_nodes) with
+    | [], _ -> List.rev acc
+    | [i], _ -> List.rev ((my_rank, [i]) :: acc)
+    | [i; j], (rr, sn, mr, nb) -> ranks rr sn mr nb ((my_rank, [i; j]) :: acc)
+    | _ -> assert(false)
+end
+
 let compute_children_bino (my_rank_i: int) (max_rank_i: int): int list =
+  (* FBR: there is a bug: 9 appears two times as a dest
+     0 1
+     0 2
+     0 4
+     0 8
+     1 3
+     1 5
+     1 9
+     2 6
+     3 9 *)
   let logbin a =
     if a = 0.0 then -1.0
     else log a /. log 2.0
@@ -56,7 +88,7 @@ let compute_children_bino (my_rank_i: int) (max_rank_i: int): int list =
     baselog := !baselog +. 1.0;
     child := ds_rank +. 2. ** !baselog;
     children := (int_of_float !child) :: !children;
-    (* Log.debug "next child: %f" !child; *)
+    Log.debug "%d %f" my_rank_i !child
   done;
   !children
 
@@ -225,7 +257,8 @@ let main () =
         in
         A.set int2node i (node, Some sock)
     ) int2node;
-  Log.info "read %d host(s)" (A.length int2node);
+  let nb_nodes = A.length int2node in
+  Log.info "read %d host(s)" nb_nodes;
   local_node := Node.create !ds_rank !ds_host !ds_port_in;
   Log.info "Client of MDS %s:%d" !mds_host !mds_port_in;
   data_store_root := create_data_store ();
@@ -396,13 +429,14 @@ let main () =
                     Socket.send to_cli ( DS_to_CLI Bcast_file_ack )
                   end
                 | `Bino ->
-                  let children = compute_children_bino !ds_rank (A.length int2node) in
-                  List.iter (fun _c ->
-                      failwith "not implemented yet"
-                        (* FBR: finish that *)
-                        (* send_to int2node c *)
-                        (* (DS_to_DS (Bcast_chunk (fn, chunk_id, is_last, chunk_data, !ds_rank))) *)
-                    ) children;
+                  match Amoeba.fork (!ds_rank, 0, !ds_rank, nb_nodes) with
+                  | [], _ -> () (* job done *)
+                  | [i], _ -> failwith "do a regular send_chunk to him"
+                  | [i; j], (root_rank, step_num, _, _) ->
+                    (* iter over all chunks *)
+                    (* send each chunk to the two guys in bcast moe *)
+                    failwith "do two send_chunk_bcast"
+                  | _ -> assert(false)
               end
             | Fetch_file_cmd_nack  (fn, err) ->
               Socket.send to_cli
