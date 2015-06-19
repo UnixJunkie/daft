@@ -202,69 +202,69 @@ let extract_file (src_fn: Types.filename) (dst_fn: Types.filename): ds_to_cli =
   else
     Fetch_file_cmd_nack (src_fn, No_such_file)
 
-exception Invalid_rank of int
-
 let send_to int2node ds_rank something =
   (* enforce ds_rank bounds because array access soon *)
-  if Utils.out_of_bounds ds_rank int2node then raise (Invalid_rank ds_rank);
-  match int2node.(ds_rank) with
-  | (_node, Some to_ds_i) -> Socket.send to_ds_i something
-  | (_, None) ->
-    Log.fatal "send_to: no socket for DS %d" ds_rank;
-    exit 1
+  if Utils.out_of_bounds ds_rank int2node then
+    begin
+      Log.fatal "send_to: out of bounds rank: %d" ds_rank;
+      exit 1
+    end
+  else match int2node.(ds_rank) with
+    | (_node, Some to_ds_i) -> Socket.send to_ds_i something
+    | (_, None) ->
+      begin
+        Log.fatal "send_to: no socket for DS %d" ds_rank;
+        exit 1
+      end
 
 (* retrieve a chunk from disk *)
-let retrieve_chunk (fn: string) (chunk_id: int): string option =
+let retrieve_chunk (fn: string) (chunk_id: int): string =
   try (* 1) check we have this file *)
     let file = FileSet.find_fn fn !local_state in
     try (* 2) check we have this chunk *)
       let chunk = File.find_chunk_id chunk_id file in
       (* 3) seek to it *)
       let local_file = fn_to_path fn in
-      let chunk_data =
-        Utils.with_in_file_descr local_file (fun input ->
-            let offset = chunk_id * !chunk_size in
-            assert(Unix.(lseek input offset SEEK_SET) = offset);
-            let curr_chunk_size = match Chunk.get_size chunk with
-              | None -> !chunk_size
-              | Some s ->
-                let res = Int64.to_int s in
-                assert(res > 0 && res < !chunk_size);
-                res
-            in
-            (* WARNING: data copy here and allocation of
-                        a fresh buffer each time *)
-            let buff = String.create curr_chunk_size in
-            Utils.really_read input buff curr_chunk_size;
-            buff
-          )
-      in
-      Some chunk_data
+      Utils.with_in_file_descr local_file (fun input ->
+          let offset = chunk_id * !chunk_size in
+          assert(Unix.(lseek input offset SEEK_SET) = offset);
+          let curr_chunk_size = match Chunk.get_size chunk with
+            | None -> !chunk_size
+            | Some s ->
+              let res = Int64.to_int s in
+              assert(res > 0 && res < !chunk_size);
+              res
+          in
+          (* WARNING: data copy here and allocation of
+                      a fresh buffer each time *)
+          let buff = String.create curr_chunk_size in
+          Utils.really_read input buff curr_chunk_size;
+          buff
+        )
     with Not_found ->
-      Utils.ignore_first
-        (Log.error "retrieve_chunk: no such chunk: fn: %s id: %d" fn chunk_id)
-        None
+      begin
+        Log.fatal "retrieve_chunk: no such chunk: fn: %s id: %d" fn chunk_id;
+        exit 1
+      end
   with Not_found ->
-    Utils.ignore_first
-      (Log.error "retrieve_chunk: no such file: %s" fn)
-      None
+    begin
+      Log.fatal "retrieve_chunk: no such file: %s" fn;
+      exit 1
+    end
 
 let send_chunk to_rank int2node fn chunk_id is_last chunk_data =
   let chunk_msg = DS_to_DS (Chunk (fn, chunk_id, is_last, chunk_data)) in
   send_to int2node to_rank chunk_msg
 
 let bcast_chunk to_ranks int2node fn chunk_id is_last root_rank step_num =
-  try match retrieve_chunk fn chunk_id with
-    | None -> ()
-    | Some chunk_data ->
-      let bcast_chunk_msg =
-        DS_to_DS
-          (Bcast_chunk (fn, chunk_id, is_last, chunk_data, root_rank, step_num))
-      in
-      List.iter (fun to_rank ->
-          send_to int2node to_rank bcast_chunk_msg
-        ) to_ranks
-  with Invalid_rank r -> Log.error "bcast_chunk: invalid rank: %d" r
+  let chunk_data = retrieve_chunk fn chunk_id in
+  let bcast_chunk_msg =
+    DS_to_DS
+      (Bcast_chunk (fn, chunk_id, is_last, chunk_data, root_rank, step_num))
+  in
+  List.iter (fun to_rank ->
+      send_to int2node to_rank bcast_chunk_msg
+    ) to_ranks
 
 let store_chunk to_mds to_cli fn chunk_id is_last data =
   let size = String.length data in
@@ -397,11 +397,8 @@ let main () =
         | MDS_to_DS (Send_to_req (to_rank, fn, chunk_id, is_last)) ->
           begin
             Log.debug "got Send_to_req";
-            try match retrieve_chunk fn chunk_id with
-              | None -> ()
-              | Some chunk_data ->
-                send_chunk to_rank int2node fn chunk_id is_last chunk_data
-            with Invalid_rank r -> Log.error "Send_to_req: invalid rank: %d" r
+            let chunk_data = retrieve_chunk fn chunk_id in
+            send_chunk to_rank int2node fn chunk_id is_last chunk_data
           end
         | MDS_to_DS Quit_cmd ->
           Log.debug "got Quit_cmd";
@@ -446,7 +443,7 @@ let main () =
 	      (* here starts the true business of the broadcast *)
               let file = FileSet.find_fn fn !local_state in
               let last_cid = (File.get_nb_chunks file) - 1 in
-              let algo = `Seq in
+              let algo = `Amoeba in
               begin match algo with
                 | `Seq ->
                   begin
@@ -465,14 +462,10 @@ let main () =
                     (* send all file chunks to him in the regular way since
                        this is the last broadcast step *)
                     for chunk_id = 0 to last_cid do
-                      try match retrieve_chunk fn chunk_id with
-                        | None -> ()
-                        | Some chunk_data ->
-                          let is_last = (chunk_id = last_cid) in
-                          send_chunk
-                            to_rank int2node fn chunk_id is_last chunk_data
-                      with Invalid_rank r ->
-                        Log.error "Bcast_file_cmd_req: invalid rank: %d" r
+                      let chunk_data = retrieve_chunk fn chunk_id in
+                      let is_last = (chunk_id = last_cid) in
+                      send_chunk
+                        to_rank int2node fn chunk_id is_last chunk_data
                     done
                   | (([_; _] as to_ranks), (root_rank, step_num, _, _)) ->
                     for chunk_id = 0 to last_cid do
