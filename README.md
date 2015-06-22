@@ -74,8 +74,6 @@ TakTuk can achieve when distributing data to cluster nodes.
 
 [dolog] https://github.com/UnixJunkie/dolog/
 
-[bitv] https://github.com/backtracking/bitv
-
 [fileutils] http://ocaml-fileutils.forge.ocamlcore.org/
 
 [cryptokit] https://forge.ocamlcore.org/projects/cryptokit/
