@@ -517,6 +517,5 @@ let main () =
         | _ -> raise exn
       end
     end
-;;
 
-main ()
+let () = main ()
