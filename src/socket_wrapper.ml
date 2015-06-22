@@ -50,12 +50,15 @@ let uncompress (s: string option): string option =
       let n = String.length maybe_compressed in
       if n < 2 then
         raise Too_short
-      else if String.get maybe_compressed 0 = '0' then
-        Some (String.sub maybe_compressed 1 (n - 1)) (* not compressed *)
-      else if String.get maybe_compressed 0 = '1' then
-        Some
-          (LZ4.Bytes.decompress ~length:1_572_864
-             (String.sub maybe_compressed 1 (n - 1)))
+      else
+        let body = String.sub maybe_compressed 1 (n - 1) in
+        if String.get maybe_compressed 0 = '0' then (* not compressed *)
+          Some body
+        else if String.get maybe_compressed 0 = '1' then (* compressed *)
+          let after =
+            LZ4.Bytes.decompress_into (Bytes.of_string body) compression_buffer
+          in
+          Some (Bytes.sub_string compression_buffer 0 after)
       else
         raise Invalid_first_char
     with
