@@ -134,8 +134,8 @@ module Command = struct
       end
 end
 
-let extract_cmd src_fn dst_fn for_DS incoming =
-  Socket.send for_DS
+let extract_cmd local_node src_fn dst_fn for_DS incoming =
+  Socket.send local_node for_DS
     (CLI_to_DS (Extract_file_cmd_req (src_fn, dst_fn)));
   process_answer incoming do_nothing
 
@@ -186,6 +186,8 @@ let main () =
         Utils.set_host_port ds_host ds_port_in daft_ds_env_var
     end;
   assert(!ds_host <> "" && !ds_port_in <> uninitialized);
+  let hostname = Utils.hostname () in
+  let local_node = Node.create uninitialized hostname !cli_port_in in
   let ctx = ZMQ.Context.create () in
   let for_MDS = Utils.(zmq_socket Push ctx !mds_host !mds_port_in) in
   Log.info "Client of MDS %s:%d" !mds_host !mds_port_in;
@@ -202,19 +204,19 @@ let main () =
       match read_one_command !interactive with
       | Skip -> Log.info "\nusage: put|get|fetch|rfetch|extract|exit|quit|ls|bcast"
       | Put src_fn ->
-        Socket.send for_DS
+        Socket.send local_node for_DS
           (CLI_to_DS (Fetch_file_cmd_req (src_fn, Local)));
         process_answer incoming do_nothing
       | Get (src_fn, dst_fn) ->
         (* get = extract . fetch *)
-        Socket.send for_DS
+        Socket.send local_node for_DS
           (CLI_to_DS (Fetch_file_cmd_req (src_fn, Remote)));
         let fetch_cont =
-          (fun () -> extract_cmd src_fn dst_fn for_DS incoming) 
+          (fun () -> extract_cmd local_node src_fn dst_fn for_DS incoming) 
         in
         process_answer incoming fetch_cont
       | Fetch src_fn ->
-        Socket.send for_DS
+        Socket.send local_node for_DS
           (CLI_to_DS (Fetch_file_cmd_req (src_fn, Remote)));
         process_answer incoming do_nothing
       | Rfetch (src_fn, host_port) ->
@@ -222,24 +224,24 @@ let main () =
         Utils.set_host_port host port host_port;
         (* create temp socket to remote DS *)
         let for_ds_i = Utils.(zmq_socket Push ctx !host !port) in
-        Socket.send for_ds_i
+        Socket.send local_node for_ds_i
           (CLI_to_DS (Fetch_file_cmd_req (src_fn, Remote)));
         process_answer incoming do_nothing;
         ZMQ.Socket.close for_ds_i
       | Extract (src_fn, dst_fn) ->
-        extract_cmd src_fn dst_fn for_DS incoming
+        extract_cmd local_node src_fn dst_fn for_DS incoming
       | Quit ->
-        Socket.send for_MDS
+        Socket.send local_node for_MDS
           (CLI_to_MDS Quit_cmd);
         not_finished := false;
       | Exit ->
         not_finished := false
       | Ls ->
-        Socket.send for_MDS
+        Socket.send local_node for_MDS
           (CLI_to_MDS Ls_cmd_req);
         process_answer incoming do_nothing
       | Bcast src_fn ->
-        Socket.send for_DS
+        Socket.send local_node for_DS
           (CLI_to_DS (Bcast_file_cmd_req src_fn));
         process_answer incoming do_nothing
     done;
