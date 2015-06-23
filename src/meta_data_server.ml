@@ -29,7 +29,7 @@ let abort msg =
   Log.fatal "%s" msg;
   exit 1
 
-let fetch_mds fn ds_rank int2node to_cli=
+let fetch_mds local_node fn ds_rank int2node to_cli=
   try
     let file = FileSet.find_fn fn !global_state in
     let chunks = Types.File.get_chunks file in
@@ -53,7 +53,7 @@ let fetch_mds fn ds_rank int2node to_cli=
                 MDS_to_DS
                   (Send_to_req (ds_rank, fn, chunk_id, is_last))
               in
-              Socket.send to_ds_i send_order
+              Socket.send local_node to_ds_i send_order
             | (_, None) -> assert(false)
           end
       ) chunks
@@ -62,10 +62,15 @@ let fetch_mds fn ds_rank int2node to_cli=
     | None -> ()
     | Some sock ->
       (* this assumes there is a single CLI; might be wrong in future *)
-      Socket.send sock (MDS_to_CLI (Fetch_cmd_nack fn))
+      Socket.send local_node sock (MDS_to_CLI (Fetch_cmd_nack fn))
 
 (* CCO: better done with only one MDS -> local DS communication *)
-let bcast_mds (f: File.t) (root: Types.ds_rank) int2node algo =
+let bcast_mds
+    (local_node: Types.Node.t)
+    (f: File.t)
+    (root: Types.ds_rank)
+    int2node
+    algo =
   match algo with
   | `Seq ->
     let fn = File.(f.name) in
@@ -74,7 +79,7 @@ let bcast_mds (f: File.t) (root: Types.ds_rank) int2node algo =
     else
       global_state := FileSet.add f !global_state;
     Array.iteri (fun i _ -> 
-        if i <> root then fetch_mds fn i int2node None
+        if i <> root then fetch_mds local_node fn i int2node None
       ) int2node
   | _ -> failwith "bcast_mds: only `Seq algo"
 
@@ -101,6 +106,8 @@ let main () =
   let int2node = Utils.data_nodes_array !machine_file in
   Log.info "read %d host(s)" (A.length int2node);
   start_data_nodes !machine_file;
+  let hostname = Utils.hostname () in
+  let local_node = Types.Node.create (-1) hostname !port_in in
   (* start server *)
   Log.info "binding server to %s:%d" "*" !port_in;
   let ctx = ZMQ.Context.create () in
@@ -153,7 +160,7 @@ let main () =
                   Add_file_ack f.name
                 end
               in
-              Socket.send receiver (MDS_to_DS ack_or_nack)
+              Socket.send local_node receiver (MDS_to_DS ack_or_nack)
           end
         | DS_to_MDS (Chunk_ack (fn, chunk_id, ds_rank)) ->
           begin
@@ -183,13 +190,13 @@ let main () =
           end
         | DS_to_MDS (Fetch_file_req (ds_rank, fn)) ->
 	  Log.debug "got Fetch_file_req";
-	  fetch_mds fn ds_rank int2node ( Some to_cli )
+	  fetch_mds local_node fn ds_rank int2node ( Some to_cli )
         | DS_to_MDS (Bcast_file_req (ds_rank, fn)) ->
           Log.debug "got Bcast_file_req";
-	  bcast_mds fn ds_rank int2node `Seq
+	  bcast_mds local_node fn ds_rank int2node `Seq
         | CLI_to_MDS Ls_cmd_req ->
           Log.debug "got Ls_cmd_req";
-          Socket.send to_cli
+          Socket.send local_node to_cli
             (MDS_to_CLI (Ls_cmd_ack !global_state))
         | CLI_to_MDS Quit_cmd ->
           Log.debug "got Quit_cmd";
@@ -197,7 +204,7 @@ let main () =
           (* send Quit to all DSs *)
           A.iteri (fun i (_ds, maybe_sock) -> match maybe_sock with
               | None -> Log.warn "DS %d missing" i
-              | Some to_DS_i -> Socket.send to_DS_i (MDS_to_DS Quit_cmd)
+              | Some to_DS_i -> Socket.send local_node to_DS_i (MDS_to_DS Quit_cmd)
             ) int2node;
           not_finished := false
     done;
