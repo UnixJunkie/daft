@@ -49,6 +49,7 @@ module Interval = struct
 end
 
 module IntervalSet = Set.Make(Interval)
+module StringSet = Set.Make(String)
 
 module Node = struct
   (* the rank allows to uniquely identify a node; a la MPI *)
@@ -73,6 +74,20 @@ module Node = struct
     Scanf.sscanf s "%d.%s:%d" create
   let compare n1 n2 =
     BatInt.compare n1.rank n2.rank
+end
+
+module Nonce_store = struct
+  type t = string
+  let counter = ref 0
+  let nonces = ref StringSet.empty
+  let add_one (n: Node.t): t =
+    let nonce =
+      sprintf "%s:%d:%d" (Node.get_host n) (Node.get_port n) !counter
+    in
+    if !counter = -1 then failwith "add_one: counter has looped";
+    incr counter;
+    nonces := StringSet.add nonce !nonces;
+    nonce
 end
 
 module NodeSet = struct
