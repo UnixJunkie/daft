@@ -76,18 +76,27 @@ module Node = struct
     BatInt.compare n1.rank n2.rank
 end
 
+(* create fresh nonces and check their freshness *)
 module Nonce_store = struct
   type t = string
   let counter = ref 0
   let nonces = ref StringSet.empty
-  let add_one (n: Node.t): t =
+  let fresh (n: Node.t): t =
     let nonce =
       sprintf "%s:%d:%d" (Node.get_host n) (Node.get_port n) !counter
     in
-    if !counter = -1 then failwith "add_one: counter has looped";
+    if !counter = -1 then failwith "fresh: counter has looped";
     incr counter;
     nonces := StringSet.add nonce !nonces;
     nonce
+  let is_fresh (nonce: t): bool =
+    if StringSet.mem nonce !nonces then
+      false
+    else
+      begin
+        nonces := StringSet.add nonce !nonces;
+        true
+      end
 end
 
 module NodeSet = struct
