@@ -133,11 +133,15 @@ let decrypt (s: string option): string option =
     turing#finish;
     Some turing#get_string
 
-(* FBR: TODO: SALT *)
 (* full pipeline: compress --> salt --> encrypt --> sign *)
 let encode (m: 'a): string =
-  let plain_text = Marshal.to_string m [Marshal.No_sharing] in
-  let maybe_compressed = may_do compression_flag compress plain_text in
+  let no_sharing = [Marshal.No_sharing] in
+  let plain_text = Marshal.to_string m no_sharing in
+  let maybe_compressed' = may_do compression_flag compress plain_text in
+  let salt = Types.RNG.int64 Int64.max_int in
+  Log.debug "enc. salt = %s" (Int64.to_string salt);
+  let salted' = (salt, maybe_compressed') in
+  let salted = Marshal.to_string salted' no_sharing in
   let maybe_encrypted =
     may_do encryption_flag
       (fun x ->
@@ -146,7 +150,7 @@ let encode (m: 'a): string =
          let after = String.length res in
          Log.debug "c: %d -> %d" before after;
          res
-      ) maybe_compressed
+      ) salted
   in
   may_do signature_flag
     (fun x ->
@@ -157,16 +161,17 @@ let encode (m: 'a): string =
        res
     ) maybe_encrypted
 
-let unmarshall (x: string): 'a option =
-  Some (Marshal.from_string x 0)
-
-(* FBR: TODO: REMOVE SALT *)
 (* full pipeline: check signature --> decrypt --> remove salt --> uncompress *)
 let decode (s: string): 'a option =
   let sign_OK = may_do signature_flag check_sign (Some s) in
-  let cipher_OK = may_do encryption_flag decrypt sign_OK in
-  let compression_OK = may_do compression_flag uncompress cipher_OK in
-  chain unmarshall compression_OK
+  let cipher_OK' = may_do encryption_flag decrypt sign_OK in
+  match cipher_OK' with
+  | None -> None
+  | Some str ->
+    let (salt, maybe_compressed) = (Marshal.from_string str 0: Int64.t * string) in
+    Log.debug "dec. salt = %s" (Int64.to_string salt);
+    let compression_OK = may_do compression_flag uncompress (Some maybe_compressed) in
+    chain (fun x -> Some (Marshal.from_string x 0: 'a)) compression_OK
 
 module CLI_socket = struct
 
