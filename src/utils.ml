@@ -185,3 +185,25 @@ let cleanup_data_nodes_array warn a =
 let ignore_first x y =
   ignore(x);
   y
+
+let count_char (c: char) (s: string): int =
+  let res = ref 0 in
+  String.iter (fun c' -> if c = c' then incr res) s;
+  !res
+
+let hostname (): string =
+  let open Unix in
+  let host_entry = gethostbyname (gethostname ()) in
+  let n1 = host_entry.h_name in
+  let l1 = String.length n1 in
+  let n2 = host_entry.h_aliases.(0) in
+  let l2 = String.length n2 in
+  let res =
+    if l1 > l2 then n1
+    else
+      ignore_first
+        (Log.warn "hostname: host alias (%s) longer than FQDN (%s)" n2 n1)
+        n2
+  in
+  if count_char '.' res <> 2 then Log.warn "hostname: FQ hostname: %s" res;
+  res
