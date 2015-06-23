@@ -25,16 +25,17 @@ let chain f = function
   | Some x -> f x
 
 (* FBR: use a BigArray as a buffer; since LZ4 can nowadays *)
-let compression_buffer = Bytes.create 1_572_864
+let buff_size = 1_572_864
+let buffer = Bytes.create buff_size
 
 (* hot toggable compression: never inflate messages *)
 let compress (s: string): string =
   let before = String.length s in
-  let after = LZ4.Bytes.compress_into (Bytes.of_string s) compression_buffer in
+  let after = LZ4.Bytes.compress_into (Bytes.of_string s) buffer in
   if after >= before then
     "0" ^ s (* flag as not compressed and keep as is *)
   else
-    let res = Bytes.sub_string compression_buffer 0 after in
+    let res = Bytes.sub_string buffer 0 after in
     Utils.ignore_first
       (Log.debug "z: %d -> %d" before after)
       ("1" ^ res) (* flag as compressed *)
@@ -56,9 +57,9 @@ let uncompress (s: string option): string option =
           Some body
         else if String.get maybe_compressed 0 = '1' then (* compressed *)
           let after =
-            LZ4.Bytes.decompress_into (Bytes.of_string body) compression_buffer
+            LZ4.Bytes.decompress_into (Bytes.of_string body) buffer
           in
-          Some (Bytes.sub_string compression_buffer 0 after)
+          Some (Bytes.sub_string buffer 0 after)
       else
         raise Invalid_first_char
     with
