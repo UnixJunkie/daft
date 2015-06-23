@@ -3,6 +3,10 @@
 
 open Types.Protocol
 
+module Nonce_store = Types.Nonce_store
+module RNG = Types.RNG
+module Node = Types.Node
+
 (* FBR: one day, position those flags with (cppo) preprocessor directives; e.g.
 #ifdef NO_CRYPTO
 let encryption_flag = false
@@ -134,13 +138,14 @@ let decrypt (s: string option): string option =
     Some turing#get_string
 
 (* full pipeline: compress --> salt --> encrypt --> sign *)
-let encode (m: 'a): string =
+let encode (sender: Node.t) (m: 'a): string =
   let no_sharing = [Marshal.No_sharing] in
   let plain_text = Marshal.to_string m no_sharing in
   let maybe_compressed' = may_do compression_flag compress plain_text in
-  let salt = Types.RNG.int64 Int64.max_int in
+  let salt = RNG.int64 Int64.max_int in
+  let nonce = Nonce_store.fresh sender in
   Log.debug "enc. salt = %s" (Int64.to_string salt);
-  let salted' = (salt, maybe_compressed') in
+  let salted' = (salt, nonce, maybe_compressed') in
   let salted = Marshal.to_string salted' no_sharing in
   let maybe_encrypted =
     may_do encryption_flag
@@ -168,14 +173,21 @@ let decode (s: string): 'a option =
   match cipher_OK' with
   | None -> None
   | Some str ->
-    let (salt, maybe_compressed) = (Marshal.from_string str 0: Int64.t * string) in
+    let (salt, nonce, maybe_compressed) =
+      (Marshal.from_string str 0: Int64.t * string * string)
+    in
     Log.debug "dec. salt = %s" (Int64.to_string salt);
-    let compression_OK = may_do compression_flag uncompress (Some maybe_compressed) in
-    chain (fun x -> Some (Marshal.from_string x 0: 'a)) compression_OK
+    if not (Nonce_store.is_fresh nonce) then None
+    else
+      let compression_OK =
+        may_do compression_flag uncompress (Some maybe_compressed)
+      in
+      chain (fun x -> Some (Marshal.from_string x 0: 'a)) compression_OK
 
 module CLI_socket = struct
 
   let send
+      (sender: Node.t)
       (sock: [> `Push] ZMQ.Socket.t)
       (m: from_cli): unit =
     (* marshalling + type translation so that message is OK to unmarshall
@@ -183,10 +195,10 @@ module CLI_socket = struct
     let translate_type: from_cli -> string = function
       | CLI_to_MDS x ->
         let to_send: to_mds = CLI_to_MDS x in
-        encode to_send
+        encode sender to_send
       | CLI_to_DS x ->
         let to_send: to_ds = CLI_to_DS x in
-        encode to_send
+        encode sender to_send
     in
     ZMQ.Socket.send sock (translate_type m)
 
@@ -198,15 +210,16 @@ end
 module MDS_socket = struct
 
   let send
+      (sender: Node.t)
       (sock: [> `Push] ZMQ.Socket.t)
       (m: from_mds): unit =
     let translate_type: from_mds -> string = function
       | MDS_to_DS x ->
         let to_send: to_ds = MDS_to_DS x in
-        encode to_send
+        encode sender to_send
       | MDS_to_CLI x ->
         let to_send: to_cli = MDS_to_CLI x in
-        encode to_send
+        encode sender to_send
     in
     ZMQ.Socket.send sock (translate_type m)
 
@@ -218,18 +231,19 @@ end
 module DS_socket = struct
 
   let send
+      (sender: Node.t)
       (sock: [> `Push] ZMQ.Socket.t)
       (m: from_ds): unit =
     let translate_type: from_ds -> string = function
       | DS_to_MDS x ->
         let to_send: to_mds = DS_to_MDS x in
-        encode to_send
+        encode sender to_send
       | DS_to_DS x ->
         let to_send: to_ds = DS_to_DS x in
-        encode to_send
+        encode sender to_send
       | DS_to_CLI x ->
         let to_send: to_cli = DS_to_CLI x in
-        encode to_send
+        encode sender to_send
     in
     ZMQ.Socket.send sock (translate_type m)
 
