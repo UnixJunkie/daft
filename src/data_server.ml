@@ -18,28 +18,6 @@ module Chunk = File.Chunk
 module ChunkSet = File.ChunkSet
 module Socket = Socket_wrapper.DS_socket
 
-let count_char (c: char) (s: string): int =
-  let res = ref 0 in
-  String.iter (fun c' -> if c = c' then incr res) s;
-  !res
-
-let hostname (): string =
-  let open Unix in
-  let host_entry = gethostbyname (gethostname ()) in
-  let n1 = host_entry.h_name in
-  let l1 = String.length n1 in
-  let n2 = host_entry.h_aliases.(0) in
-  let l2 = String.length n2 in
-  let res =
-    if l1 > l2 then n1
-    else
-      Utils.ignore_first
-        (Log.warn "hostname: host alias (%s) longer than FQDN (%s)" n2 n1)
-        n2
-  in
-  if count_char '.' res <> 2 then Log.warn "hostname: FQ hostname: %s" res;
-  res
-
 module Amoeba = struct
   (* broadcasting technique:
      compute two children per node and stop once we are looping *)
@@ -203,7 +181,7 @@ let extract_file (src_fn: Types.filename) (dst_fn: Types.filename): ds_to_cli =
 
 exception Fatal (* throw this when we are doomed *)
 
-let send_to int2node ds_rank something =
+let send_to local_node int2node ds_rank something =
   (* enforce ds_rank bounds because array access soon *)
   if Utils.out_of_bounds ds_rank int2node then
     begin
@@ -211,7 +189,7 @@ let send_to int2node ds_rank something =
       raise Fatal
     end
   else match int2node.(ds_rank) with
-    | (_node, Some to_ds_i) -> Socket.send to_ds_i something
+    | (_node, Some to_ds_i) -> Socket.send local_node to_ds_i something
     | (_, None) ->
       begin
         Log.fatal "send_to: no socket for DS %d" ds_rank;
@@ -253,17 +231,17 @@ let retrieve_chunk (fn: string) (chunk_id: int): string =
       raise Fatal
     end
 
-let send_chunk to_rank int2node fn chunk_id is_last chunk_data =
+let send_chunk local_node to_rank int2node fn chunk_id is_last chunk_data =
   let chunk_msg = DS_to_DS (Chunk (fn, chunk_id, is_last, chunk_data)) in
-  send_to int2node to_rank chunk_msg
+  send_to local_node int2node to_rank chunk_msg
 
-let bcast_chunk to_ranks int2node fn chunk_id is_last root_rank step_num chunk_data =
+let bcast_chunk local_node to_ranks int2node fn chunk_id is_last root_rank step_num chunk_data =
   let bcast_chunk_msg =
     DS_to_DS
       (Bcast_chunk (fn, chunk_id, is_last, chunk_data, root_rank, step_num))
   in
   List.iter (fun to_rank ->
-      send_to int2node to_rank bcast_chunk_msg
+      send_to local_node int2node to_rank bcast_chunk_msg
     ) to_ranks
 
 let store_chunk to_mds to_cli fn chunk_id is_last data =
@@ -311,7 +289,7 @@ let store_chunk to_mds to_cli fn chunk_id is_last data =
     in
     local_state := FileSet.update new_file !local_state;
     (* 3) notify MDS *)
-    Socket.send to_mds
+    Socket.send !local_node to_mds
       (DS_to_MDS (Chunk_ack (fn, chunk_id, !my_rank)));
     (* 4) notify CLI if all file chunks have been received
           and fix file perms in the local datastore *)
@@ -323,7 +301,7 @@ let store_chunk to_mds to_cli fn chunk_id is_last data =
         match to_cli with
         | None -> () (* in case of broadcast: no feedback to CLI *)
         | Some cli_sock ->
-          Socket.send cli_sock (DS_to_CLI (Fetch_file_cmd_ack fn))
+          Socket.send !local_node cli_sock (DS_to_CLI (Fetch_file_cmd_ack fn))
       end
   end
 
@@ -332,7 +310,7 @@ let main () =
   Logger.set_log_level Logger.DEBUG;
   Logger.set_output Legacy.stdout;
   Logger.color_on ();
-  ds_host := hostname ();
+  ds_host := Utils.hostname ();
   (* options parsing *)
   Arg.parse
     [ "-cs", Arg.Set_int chunk_size, "<size> file chunk size";
@@ -385,7 +363,7 @@ let main () =
   (* register at the MDS *)
   Log.info "connecting to MDS %s:%d" !mds_host !mds_port_in;
   let to_mds = Utils.(zmq_socket Push ctx !mds_host !mds_port_in) in
-  Socket.send to_mds (DS_to_MDS (Join_push !local_node));
+  Socket.send !local_node to_mds (DS_to_MDS (Join_push !local_node));
   try (* loop on messages until quit command *)
     let not_finished = ref true in
     while !not_finished do
@@ -398,7 +376,7 @@ let main () =
           begin
             Log.debug "got Send_to_req";
             let chunk_data = retrieve_chunk fn chunk_id in
-            send_chunk to_rank int2node fn chunk_id is_last chunk_data
+            send_chunk !local_node to_rank int2node fn chunk_id is_last chunk_data
           end
         | MDS_to_DS Quit_cmd ->
           Log.debug "got Quit_cmd";
@@ -407,7 +385,7 @@ let main () =
         | MDS_to_DS (Add_file_ack fn) ->
           Log.debug "got Add_file_ack";
           (* forward the good news to the CLI *)
-          Socket.send to_cli
+          Socket.send !local_node to_cli
             (DS_to_CLI (Fetch_file_cmd_ack fn))
         | MDS_to_DS (Add_file_nack fn) ->
           Log.debug "got Add_file_nack";
@@ -415,7 +393,7 @@ let main () =
           (* quick and dirty but maybe OK: only rollback local state's view *)
           local_state := FileSet.remove_fn fn !local_state;
           (* forward nack to CLI *)
-          Socket.send to_cli
+          Socket.send !local_node to_cli
             (DS_to_CLI (Fetch_file_cmd_nack (fn, Already_here)))
         | DS_to_DS (Chunk (fn, chunk_id, is_last, data)) ->
           Log.debug "got Chunk";
@@ -428,9 +406,9 @@ let main () =
               (* notify MDS about this new file *)
               let file = FileSet.find_fn fn !local_state in
               let add_file_req = Add_file_req (!my_rank, file) in
-              Socket.send to_mds (DS_to_MDS add_file_req)
+              Socket.send !local_node to_mds (DS_to_MDS add_file_req)
             | Fetch_file_cmd_nack (fn, err) ->
-              Socket.send to_cli
+              Socket.send !local_node to_cli
                 (DS_to_CLI (Fetch_file_cmd_nack (fn, err)))
             | Bcast_file_ack -> assert(false)
           end
@@ -451,9 +429,9 @@ let main () =
                     (* broadcasting a file is also adding it: we cannot start
                        broadcasting right here: we first need the MDS to allow
                        this new file *)
-	            Socket.send to_mds (DS_to_MDS bcast_file_req);
+	            Socket.send !local_node to_mds (DS_to_MDS bcast_file_req);
                     (* unlock CLI *)
-                    Socket.send to_cli (DS_to_CLI Bcast_file_ack)
+                    Socket.send !local_node to_cli (DS_to_CLI Bcast_file_ack)
                   end
                 | `Amoeba ->
                   match Amoeba.fork (!my_rank, 0, !my_rank, nb_nodes) with
@@ -464,13 +442,13 @@ let main () =
                       for chunk_id = 0 to last_cid do
                         let chunk_data = retrieve_chunk fn chunk_id in
                         let is_last = (chunk_id = last_cid) in
-                        bcast_chunk to_ranks int2node fn chunk_id is_last
+                        bcast_chunk !local_node to_ranks int2node fn chunk_id is_last
                           root_rank step_num chunk_data
                       done
                     | _ -> assert(false)
               end
             | Fetch_file_cmd_nack (fn, err) ->
-              Socket.send to_cli
+              Socket.send !local_node to_cli
                 (DS_to_CLI (Fetch_file_cmd_nack (fn, err)))
             | Bcast_file_ack -> assert(false)
 	  end
@@ -479,14 +457,14 @@ let main () =
           (* finish quickly in case file is already present locally *)
           if FileSet.contains_fn fn !local_state then
             let _ = Log.info "%s already here" fn in
-            Socket.send to_cli
+            Socket.send !local_node to_cli
               (DS_to_CLI (Fetch_file_cmd_ack fn))
           else (* forward request to MDS *)
-            Socket.send to_mds
+            Socket.send !local_node to_mds
               (DS_to_MDS (Fetch_file_req (Node.get_rank !local_node, fn)))
         | CLI_to_DS (Extract_file_cmd_req (src_fn, dst_fn)) ->
           let res = extract_file src_fn dst_fn in
-          Socket.send to_cli (DS_to_CLI res)
+          Socket.send !local_node to_cli (DS_to_CLI res)
 	| DS_to_DS
             (Bcast_chunk
                (fn, chunk_id, is_last, chunk_data, root_rank, step_num)) ->
@@ -497,7 +475,7 @@ let main () =
             | (to_ranks, (root_rank, step_num, _, _)) ->
               match to_ranks with
               | [_] | [_; _] -> (* one or two successors *)
-                bcast_chunk to_ranks int2node fn chunk_id is_last
+                bcast_chunk !local_node to_ranks int2node fn chunk_id is_last
                   root_rank step_num chunk_data
               | _ -> assert(false)
           end
