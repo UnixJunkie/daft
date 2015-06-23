@@ -87,6 +87,7 @@ module Nonce_store = struct
     in
     if !counter = -1 then failwith "fresh: counter has looped";
     incr counter;
+    Log.debug "nonce: %s" nonce;
     nonces := StringSet.add nonce !nonces;
     nonce
   let is_fresh (nonce: t): bool =
