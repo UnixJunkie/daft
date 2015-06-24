@@ -70,23 +70,18 @@ let bcast_mds
     (f: File.t)
     (root: Types.ds_rank)
     int2node =
+  let fn = File.(f.name) in
+  if FileSet.contains_fn fn !global_state then
+    Log.warn "bcast_mds: file already added: %s" fn
+  else
+    global_state := FileSet.add f !global_state;
   match Utils.default_bcast_algo with
   | `Seq ->
-    let fn = File.(f.name) in
-    if FileSet.contains_fn fn !global_state then
-      Log.warn "bcast_mds: file already added: %s" fn
-    else
-      global_state := FileSet.add f !global_state;
     Array.iteri (fun i _ -> 
         if i <> root then fetch_mds local_node fn i int2node None
       ) int2node
   | `Amoeba ->
-    (* FBR: factor code *)
-    let fn = File.(f.name) in
-    if FileSet.contains_fn fn !global_state then
-      Log.warn "bcast_mds: file already added: %s" fn
-    else
-      global_state := FileSet.add f !global_state
+    () (* DSs do the job themselves *)
 
 let main () =
   (* setup logger *)
