@@ -241,6 +241,7 @@ let bcast_chunk local_node to_ranks int2node fn chunk_id is_last root_rank step_
       (Bcast_chunk (fn, chunk_id, is_last, chunk_data, root_rank, step_num))
   in
   List.iter (fun to_rank ->
+      (* Log.debug "%d bcast to %d" (Node.get_rank local_node) to_rank; *)
       send_to local_node int2node to_rank bcast_chunk_msg
     ) to_ranks
 
@@ -367,6 +368,7 @@ let main () =
   try (* loop on messages until quit command *)
     let not_finished = ref true in
     while !not_finished do
+      Log.debug "waiting msg";
       let message' = Socket.receive incoming in
       match message' with
       | None -> Log.warn "junk"
@@ -421,8 +423,7 @@ let main () =
 	      (* here starts the true business of the broadcast *)
               let file = FileSet.find_fn fn !local_state in
               let last_cid = (File.get_nb_chunks file) - 1 in
-              let algo = `Seq in
-              begin match algo with
+              begin match Utils.default_bcast_algo with
                 | `Seq ->
                   begin
                     let bcast_file_req = Bcast_file_req (!my_rank, file) in
@@ -434,6 +435,11 @@ let main () =
                     Socket.send !local_node to_cli (DS_to_CLI Bcast_file_ack)
                   end
                 | `Amoeba ->
+                  let bcast_file_req = Bcast_file_req (!my_rank, file) in
+                  (* notify MDS to allow this potentially new file *)
+	          Socket.send !local_node to_mds (DS_to_MDS bcast_file_req);
+                  (* unlock CLI *)
+                  Socket.send !local_node to_cli (DS_to_CLI Bcast_file_ack);
                   match Amoeba.fork (!my_rank, 0, !my_rank, nb_nodes) with
                   | [], _ -> () (* job done *)
                   | (to_ranks, (root_rank, step_num, _, _)) ->

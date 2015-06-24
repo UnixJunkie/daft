@@ -69,9 +69,8 @@ let bcast_mds
     (local_node: Types.Node.t)
     (f: File.t)
     (root: Types.ds_rank)
-    int2node
-    algo =
-  match algo with
+    int2node =
+  match Utils.default_bcast_algo with
   | `Seq ->
     let fn = File.(f.name) in
     if FileSet.contains_fn fn !global_state then
@@ -81,7 +80,13 @@ let bcast_mds
     Array.iteri (fun i _ -> 
         if i <> root then fetch_mds local_node fn i int2node None
       ) int2node
-  | _ -> failwith "bcast_mds: only `Seq algo"
+  | `Amoeba ->
+    (* FBR: factor code *)
+    let fn = File.(f.name) in
+    if FileSet.contains_fn fn !global_state then
+      Log.warn "bcast_mds: file already added: %s" fn
+    else
+      global_state := FileSet.add f !global_state
 
 let main () =
   (* setup logger *)
@@ -190,10 +195,10 @@ let main () =
           end
         | DS_to_MDS (Fetch_file_req (ds_rank, fn)) ->
 	  Log.debug "got Fetch_file_req";
-	  fetch_mds local_node fn ds_rank int2node ( Some to_cli )
+	  fetch_mds local_node fn ds_rank int2node (Some to_cli)
         | DS_to_MDS (Bcast_file_req (ds_rank, fn)) ->
           Log.debug "got Bcast_file_req";
-	  bcast_mds local_node fn ds_rank int2node `Seq
+	  bcast_mds local_node fn ds_rank int2node
         | CLI_to_MDS Ls_cmd_req ->
           Log.debug "got Ls_cmd_req";
           Socket.send local_node to_cli
