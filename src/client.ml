@@ -91,7 +91,7 @@ module Command = struct
          | Quit (* turn off whole system *)
          | Ls
          | Skip
-  (* understand a command as soon as it is unambiguous; quick and dirty *)
+  (* quick and dirty way to understand a command ASAP *)
   let of_list: string list -> t = function
     | [] -> Skip
     | cmd :: args ->
