@@ -26,6 +26,10 @@ let fg_white = "\027[37m"
 let fg_default = "\027[39m"
 let fg_reset = "\027[0m"
 
+let fst3 (a, _, _) = a
+let snd3 (_, b, _) = b
+let trd3 (_, _, c) = c
+
 let sleep_ms ms =
   let (_, _, _) = Unix.select [] [] [] (float_of_int ms /. 1000.) in
   ()
@@ -141,11 +145,11 @@ let set_host_port (host_ref: string ref) (port_ref: int ref) (s: string) =
   host_ref := host;
   port_ref := port
 
-let parse_machine_line (rank: int) (l: string): Node.t =
-  let host, port = string_to_host_port l in
-  Node.create rank host port None
-
 let parse_machine_file (fn: string): Node.t list =
+  let parse_machine_line (rank: int) (l: string): Node.t =
+    let host, port = string_to_host_port l in
+    Node.create rank host port None
+  in
   let res = ref [] in
   with_in_file fn
     (fun input ->
@@ -173,15 +177,23 @@ let get_ds_rank (host: string) (port: int) (nodes: Node.t list): int =
 let data_nodes_array (fn: string) =
   let machines = parse_machine_file fn in
   let len = L.length machines in
-  let res = A.create len (Node.dummy (), None) in
-  L.iter (fun node -> A.set res (Node.get_rank node) (node, None)
+  let res = A.create len (Node.dummy (), None, None) in
+  L.iter (fun node -> A.set res (Node.get_rank node) (node, None, None)
          ) machines;
   res
 
 let cleanup_data_nodes_array warn a =
-  A.iteri (fun i (_ds, maybe_sock) -> match maybe_sock with
-      | Some s -> ZMQ.Socket.close s
-      | None -> if warn then Log.warn "DS %d missing" i
+  A.iteri (fun i (_ds, maybe_ds_sock, maybe_cli_sock) ->
+      match maybe_ds_sock, maybe_cli_sock with
+      | Some ds_sock, Some cli_sock ->
+        ZMQ.Socket.close ds_sock;
+        ZMQ.Socket.close cli_sock
+      | Some ds_sock, None ->
+        ZMQ.Socket.close ds_sock
+      | None, None -> if warn then Log.warn "DS %d missing" i
+      | None, Some cli_sock ->
+        if warn then Log.warn "DS %d missing" i;
+        ZMQ.Socket.close cli_sock
     ) a
 
 let ignore_first x y =
