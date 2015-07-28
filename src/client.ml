@@ -188,7 +188,8 @@ let main () =
     end;
   assert(!ds_host <> "" && !ds_port_in <> uninitialized);
   let hostname = Utils.hostname () in
-  let local_node = Node.create uninitialized hostname !cli_port_in in
+  (* local_node does not correspond to a DS; it is initialized dirtily *)
+  let local_node = Node.create uninitialized hostname !cli_port_in None in
   let ctx = ZMQ.Context.create () in
   let for_MDS = Utils.(zmq_socket Push ctx !mds_host !mds_port_in) in
   Log.info "Client of MDS %s:%d" !mds_host !mds_port_in;
