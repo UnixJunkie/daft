@@ -310,6 +310,8 @@ module Protocol = struct
     | Add_file_req of rank * File.t
     | Bcast_file_req of rank * File.t
     | Fetch_file_req of rank * filename
+    | Connect_push of rank * port (* a CLI local to DS of rank 'rank' and
+                                     listening on 'port' has connected *)
 
   type mds_to_ds =
     | Add_file_ack of filename
