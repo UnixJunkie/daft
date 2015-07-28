@@ -187,8 +187,8 @@ let send_to local_node int2node ds_rank something =
       raise Fatal
     end
   else match int2node.(ds_rank) with
-    | (_node, Some to_ds_i) -> Socket.send local_node to_ds_i something
-    | (_, None) ->
+    | (_node, Some to_ds_i, _maybe_cli_sock) -> Socket.send local_node to_ds_i something
+    | (_, None, _maybe_cli_sock) ->
       begin
         Log.fatal "send_to: no socket for DS %d" ds_rank;
         raise Fatal
@@ -342,12 +342,12 @@ let main () =
   let int2node = Utils.data_nodes_array !machine_file in
   (* create a push socket for each DS, except the current one because we
      will never send to self *)
-  A.iteri (fun i (node, _sock) ->
+  A.iteri (fun i (node, _ds_sock, cli_sock) ->
       if i <> !my_rank then
         let sock =
           Utils.(zmq_socket Push ctx (Node.get_host node) (Node.get_ds_port node))
         in
-        A.set int2node i (node, Some sock)
+        A.set int2node i (node, Some sock, cli_sock)
     ) int2node;
   let nb_nodes = A.length int2node in
   Log.info "read %d host(s)" nb_nodes;
@@ -470,12 +470,12 @@ let main () =
         | CLI_to_DS (Extract_file_cmd_req (src_fn, dst_fn)) ->
           let res = extract_file src_fn dst_fn in
           Socket.send !local_node (deref to_cli) (DS_to_CLI res)
-        | CLI_to_DS (Connect_cmd_push port) ->
+        | CLI_to_DS (Connect_cmd_push cli_port) ->
           (* setup socket to CLI *)
-          to_cli := Some (Utils.(zmq_socket Push ctx !ds_host port));
+          to_cli := Some (Utils.(zmq_socket Push ctx !ds_host cli_port));
           (* complete local_node *)
           assert(Node.get_cli_port !local_node = None);
-          local_node := Node.create !my_rank !ds_host !ds_port_in (Some port)
+          local_node := Node.create !my_rank !ds_host !ds_port_in (Some cli_port)
 	| DS_to_DS
             (Bcast_chunk
                (fn, chunk_id, is_last, chunk_data, root_rank, step_num)) ->
