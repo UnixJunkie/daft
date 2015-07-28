@@ -5,16 +5,16 @@ exception Loop_end
 
 module FU = FileUtil
 
-(* we might need a cli_rank in the future, and assume there are at most
-   as many CLIs as there are DSs *)
 (* some type aliases to make signatures more readable *)
-type ds_rank = int
+type chunk_data = string
+type chunk_id = int
+type rank = int
+type filename = string
+type hostname = string
+type is_last = bool
+type port = int
 type root_node = int
 type step_number = int
-type filename = string
-type chunk_id = int
-type chunk_data = string
-type is_last = bool
 
 (* FBR: add module interfaces and hide as much operations as possible *)
 (*      make types abstract too *)
@@ -53,9 +53,9 @@ module StringSet = Set.Make(String)
 
 module Node = struct
   (* the rank allows to uniquely identify a node; a la MPI *)
-  type t = { rank: int    ;
-             host: string ;
-             port: int    }
+  type t = { rank: rank     ;
+             host: hostname ;
+             port: port     }
   let create rank host port =
     { rank; host; port }
   let dummy () =
@@ -92,11 +92,10 @@ module Nonce_store = struct
   let is_fresh (nonce: t): bool =
     if StringSet.mem nonce !nonces then
       false
-    else
-      begin
-        nonces := StringSet.add nonce !nonces;
-        true
-      end
+    else begin
+      nonces := StringSet.add nonce !nonces;
+      true
+    end
 end
 
 module NodeSet = struct
@@ -286,14 +285,8 @@ module FileSet = struct
     Buffer.contents res
 end
 
-(* only support Raw mode until all commands are properly working
-   Compressed mode will be the next priority
-   Compressed, Signed and Encrypted can be combined so there is
-   a total of eight modes
-   signing alone could provide some sort of authentication for
-   commands which allow to control the state of the system; an
-   attacker could observe the system if he is on the same network
-   but not control it. *)
+(* Compressed, Signed and Encrypted can be combined so there is
+   a total of eight modes. *)
 type data_mode = Raw | Compressed | Encrypted | Signed
 
 module Protocol = struct
@@ -309,15 +302,15 @@ module Protocol = struct
 
   type ds_to_mds =
     | Join_push of Node.t (* a DS registering itself with the MDS *)
-    | Chunk_ack of filename * chunk_id * ds_rank
-    | Add_file_req of ds_rank * File.t
-    | Bcast_file_req of ds_rank * File.t
-    | Fetch_file_req of ds_rank * filename
+    | Chunk_ack of filename * chunk_id * rank
+    | Add_file_req of rank * File.t
+    | Bcast_file_req of rank * File.t
+    | Fetch_file_req of rank * filename
 
   type mds_to_ds =
     | Add_file_ack of filename
     | Add_file_nack of filename
-    | Send_to_req of ds_rank * filename * chunk_id * is_last
+    | Send_to_req of rank * filename * chunk_id * is_last
     | Quit_cmd
 
   type ds_to_ds =
@@ -334,12 +327,14 @@ module Protocol = struct
     | Ls_cmd_ack of FileSet.t
     | Fetch_cmd_nack of filename
 
-  type file_loc = Local (* disk *) | Remote (* host *)
+  type file_loc = Local (* local disk *) | Remote (* remote host *)
 
   type cli_to_ds =
     | Fetch_file_cmd_req of filename * file_loc
     | Extract_file_cmd_req of filename * filename
     | Bcast_file_cmd_req of filename
+    | Connect_cmd_push of port (* CLI listening port on the same host
+                                  than the DS receiving the command *)
 
   type error = Already_here | Is_directory | Copy_failed | No_such_file
 
