@@ -73,8 +73,6 @@ let compute_children_bino (my_rank_i: int) (max_rank_i: int): int list =
 let ds_log_fn = ref ""
 let ds_host = ref "localhost"
 let ds_port_in = ref Utils.default_ds_port_in
-let cli_host = ref ""
-let cli_port_in = ref Utils.default_cli_port_in
 let my_rank = ref Utils.uninitialized
 let machine_file = ref ""
 let mds_host = ref "localhost"
@@ -306,6 +304,10 @@ let store_chunk to_mds to_cli fn chunk_id is_last data =
       end
   end
 
+let deref cli_sock_ref = match !cli_sock_ref with
+  | None -> failwith "deref: to_cli socket uninitialized"
+  | Some sock -> sock
+
 let main () =
   (* setup logger *)
   Logger.set_log_level Logger.DEBUG;
@@ -316,8 +318,6 @@ let main () =
   Arg.parse
     [ "-cs", Arg.Set_int chunk_size, "<size> file chunk size";
       "-l", Arg.Set_string ds_log_fn, "<filename> where to log";
-      "-cli", Arg.String (Utils.set_host_port cli_host cli_port_in),
-      "<host:port> CLI";
       "-p", Arg.Set_int ds_port_in, "<port> where to listen";
       "-r", Arg.Set_int my_rank, "<rank> rank among other data nodes";
       "-m", Arg.Set_string machine_file,
@@ -337,8 +337,6 @@ let main () =
   if !mds_port_in = Utils.uninitialized then abort "-sp is mandatory";
   if !my_rank = Utils.uninitialized then abort "-r is mandatory";
   if !ds_port_in = Utils.uninitialized then abort "-p is mandatory";
-  if !cli_host = "" then abort "-cli is mandatory";
-  if !cli_port_in = Utils.uninitialized then abort "-cli is mandatory";
   if !machine_file = "" then abort "-m is mandatory";
   let ctx = ZMQ.Context.create () in
   let int2node = Utils.data_nodes_array !machine_file in
@@ -360,7 +358,7 @@ let main () =
   Log.info "binding server to %s:%d" "*" !ds_port_in;
   let incoming = Utils.(zmq_socket Pull ctx "*" !ds_port_in) in
   (* feedback socket to the local CLI *)
-  let to_cli = Utils.(zmq_socket Push ctx !cli_host !cli_port_in) in
+  let to_cli = ref None in
   (* register at the MDS *)
   Log.info "connecting to MDS %s:%d" !mds_host !mds_port_in;
   let to_mds = Utils.(zmq_socket Push ctx !mds_host !mds_port_in) in
@@ -387,7 +385,7 @@ let main () =
         | MDS_to_DS (Add_file_ack fn) ->
           Log.debug "got Add_file_ack";
           (* forward the good news to the CLI *)
-          Socket.send !local_node to_cli
+          Socket.send !local_node (deref to_cli)
             (DS_to_CLI (Fetch_file_cmd_ack fn))
         | MDS_to_DS (Add_file_nack fn) ->
           Log.debug "got Add_file_nack";
@@ -395,11 +393,11 @@ let main () =
           (* quick and dirty but maybe OK: only rollback local state's view *)
           local_state := FileSet.remove_fn fn !local_state;
           (* forward nack to CLI *)
-          Socket.send !local_node to_cli
+          Socket.send !local_node (deref to_cli)
             (DS_to_CLI (Fetch_file_cmd_nack (fn, Already_here)))
         | DS_to_DS (Chunk (fn, chunk_id, is_last, data)) ->
           Log.debug "got Chunk";
-          store_chunk to_mds (Some to_cli) fn chunk_id is_last data
+          store_chunk to_mds (Some (deref to_cli)) fn chunk_id is_last data
         | CLI_to_DS (Fetch_file_cmd_req (fn, Local)) ->
           Log.debug "got Fetch_file_cmd_req:Local";
           let res = add_file fn in
@@ -410,7 +408,7 @@ let main () =
               let add_file_req = Add_file_req (!my_rank, file) in
               Socket.send !local_node to_mds (DS_to_MDS add_file_req)
             | Fetch_file_cmd_nack (fn, err) ->
-              Socket.send !local_node to_cli
+              Socket.send !local_node (deref to_cli)
                 (DS_to_CLI (Fetch_file_cmd_nack (fn, err)))
             | Bcast_file_ack -> assert(false)
           end
@@ -432,14 +430,15 @@ let main () =
                        this new file *)
 	            Socket.send !local_node to_mds (DS_to_MDS bcast_file_req);
                     (* unlock CLI *)
-                    Socket.send !local_node to_cli (DS_to_CLI Bcast_file_ack)
+                    Socket.send
+                      !local_node (deref to_cli) (DS_to_CLI Bcast_file_ack)
                   end
                 | `Amoeba ->
                   let bcast_file_req = Bcast_file_req (!my_rank, file) in
                   (* notify MDS to allow this potentially new file *)
 	          Socket.send !local_node to_mds (DS_to_MDS bcast_file_req);
                   (* unlock CLI *)
-                  Socket.send !local_node to_cli (DS_to_CLI Bcast_file_ack);
+                  Socket.send !local_node (deref to_cli) (DS_to_CLI Bcast_file_ack);
                   match Amoeba.fork (!my_rank, 0, !my_rank, nb_nodes) with
                   | [], _ -> () (* job done *)
                   | (to_ranks, (root_rank, step_num, _, _)) ->
@@ -454,7 +453,7 @@ let main () =
                     | _ -> assert(false)
               end
             | Fetch_file_cmd_nack (fn, err) ->
-              Socket.send !local_node to_cli
+              Socket.send !local_node (deref to_cli)
                 (DS_to_CLI (Fetch_file_cmd_nack (fn, err)))
             | Bcast_file_ack -> assert(false)
 	  end
@@ -463,14 +462,16 @@ let main () =
           (* finish quickly in case file is already present locally *)
           if FileSet.contains_fn fn !local_state then
             let _ = Log.info "%s already here" fn in
-            Socket.send !local_node to_cli
+            Socket.send !local_node (deref to_cli)
               (DS_to_CLI (Fetch_file_cmd_ack fn))
           else (* forward request to MDS *)
             Socket.send !local_node to_mds
               (DS_to_MDS (Fetch_file_req (Node.get_rank !local_node, fn)))
         | CLI_to_DS (Extract_file_cmd_req (src_fn, dst_fn)) ->
           let res = extract_file src_fn dst_fn in
-          Socket.send !local_node to_cli (DS_to_CLI res)
+          Socket.send !local_node (deref to_cli) (DS_to_CLI res)
+        | CLI_to_DS (Connect_cmd_push port) ->
+          to_cli := Some (Utils.(zmq_socket Push ctx !ds_host port))
 	| DS_to_DS
             (Bcast_chunk
                (fn, chunk_id, is_last, chunk_data, root_rank, step_num)) ->
@@ -492,7 +493,10 @@ let main () =
       (* let (_: int) = delete_data_store !data_store_root in *)
       ZMQ.Socket.close incoming;
       ZMQ.Socket.close to_mds;
-      ZMQ.Socket.close to_cli;
+      (match !to_cli with
+       | Some s -> ZMQ.Socket.close s;
+       | None -> () (* no CLI ever registered with us *)
+      );
       let dont_warn = false in
       Utils.cleanup_data_nodes_array dont_warn int2node;
       ZMQ.Context.terminate ctx;

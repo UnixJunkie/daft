@@ -81,54 +81,55 @@ let get_two: 'a list -> ('a * 'a) option = function
 
 module Command = struct
   type filename = string
-  type t = Put of filename
-         | Get of filename * filename (* src_fn dst_fn *)
-         | Fetch of filename
-         | Rfetch of filename * string (* string format: host:port *)
-         | Extract of filename * filename
-	 | Bcast of filename
+  type port = int
+  type t = Bcast of filename
          | Exit (* just exit CLI *)
-         | Quit (* turn off whole system *)
+         | Extract of filename * filename
+         | Fetch of filename
+         | Get of filename * filename (* src_fn dst_fn *)
          | Ls
+         | Put of filename
+         | Quit (* turn off whole system *)
+         | Rfetch of filename * string (* string format: host:port *)
          | Skip
   (* quick and dirty way to understand a command ASAP *)
   let of_list: string list -> t = function
     | [] -> Skip
     | cmd :: args ->
       begin match cmd with
-        | "p" | "pu" | "put" ->
-          begin match get_one args with
-            | Some fn -> Put fn
-            | None -> Log.error "\nusage: put fn" ; Skip
-          end
-        | "g" | "ge" | "get" ->
-          begin match get_two args with
-            | Some (src_fn, dst_fn) -> Get (src_fn, dst_fn)
-            | None -> Log.error "\nusage: get src_fn dst_fn" ; Skip
-          end
-        | "f" | "fe" | "fet" | "fetc" | "fetch" ->
-          begin match get_one args with
-            | Some fn -> Fetch fn
-            | None -> Log.error "\nusage: fetch fn" ; Skip
-          end
-        | "r" | "rf" | "rfe" | "rfet" | "rfetc" | "rfetch" ->
-          begin match get_two args with
-            | Some (src_fn, host_port) -> Rfetch (src_fn, host_port)
-            | None -> Log.error "\nusage: rfetch fn host:port" ; Skip
-          end
-        | "e" | "ex" | "ext" | "extr" | "extra" | "extrac" | "extract" ->
-          begin match get_two args with
-            | Some (src_fn, dst_fn) -> Extract (src_fn, dst_fn)
-            | None -> Log.error "\nusage: extract src_fn dst_fn" ; Skip
-          end
-        | "b" | "bc" | "bca" | "bcas" | "bcast" ->
+        | "b" | "bcast" ->
           begin match get_one args with
             | Some fn -> Bcast fn
             | None -> Log.error "\nusage: bcast fn" ; Skip
           end
-        | "x" | "exit" -> Exit
-        | "q" | "qu" | "qui" | "quit" -> Quit
+        | "e" | "extract" ->
+          begin match get_two args with
+            | Some (src_fn, dst_fn) -> Extract (src_fn, dst_fn)
+            | None -> Log.error "\nusage: extract src_fn dst_fn" ; Skip
+          end
+        | "f" | "fetch" ->
+          begin match get_one args with
+            | Some fn -> Fetch fn
+            | None -> Log.error "\nusage: fetch fn" ; Skip
+          end
+        | "g" | "get" ->
+          begin match get_two args with
+            | Some (src_fn, dst_fn) -> Get (src_fn, dst_fn)
+            | None -> Log.error "\nusage: get src_fn dst_fn" ; Skip
+          end
         | "l" | "ls" -> Ls
+        | "p" | "put" ->
+          begin match get_one args with
+            | Some fn -> Put fn
+            | None -> Log.error "\nusage: put fn" ; Skip
+          end
+        | "q" | "quit" -> Quit
+        | "r" | "rfetch" ->
+          begin match get_two args with
+            | Some (src_fn, host_port) -> Rfetch (src_fn, host_port)
+            | None -> Log.error "\nusage: rfetch fn host:port" ; Skip
+          end
+        | "x" | "exit" -> Exit
         | "" -> Log.error "empty command"; Skip
         | cmd -> Log.error "unknown command: %s" cmd; Skip
       end
@@ -192,6 +193,8 @@ let main () =
   let for_MDS = Utils.(zmq_socket Push ctx !mds_host !mds_port_in) in
   Log.info "Client of MDS %s:%d" !mds_host !mds_port_in;
   let for_DS = Utils.(zmq_socket Push ctx !ds_host !ds_port_in) in
+  (* register yourself to the local DS by telling it the port you listen to *)
+  Socket.send local_node for_DS (CLI_to_DS (Connect_cmd_push !cli_port_in));
   let incoming = Utils.(zmq_socket Pull ctx "*" !cli_port_in) in
   Log.info "Client of DS %s:%d" !ds_host !ds_port_in;
   (* the CLI execute just one command then exit *)
