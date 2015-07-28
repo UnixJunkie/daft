@@ -187,7 +187,7 @@ let main () =
           Log.debug "got Bcast_file_req";
 	  bcast_mds local_node fn ds_rank int2node
         | CLI_to_MDS (Connect_push (ds_rank, cli_port)) ->
-          Log.debug "got Connect_push rank: %d port: %d)" ds_rank cli_port;
+          Log.debug "got Connect_push rank: %d port: %d" ds_rank cli_port;
           if Utils.out_of_bounds ds_rank int2node then
             Log.error "Connect_push: invalid ds_rank: %d" ds_rank
           else
