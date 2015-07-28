@@ -93,7 +93,7 @@ let create_data_store (): string =
   assert(!local_node <> Node.dummy ());
   let tmp_dir = Fn.get_temp_dir_name () in
   let data_store_root =
-    sprintf "%s/%s.ds" tmp_dir (Node.to_string !local_node)
+    sprintf "%s/%s.ds" tmp_dir (Node.to_string_id !local_node)
   in
   Unix.mkdir data_store_root 0o700; (* access rights for owner only *)
   Log.info "I store in %s" data_store_root;
@@ -471,6 +471,7 @@ let main () =
           let res = extract_file src_fn dst_fn in
           Socket.send !local_node (deref to_cli) (DS_to_CLI res)
         | CLI_to_DS (Connect_cmd_push cli_port) ->
+          Log.debug "got Connect_cmd_push";
           (* setup socket to CLI *)
           to_cli := Some (Utils.(zmq_socket Push ctx !ds_host cli_port));
           (* complete local_node *)
