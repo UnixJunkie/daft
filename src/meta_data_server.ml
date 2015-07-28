@@ -46,7 +46,7 @@ let fetch_mds local_node fn ds_rank int2node to_cli=
           let selected_src_node = Chunk.select_source_rand chunk in
           let chosen = Node.get_rank selected_src_node in
           begin match int2node.(chosen) with
-            | (_node, Some to_ds_i) ->
+            | (_node, Some to_ds_i, _maybe_cli_sock) ->
               let chunk_id = Chunk.get_id chunk in
               let is_last = File.is_last_chunk chunk file in
               let send_order =
@@ -54,7 +54,7 @@ let fetch_mds local_node fn ds_rank int2node to_cli=
                   (Send_to_req (ds_rank, fn, chunk_id, is_last))
               in
               Socket.send local_node to_ds_i send_order
-            | (_, None) -> assert(false)
+            | (_, None, _) -> assert(false)
           end
       ) chunks
   with Not_found ->
@@ -133,13 +133,13 @@ let main () =
           if Utils.out_of_bounds ds_rank int2node then
             Log.warn "suspicious rank %d in Join_push" ds_rank
           else
-            let expected_ds, prev_sock = int2node.(ds_rank) in
-            begin match prev_sock with
+            let expected_ds, prev_ds_sock, prev_cli_sock = int2node.(ds_rank) in
+            begin match prev_ds_sock with
               | Some _ -> Log.warn "%s already joined" ds_as_string
               | None -> (* remember him for the future *)
                 if ds = expected_ds then
                   let sock = Utils.(zmq_socket Push ctx ds_host ds_port_in) in
-                  A.set int2node ds_rank (ds, Some sock)
+                  A.set int2node ds_rank (ds, Some sock, prev_cli_sock)
                 else
                   Log.warn "suspicious Join req from %s" ds_as_string;
             end
@@ -148,7 +148,7 @@ let main () =
           let open Types.File in
           if Utils.out_of_bounds ds_rank int2node then
             Log.warn "suspicious rank %d in Add_file_req" ds_rank
-          else begin match snd int2node.(ds_rank) with
+          else begin match Utils.snd3 int2node.(ds_rank) with
             | None -> Log.warn "cannot send nack of %s to %d" f.name ds_rank
             | Some receiver ->
               let ack_or_nack =
@@ -177,7 +177,7 @@ let main () =
                     "invalid ds_rank in Chunk_ack: fn: %s chunk_id: %d \
                      ds_rank: %d" fn chunk_id ds_rank
                 else
-                  let new_source = fst int2node.(ds_rank) in
+                  let new_source = Utils.fst3 int2node.(ds_rank) in
                   let new_chunk = Chunk.add_source prev_chunk new_source in
                   let new_file = File.update_chunk file new_chunk in
                   global_state := FileSet.update new_file !global_state
@@ -194,6 +194,15 @@ let main () =
         | DS_to_MDS (Bcast_file_req (ds_rank, fn)) ->
           Log.debug "got Bcast_file_req";
 	  bcast_mds local_node fn ds_rank int2node
+        | DS_to_MDS (Connect_push (ds_rank, cli_port)) ->
+          if Utils.out_of_bounds ds_rank int2node then
+            Log.error "Connect_push: invalid ds_rank: %d" ds_rank
+          else
+            let node, ds_sock, maybe_cli_sock = int2node.(ds_rank) in
+            assert(Option.is_some ds_sock); (* already a DS sock *)
+            assert(Option.is_none maybe_cli_sock); (* not yet a CLI sock *)
+            let cli_sock = Utils.(zmq_socket Push ctx (Node.get_host node) cli_port) in
+            A.set int2node ds_rank (node, ds_sock, Some cli_sock)
         | CLI_to_MDS Ls_cmd_req ->
           Log.debug "got Ls_cmd_req";
           Socket.send local_node to_cli
@@ -202,7 +211,7 @@ let main () =
           Log.debug "got Quit_cmd";
           let _ = Log.info "got Quit" in
           (* send Quit to all DSs *)
-          A.iteri (fun i (_ds, maybe_sock) -> match maybe_sock with
+          A.iteri (fun i (_ds, maybe_sock, _maybe_cli_sock) -> match maybe_sock with
               | None -> Log.warn "DS %d missing" i
               | Some to_DS_i -> Socket.send local_node to_DS_i (MDS_to_DS Quit_cmd)
             ) int2node;
