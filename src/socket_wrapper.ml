@@ -143,9 +143,9 @@ let encode (sender: Node.t) (m: 'a): string =
   let plain_text = Marshal.to_string m no_sharing in
   let maybe_compressed' = may_do compression_flag compress plain_text in
   let salt = RNG.int64 Int64.max_int in
-  Log.debug "enc. salt = %s" (Int64.to_string salt);
+  (* Log.debug "enc. salt = %s" (Int64.to_string salt); *)
   let nonce = Nonce_store.fresh sender in
-  Log.debug "enc. nonce = %s" nonce;
+  (* Log.debug "enc. nonce = %s" nonce; *)
   let salted' = (salt, nonce, maybe_compressed') in
   let salted = Marshal.to_string salted' no_sharing in
   let maybe_encrypted =
@@ -174,11 +174,11 @@ let decode (s: string): 'a option =
   match cipher_OK' with
   | None -> None
   | Some str ->
-    let (salt, nonce, maybe_compressed) =
+    let (_salt, nonce, maybe_compressed) =
       (Marshal.from_string str 0: Int64.t * string * string)
     in
-    Log.debug "dec. salt = %s" (Int64.to_string salt);
-    Log.debug "dec. nonce = %s" nonce;
+    (* Log.debug "dec. salt = %s" (Int64.to_string salt); *)
+    (* Log.debug "dec. nonce = %s" nonce; *)
     if not (Nonce_store.is_fresh nonce) then
       Utils.ignore_first (Log.warn "nonce already seen: %s" nonce) None
     else
