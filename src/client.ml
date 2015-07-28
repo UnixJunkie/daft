@@ -15,12 +15,10 @@ module File = Types.File
 module FileSet = Types.FileSet
 module Socket = Socket_wrapper.CLI_socket
 
-let uninitialized = -1
-
 let ds_host = ref ""
-let ds_port_in = ref uninitialized
+let ds_port_in = ref Utils.uninitialized
 let mds_host = ref ""
-let mds_port_in = ref uninitialized
+let mds_port_in = ref Utils.uninitialized
 let cli_port_in = ref Utils.default_cli_port_in
 let single_command = ref ""
 let interactive = ref false
@@ -152,6 +150,7 @@ let read_one_command is_interactive =
   Command.of_list command_line
 
 let main () =
+  let my_rank = ref Utils.uninitialized in
   (* setup logger *)
   Logger.set_log_level Logger.DEBUG;
   Logger.set_output Legacy.stdout;
@@ -165,11 +164,13 @@ let main () =
       "-mds", Arg.String (Utils.set_host_port mds_host mds_port_in),
       "<host:port> MDS";
       "-ds", Arg.String (Utils.set_host_port ds_host ds_port_in),
-      "<host:port> local DS" ]
+      "<host:port> local DS" ;
+      "-r", Arg.Set_int my_rank, "<rank> rank of the local data node" ]
     (fun arg -> raise (Arg.Bad ("Bad argument: " ^ arg)))
     (sprintf "usage: %s <options>" Sys.argv.(0));
   (* check options *)
-  if !mds_host = "" && !mds_port_in = uninitialized then
+  if !my_rank = Utils.uninitialized then abort "-r is mandatory";
+  if !mds_host = "" && !mds_port_in = Utils.uninitialized then
     begin
       let daft_mds_env_var = getenv_or_fail "DAFT_MDS" in
       if daft_mds_env_var = "" then
@@ -177,8 +178,8 @@ let main () =
       else
         Utils.set_host_port mds_host mds_port_in daft_mds_env_var
     end;
-  assert(!mds_host <> "" && !mds_port_in <> uninitialized);
-  if !ds_host = "" && !ds_port_in = uninitialized then
+  assert(!mds_host <> "" && !mds_port_in <> Utils.uninitialized);
+  if !ds_host = "" && !ds_port_in = Utils.uninitialized then
     begin
       let daft_ds_env_var = getenv_or_fail "DAFT_DS" in
       if daft_ds_env_var = "" then
@@ -186,16 +187,19 @@ let main () =
       else
         Utils.set_host_port ds_host ds_port_in daft_ds_env_var
     end;
-  assert(!ds_host <> "" && !ds_port_in <> uninitialized);
+  assert(!ds_host <> "" && !ds_port_in <> Utils.uninitialized);
   let hostname = Utils.hostname () in
   (* local_node does not correspond to a DS; it is initialized dirtily *)
-  let local_node = Node.create uninitialized hostname !cli_port_in None in
+  let local_node = Node.create Utils.uninitialized hostname !cli_port_in None in
   let ctx = ZMQ.Context.create () in
   let for_MDS = Utils.(zmq_socket Push ctx !mds_host !mds_port_in) in
   Log.info "Client of MDS %s:%d" !mds_host !mds_port_in;
   let for_DS = Utils.(zmq_socket Push ctx !ds_host !ds_port_in) in
   (* register yourself to the local DS by telling it the port you listen to *)
   Socket.send local_node for_DS (CLI_to_DS (Connect_cmd_push !cli_port_in));
+  (* register yourself to the MDS *)
+  Socket.send local_node for_MDS
+    (CLI_to_MDS (Connect_push (!my_rank, !cli_port_in)));
   let incoming = Utils.(zmq_socket Pull ctx "*" !cli_port_in) in
   Log.info "Client of DS %s:%d" !ds_host !ds_port_in;
   (* the CLI execute just one command then exit *)
@@ -241,8 +245,7 @@ let main () =
       | Exit ->
         not_finished := false
       | Ls ->
-        Socket.send local_node for_MDS
-          (CLI_to_MDS Ls_cmd_req);
+        Socket.send local_node for_MDS (CLI_to_MDS (Ls_cmd_req !my_rank));
         process_answer incoming do_nothing
       | Bcast src_fn ->
         Socket.send local_node for_DS
