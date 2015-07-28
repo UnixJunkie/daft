@@ -19,7 +19,7 @@ let ds_host = ref ""
 let ds_port_in = ref Utils.uninitialized
 let mds_host = ref ""
 let mds_port_in = ref Utils.uninitialized
-let cli_port_in = ref Utils.default_cli_port_in
+let cli_port_in = ref Utils.uninitialized
 let single_command = ref ""
 let interactive = ref false
 let machine_file = ref ""
@@ -160,7 +160,7 @@ let main () =
     [ "-i", Arg.Set interactive, " interactive mode of the CLI";
       "-c", Arg.Set_string single_command,
       "'command' execute a single command; use quotes if several words";
-      "-cli", Arg.Set_int cli_port_in, "<port> where the CLI is listening";
+      "-p", Arg.Set_int cli_port_in, "<port> where the CLI is listening";
       "-mds", Arg.String (Utils.set_host_port mds_host mds_port_in),
       "<host:port> MDS";
       "-ds", Arg.String (Utils.set_host_port ds_host ds_port_in),
@@ -170,6 +170,7 @@ let main () =
     (sprintf "usage: %s <options>" Sys.argv.(0));
   (* check options *)
   if !my_rank = Utils.uninitialized then abort "-r is mandatory";
+  if !cli_port_in = Utils.uninitialized then abort "-p is mandatory";
   if !mds_host = "" && !mds_port_in = Utils.uninitialized then
     begin
       let daft_mds_env_var = getenv_or_fail "DAFT_MDS" in
