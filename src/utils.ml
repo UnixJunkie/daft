@@ -143,7 +143,7 @@ let set_host_port (host_ref: string ref) (port_ref: int ref) (s: string) =
 
 let parse_machine_line (rank: int) (l: string): Node.t =
   let host, port = string_to_host_port l in
-  Node.create rank host port
+  Node.create rank host port None
 
 let parse_machine_file (fn: string): Node.t list =
   let res = ref [] in
@@ -164,7 +164,7 @@ exception Found of int
 let get_ds_rank (host: string) (port: int) (nodes: Node.t list): int =
   try
     List.iter (fun n ->
-        if Node.get_host n = host && Node.get_port n = port then
+        if Node.get_host n = host && Node.get_ds_port n = port then
           raise (Found (Node.get_rank n))
       ) nodes;
     failwith (sprintf "get_ds_rank: no such ds: %s:%d" host port)

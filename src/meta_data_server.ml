@@ -33,7 +33,7 @@ let fetch_mds local_node fn ds_rank int2node to_cli=
   try
     let file = FileSet.find_fn fn !global_state in
     let chunks = Types.File.get_chunks file in
-    (* FBR: code logic needs to moved into File 
+    (* FBR: code logic needs to move into the File module
             File.get_rand_sources will send a list of
             (chunk_rank, src_node) *)
     (* randomized algorithm: for each chunk we ask a randomly selected
@@ -107,7 +107,7 @@ let main () =
   Log.info "read %d host(s)" (A.length int2node);
   start_data_nodes !machine_file;
   let hostname = Utils.hostname () in
-  let local_node = Types.Node.create (-1) hostname !port_in in
+  let local_node = Types.Node.create (-1) hostname !port_in None in
   (* start server *)
   Log.info "binding server to %s:%d" "*" !port_in;
   let ctx = ZMQ.Context.create () in
@@ -128,7 +128,7 @@ let main () =
           Log.debug "got Join_push";
           let ds_as_string = Node.to_string ds in
           Log.info "DS %s Join req" ds_as_string;
-          let ds_rank, ds_host, ds_port_in = Node.to_triplet ds in
+          let ds_rank, ds_host, ds_port_in, _ds_cli_port = Node.to_quad ds in
           (* check it is the one we expect at that rank *)
           if Utils.out_of_bounds ds_rank int2node then
             Log.warn "suspicious rank %d in Join_push" ds_rank

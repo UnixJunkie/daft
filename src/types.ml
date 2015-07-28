@@ -53,25 +53,29 @@ module StringSet = Set.Make(String)
 
 module Node = struct
   (* the rank allows to uniquely identify a node; a la MPI *)
-  type t = { rank: rank     ;
-             host: hostname ;
-             port: port     }
-  let create rank host port =
-    { rank; host; port }
+  type t = { rank:     rank        ;
+             host:     hostname    ;
+             ds_port:  port        ;
+             cli_port: port option }
+  let create rank host ds_port cli_port =
+    { rank; host; ds_port; cli_port }
   let dummy () =
-    { rank = -1; host = "dummy_hostname"; port = -1 }
+    { rank = -1; host = "!!!dummy_hostname!!!"; ds_port = -1; cli_port = None }
   let get_rank n =
     n.rank
   let get_host n =
     n.host
-  let get_port n =
-    n.port
+  let get_ds_port n =
+    n.ds_port
+  let get_cli_port n =
+    n.cli_port
   let to_string n =
-    sprintf "%d.%s:%d" n.rank n.host n.port
-  let to_triplet n =
-    (n.rank, n.host, n.port)
-  let of_string s =
-    Scanf.sscanf s "%d.%s:%d" create
+    sprintf "%d.%s:%d:%s" n.rank n.host n.ds_port
+      (match n.cli_port with
+       | None -> "None"
+       | Some p -> sprintf "(Some %d)" p)
+  let to_quad n =
+    (n.rank, n.host, n.ds_port, n.cli_port)
   let compare n1 n2 =
     BatInt.compare n1.rank n2.rank
 end
@@ -83,7 +87,7 @@ module Nonce_store = struct
   let nonces = ref StringSet.empty
   let fresh (n: Node.t): t =
     let nonce =
-      sprintf "%s:%d:%d" (Node.get_host n) (Node.get_port n) !counter
+      sprintf "%s:%d:%d" (Node.get_host n) (Node.get_ds_port n) !counter
     in
     if !counter = -1 then failwith "fresh: counter has looped";
     incr counter;

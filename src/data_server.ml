@@ -345,13 +345,13 @@ let main () =
   A.iteri (fun i (node, _sock) ->
       if i <> !my_rank then
         let sock =
-          Utils.(zmq_socket Push ctx (Node.get_host node) (Node.get_port node))
+          Utils.(zmq_socket Push ctx (Node.get_host node) (Node.get_ds_port node))
         in
         A.set int2node i (node, Some sock)
     ) int2node;
   let nb_nodes = A.length int2node in
   Log.info "read %d host(s)" nb_nodes;
-  local_node := Node.create !my_rank !ds_host !ds_port_in;
+  local_node := Node.create !my_rank !ds_host !ds_port_in None;
   Log.info "Client of MDS %s:%d" !mds_host !mds_port_in;
   data_store_root := create_data_store ();
   (* setup server *)
@@ -471,7 +471,11 @@ let main () =
           let res = extract_file src_fn dst_fn in
           Socket.send !local_node (deref to_cli) (DS_to_CLI res)
         | CLI_to_DS (Connect_cmd_push port) ->
-          to_cli := Some (Utils.(zmq_socket Push ctx !ds_host port))
+          (* setup socket to CLI *)
+          to_cli := Some (Utils.(zmq_socket Push ctx !ds_host port));
+          (* complete local_node *)
+          assert(Node.get_cli_port !local_node = None);
+          local_node := Node.create !my_rank !ds_host !ds_port_in (Some port)
 	| DS_to_DS
             (Bcast_chunk
                (fn, chunk_id, is_last, chunk_data, root_rank, step_num)) ->
