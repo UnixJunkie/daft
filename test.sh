@@ -23,6 +23,6 @@ export DAFT_MDS=`hostname -f`:8082
 export DAFT_DS=`hostname -f`:8083
 
 sleep 1s
-./daft -r 0 $OPTS -c quit
+./daft -r 0 $OPTS -p 8000 -c quit
 
 ps
