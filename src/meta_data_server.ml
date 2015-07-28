@@ -68,7 +68,7 @@ let fetch_mds local_node fn ds_rank int2node to_cli=
 let bcast_mds
     (local_node: Types.Node.t)
     (f: File.t)
-    (root: Types.ds_rank)
+    (root: Types.rank)
     int2node =
   let fn = File.(f.name) in
   if FileSet.contains_fn fn !global_state then
