@@ -239,8 +239,9 @@ let bcast_chunk local_node to_ranks int2node fn chunk_id is_last root_rank step_
       (Bcast_chunk (fn, chunk_id, is_last, chunk_data, root_rank, step_num))
   in
   List.iter (fun to_rank ->
-      (* Log.debug "%d bcast to %d" (Node.get_rank local_node) to_rank; *)
-      send_to local_node int2node to_rank bcast_chunk_msg
+      if to_rank <> !my_rank then
+        (* Log.debug "%d bcast to %d" (Node.get_rank local_node) to_rank; *)
+        send_to local_node int2node to_rank bcast_chunk_msg
     ) to_ranks
 
 let store_chunk to_mds to_cli fn chunk_id is_last data =
