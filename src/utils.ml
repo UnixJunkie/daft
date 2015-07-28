@@ -11,7 +11,6 @@ let uninitialized = -1
 let default_mds_host = "*" (* star means all interfaces *)
 let default_ds_port_in  = 8081
 let default_mds_port_in = 8082
-let default_cli_port_in = 8000
 let default_chunk_size = 1_000_000 (* bytes *)
 
 (* ANSI terminal colors for UNIX: *)
