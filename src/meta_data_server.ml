@@ -17,8 +17,6 @@ module Node = Types.Node
 module Socket = Socket_wrapper.MDS_socket
 
 let global_state = ref FileSet.empty
-let cli_host = ref ""
-let cli_port_in = ref Utils.default_cli_port_in
 
 let start_data_nodes _machine_fn =
   (* TODO: scp exe to each node *)
@@ -29,7 +27,7 @@ let abort msg =
   Log.fatal "%s" msg;
   exit 1
 
-let fetch_mds local_node fn ds_rank int2node to_cli=
+let fetch_mds local_node fn ds_rank int2node feedback_to_cli =
   try
     let file = FileSet.find_fn fn !global_state in
     let chunks = Types.File.get_chunks file in
@@ -39,30 +37,30 @@ let fetch_mds local_node fn ds_rank int2node to_cli=
     (* randomized algorithm: for each chunk we ask a randomly selected
        chunk source to send the chunk to destination *)
     Types.File.ChunkSet.iter (fun chunk ->
-        if Utils.out_of_bounds ds_rank int2node then
-          Log.error "Fetch_cmd_req: fn: %s invalid ds_rank: %d"
-            fn ds_rank
-        else
-          let selected_src_node = Chunk.select_source_rand chunk in
-          let chosen = Node.get_rank selected_src_node in
-          begin match int2node.(chosen) with
-            | (_node, Some to_ds_i, _maybe_cli_sock) ->
-              let chunk_id = Chunk.get_id chunk in
-              let is_last = File.is_last_chunk chunk file in
-              let send_order =
-                MDS_to_DS
-                  (Send_to_req (ds_rank, fn, chunk_id, is_last))
-              in
-              Socket.send local_node to_ds_i send_order
-            | (_, None, _) -> assert(false)
-          end
+        let selected_src_node = Chunk.select_source_rand chunk in
+        let chosen = Node.get_rank selected_src_node in
+        begin match int2node.(chosen) with
+          | (_node, Some to_ds_i, _maybe_cli_sock) ->
+            let chunk_id = Chunk.get_id chunk in
+            let is_last = File.is_last_chunk chunk file in
+            let send_order =
+              MDS_to_DS
+                (Send_to_req (ds_rank, fn, chunk_id, is_last))
+            in
+            Socket.send local_node to_ds_i send_order
+          | (_, None, _) -> assert(false)
+        end
       ) chunks
   with Not_found ->
-    match to_cli with
-    | None -> ()
-    | Some sock ->
-      (* this assumes there is a single CLI; might be wrong in future *)
-      Socket.send local_node sock (MDS_to_CLI (Fetch_cmd_nack fn))
+    if feedback_to_cli then
+      if Utils.out_of_bounds ds_rank int2node then
+        Log.error "fetch_mds: fn: %s invalid ds_rank: %d"
+          fn ds_rank
+      else match Utils.trd3 int2node.(ds_rank) with
+        | None ->
+          Log.warn "fetch_mds: no CLI feedback sock for node %d" ds_rank
+        | Some to_cli_sock ->
+          Socket.send local_node to_cli_sock (MDS_to_CLI (Fetch_cmd_nack fn))
 
 (* CCO: better done with only one MDS -> local DS communication *)
 let bcast_mds
@@ -77,8 +75,8 @@ let bcast_mds
     global_state := FileSet.add f !global_state;
   match Utils.default_bcast_algo with
   | `Seq ->
-    Array.iteri (fun i _ -> 
-        if i <> root then fetch_mds local_node fn i int2node None
+    Array.iteri (fun i _ ->
+        if i <> root then fetch_mds local_node fn i int2node false
       ) int2node
   | `Amoeba ->
     () (* DSs do the job themselves *)
@@ -94,15 +92,11 @@ let main () =
   Arg.parse
     [ "-p", Arg.Set_int port_in, "port where to listen";
       "-m", Arg.Set_string machine_file,
-      "machine_file list of [user@]host:port (one per line)";
-      "-cli", Arg.String (Utils.set_host_port cli_host cli_port_in),
-      "<host:port> CLI" ]
+      "machine_file list of [user@]host:port (one per line)" ]
     (fun arg -> raise (Arg.Bad ("Bad argument: " ^ arg)))
     (sprintf "usage: %s <options>" Sys.argv.(0));
   (* check options *)
   if !machine_file = "" then abort "-m is mandatory";
-  if !cli_host = "" then abort "-cli is mandatory";
-  if !cli_port_in = Utils.uninitialized then abort "-cli is mandatory";
   let int2node = Utils.data_nodes_array !machine_file in
   Log.info "read %d host(s)" (A.length int2node);
   start_data_nodes !machine_file;
@@ -111,8 +105,6 @@ let main () =
   (* start server *)
   Log.info "binding server to %s:%d" "*" !port_in;
   let ctx = ZMQ.Context.create () in
-  (* feedback socket to the local CLI *)
-  let to_cli = Utils.(zmq_socket Push ctx !cli_host !cli_port_in) in
   let incoming = Utils.(zmq_socket Pull ctx "*" !port_in ) in
   try (* loop on messages until quit command *)
     let not_finished = ref true in
@@ -190,11 +182,12 @@ let main () =
           end
         | DS_to_MDS (Fetch_file_req (ds_rank, fn)) ->
 	  Log.debug "got Fetch_file_req";
-	  fetch_mds local_node fn ds_rank int2node (Some to_cli)
+	  fetch_mds local_node fn ds_rank int2node true
         | DS_to_MDS (Bcast_file_req (ds_rank, fn)) ->
           Log.debug "got Bcast_file_req";
 	  bcast_mds local_node fn ds_rank int2node
-        | DS_to_MDS (Connect_push (ds_rank, cli_port)) ->
+        | CLI_to_MDS (Connect_push (ds_rank, cli_port)) ->
+          Log.debug "got Connect_push rank: %d port: %d)" ds_rank cli_port;
           if Utils.out_of_bounds ds_rank int2node then
             Log.error "Connect_push: invalid ds_rank: %d" ds_rank
           else
@@ -203,10 +196,19 @@ let main () =
             assert(Option.is_none maybe_cli_sock); (* not yet a CLI sock *)
             let cli_sock = Utils.(zmq_socket Push ctx (Node.get_host node) cli_port) in
             A.set int2node ds_rank (node, ds_sock, Some cli_sock)
-        | CLI_to_MDS Ls_cmd_req ->
+        | CLI_to_MDS (Ls_cmd_req ds_rank) ->
           Log.debug "got Ls_cmd_req";
-          Socket.send local_node to_cli
-            (MDS_to_CLI (Ls_cmd_ack !global_state))
+          if Utils.out_of_bounds ds_rank int2node then
+            Log.error "Ls_cmd_req: invalid ds_rank: %d" ds_rank
+          else
+            begin match Utils.trd3 int2node.(ds_rank) with
+              | None ->
+                abort
+                  (sprintf "Ls_cmd_req: no CLI feedback sock for node %d" ds_rank)
+              | Some to_cli_sock ->
+                Socket.send local_node to_cli_sock
+                  (MDS_to_CLI (Ls_cmd_ack !global_state))
+            end
         | CLI_to_MDS Quit_cmd ->
           Log.debug "got Quit_cmd";
           let _ = Log.info "got Quit" in
@@ -220,7 +222,6 @@ let main () =
     raise Types.Loop_end;
   with exn -> begin
       ZMQ.Socket.close incoming;
-      ZMQ.Socket.close to_cli;
       let warn = true in
       Utils.cleanup_data_nodes_array warn int2node;
       ZMQ.Context.terminate ctx;
