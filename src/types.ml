@@ -74,6 +74,9 @@ module Node = struct
       (match n.cli_port with
        | None -> "None"
        | Some p -> sprintf "(Some %d)" p)
+  (* unique identifier for this node; ignores the optional cli_port *)
+  let to_string_id n =
+    sprintf "%d.%s:%d" n.rank n.host n.ds_port
   let to_quad n =
     (n.rank, n.host, n.ds_port, n.cli_port)
   let compare n1 n2 =
@@ -310,8 +313,6 @@ module Protocol = struct
     | Add_file_req of rank * File.t
     | Bcast_file_req of rank * File.t
     | Fetch_file_req of rank * filename
-    | Connect_push of rank * port (* a CLI local to DS of rank 'rank' and
-                                     listening on 'port' has connected *)
 
   type mds_to_ds =
     | Add_file_ack of filename
@@ -326,8 +327,10 @@ module Protocol = struct
         filename * chunk_id * is_last * chunk_data * root_node * step_number
 
   type cli_to_mds =
-    | Ls_cmd_req
+    | Ls_cmd_req of rank
     | Quit_cmd
+    | Connect_push of rank * port (* a CLI local to DS of rank 'rank' and
+                                     listening on 'port' has connected *)
 
   type mds_to_cli =
     | Ls_cmd_ack of FileSet.t
