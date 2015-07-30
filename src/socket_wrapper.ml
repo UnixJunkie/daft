@@ -40,9 +40,8 @@ let compress (s: string): string =
     "0" ^ s (* flag as not compressed and keep as is *)
   else
     let res = Bytes.sub_string buffer 0 after in
-    Utils.ignore_first
-      (Log.debug "z: %d -> %d" before after)
-      ("1" ^ res) (* flag as compressed *)
+    (* Log.debug "z: %d -> %d" before after; *)
+    ("1" ^ res) (* flag as compressed *)
 
 exception Too_short
 exception Invalid_first_char
@@ -137,55 +136,58 @@ let decrypt (s: string option): string option =
     turing#finish;
     Some turing#get_string
 
-(* full pipeline: compress --> salt --> encrypt --> sign *)
+(* full pipeline: compress --> salt --> nonce --> encrypt --> sign *)
 let encode (sender: Node.t) (m: 'a): string =
   let no_sharing = [Marshal.No_sharing] in
   let plain_text = Marshal.to_string m no_sharing in
   let maybe_compressed' = may_do compression_flag compress plain_text in
-  let salt = RNG.int64 Int64.max_int in
-  (* Log.debug "enc. salt = %s" (Int64.to_string salt); *)
-  let nonce = Nonce_store.fresh sender in
-  (* Log.debug "enc. nonce = %s" nonce; *)
-  let salted' = (salt, nonce, maybe_compressed') in
-  let salted = Marshal.to_string salted' no_sharing in
   let maybe_encrypted =
     may_do encryption_flag
-      (fun x ->
-         let before = String.length x in
-         let res = encrypt x in
-         let after = String.length res in
-         Log.debug "c: %d -> %d" before after;
+      (fun msg ->
+         let salt = RNG.int64 Int64.max_int in
+         (* Log.debug "enc. salt = %s" (Int64.to_string salt); *)
+         let nonce = Nonce_store.fresh sender in
+         (* Log.debug "enc. nonce = %s" nonce; *)
+         let s_n_mc = (salt, nonce, msg) in
+         let to_encrypt = Marshal.to_string s_n_mc no_sharing in
+         let res = encrypt to_encrypt in
+         (* Log.debug "c: %d -> %d" (String.length msg) (String.length res); *)
          res
-      ) salted
+      ) maybe_compressed'
   in
   may_do signature_flag
     (fun x ->
-       let before = String.length x in
        let res = sign x in
-       let after = String.length res in
-       Log.debug "s: %d -> %d" before after;
+       (* Log.debug "s: %d -> %d" (String.length x) (String.length res); *)
        res
     ) maybe_encrypted
 
-(* full pipeline: check signature --> decrypt --> remove salt --> uncompress *)
+(* full pipeline:
+   check sign --> decrypt --> check nonce --> rm salt --> uncompress *)
 let decode (s: string): 'a option =
   let sign_OK = may_do signature_flag check_sign (Some s) in
   let cipher_OK' = may_do encryption_flag decrypt sign_OK in
   match cipher_OK' with
   | None -> None
   | Some str ->
-    let (_salt, nonce, maybe_compressed) =
-      (Marshal.from_string str 0: Int64.t * string * string)
+    let maybe_compressed =
+      if not encryption_flag then
+        Some str
+      else
+        let (_salt, nonce, mc) =
+          (Marshal.from_string str 0: Int64.t * string * string)
+        in
+        (* Log.debug "dec. salt = %s" (Int64.to_string salt); *)
+        (* Log.debug "dec. nonce = %s" nonce; *)
+        if Nonce_store.is_fresh nonce then
+          Some mc
+        else
+          Utils.ignore_first (Log.warn "nonce already seen: %s" nonce) None
     in
-    (* Log.debug "dec. salt = %s" (Int64.to_string salt); *)
-    (* Log.debug "dec. nonce = %s" nonce; *)
-    if not (Nonce_store.is_fresh nonce) then
-      Utils.ignore_first (Log.warn "nonce already seen: %s" nonce) None
-    else
-      let compression_OK =
-        may_do compression_flag uncompress (Some maybe_compressed)
-      in
-      chain (fun x -> Some (Marshal.from_string x 0: 'a)) compression_OK
+    let compression_OK =
+      may_do compression_flag uncompress maybe_compressed
+    in
+    chain (fun x -> Some (Marshal.from_string x 0: 'a)) compression_OK
 
 module CLI_socket = struct
 
