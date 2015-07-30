@@ -84,11 +84,10 @@ module Command = struct
          | Exit (* just exit CLI *)
          | Extract of filename * filename
          | Fetch of filename
-         | Get of filename * filename (* src_fn dst_fn *)
+         | Get of filename * filename (* src_fn dst_fn *) (* FBR: dst_fn should be optional *)
          | Ls
-         | Put of filename
+         | Put of filename (* FBR: put needs an optional dst_fn *)
          | Quit (* turn off whole system *)
-         | Rfetch of filename * string (* string format: host:port *)
          | Skip
   (* quick and dirty way to understand a command ASAP *)
   let of_list: string list -> t = function
@@ -122,11 +121,6 @@ module Command = struct
             | None -> Log.error "\nusage: put fn" ; Skip
           end
         | "q" | "quit" -> Quit
-        | "r" | "rfetch" ->
-          begin match get_two args with
-            | Some (src_fn, host_port) -> Rfetch (src_fn, host_port)
-            | None -> Log.error "\nusage: rfetch fn host:port" ; Skip
-          end
         | "x" | "exit" -> Exit
         | "" -> Log.error "empty command"; Skip
         | cmd -> Log.error "unknown command: %s" cmd; Skip
@@ -211,7 +205,7 @@ let main () =
       not_finished := !interactive;
       let open Command in
       match read_one_command !interactive with
-      | Skip -> Log.info "\nusage: put|get|fetch|rfetch|extract|exit|quit|ls|bcast"
+      | Skip -> Log.info "\nusage: put|get|fetch|extract|exit|quit|ls|bcast"
       | Put src_fn ->
         Socket.send local_node for_DS
           (CLI_to_DS (Fetch_file_cmd_req (src_fn, Local)));
@@ -228,15 +222,6 @@ let main () =
         Socket.send local_node for_DS
           (CLI_to_DS (Fetch_file_cmd_req (src_fn, Remote)));
         process_answer incoming do_nothing
-      | Rfetch (src_fn, host_port) ->
-        let host, port = ref "", ref 0 in
-        Utils.set_host_port host port host_port;
-        (* create temp socket to remote DS *)
-        let for_ds_i = Utils.(zmq_socket Push ctx !host !port) in
-        Socket.send local_node for_ds_i
-          (CLI_to_DS (Fetch_file_cmd_req (src_fn, Remote)));
-        process_answer incoming do_nothing;
-        ZMQ.Socket.close for_ds_i
       | Extract (src_fn, dst_fn) ->
         extract_cmd local_node src_fn dst_fn for_DS incoming
       | Quit ->
