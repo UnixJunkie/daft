@@ -381,8 +381,7 @@ let main () =
             send_chunk !local_node to_rank int2node fn chunk_id is_last chunk_data
           end
         | MDS_to_DS Quit_cmd ->
-          Log.debug "got Quit_cmd";
-          let _ = Log.info "got Quit" in
+          Log.info "got Quit_cmd";
           not_finished := false
         | MDS_to_DS (Add_file_ack fn) ->
           Log.debug "got Add_file_ack";
