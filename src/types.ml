@@ -207,6 +207,7 @@ module File = struct
       iter (fun c ->
           if !first_time then first_time := false
           else Buffer.add_char res '\n';
+          Buffer.add_char res ' '; (* some indentation *)
           Buffer.add_string res (Chunk.to_string c)
         ) cs;
       Buffer.contents res
