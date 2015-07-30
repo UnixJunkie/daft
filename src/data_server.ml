@@ -282,10 +282,10 @@ let store_chunk to_mds to_cli fn chunk_id is_last data =
       if is_last then (* finalize file description *)
         let full_size = Int64.(of_int offset + size64) in
         let total_chunks = chunk_id + 1 in
-        let chunks = File.get_chunks file in
+        let chunks = File.get_chunks (File.add_chunk file curr_chunk) in
         File.create fn full_size total_chunks chunks
       else
-        File.add_chunk file curr_chunk;
+        File.add_chunk file curr_chunk
     in
     local_state := FileSet.update new_file !local_state;
     (* 3) notify MDS *)
@@ -293,16 +293,17 @@ let store_chunk to_mds to_cli fn chunk_id is_last data =
       (DS_to_MDS (Chunk_ack (fn, chunk_id, !my_rank)));
     (* 4) notify CLI if all file chunks have been received
           and fix file perms in the local datastore *)
-    let curr_chunks = File.get_chunks new_file in
-    let nb_chunks = File.get_nb_chunks new_file in
-    if ChunkSet.cardinal curr_chunks = nb_chunks then
-      begin
-        Unix.chmod local_file 0o400;
-        match to_cli with
-        | None -> () (* in case of broadcast: no feedback to CLI *)
-        | Some cli_sock ->
-          Socket.send !local_node cli_sock (DS_to_CLI (Fetch_file_cmd_ack fn))
-      end
+    let must_have = File.get_nb_chunks new_file in
+    if must_have <> -1 then (* file has been finalized *)
+      let curr_nb_chunks = ChunkSet.cardinal (File.get_chunks new_file) in
+      if curr_nb_chunks = must_have then (* file is complete *)
+        begin
+          Unix.chmod local_file 0o400;
+          match to_cli with
+          | None -> () (* in case of broadcast: no feedback to CLI *)
+          | Some cli_sock ->
+            Socket.send !local_node cli_sock (DS_to_CLI (Fetch_file_cmd_ack fn))
+        end
   end
 
 let deref cli_sock_ref = match !cli_sock_ref with
