@@ -179,21 +179,6 @@ let extract_file (src_fn: Types.filename) (dst_fn: Types.filename): ds_to_cli =
 
 exception Fatal (* throw this when we are doomed *)
 
-let send_to local_node int2node ds_rank something =
-  (* enforce ds_rank bounds because array access soon *)
-  if Utils.out_of_bounds ds_rank int2node then
-    begin
-      Log.fatal "send_to: out of bounds rank: %d" ds_rank;
-      raise Fatal
-    end
-  else match int2node.(ds_rank) with
-    | (_node, Some to_ds_i, _maybe_cli_sock) -> Socket.send local_node to_ds_i something
-    | (_, None, _maybe_cli_sock) ->
-      begin
-        Log.fatal "send_to: no socket for DS %d" ds_rank;
-        raise Fatal
-      end
-
 (* retrieve a chunk from disk *)
 let retrieve_chunk (fn: string) (chunk_id: int): string =
   try (* 1) check we have this file *)
@@ -229,9 +214,27 @@ let retrieve_chunk (fn: string) (chunk_id: int): string =
       raise Fatal
     end
 
+let send_chunk_to local_node int2node ds_rank something =
+  (* enforce ds_rank bounds because array access soon *)
+  if Utils.out_of_bounds ds_rank int2node then
+    begin
+      Log.fatal "send_chunk_to: out of bounds rank: %d" ds_rank;
+      raise Fatal
+    end
+  else match int2node.(ds_rank) with
+    | (_node, Some to_ds_i, _maybe_cli_sock) ->
+      (* chunk data is not sent asynchronously because it is too big and chunks
+         can pile up in memory *)
+      Socket.send ~async:false local_node to_ds_i something
+    | (_, None, _maybe_cli_sock) ->
+      begin
+        Log.fatal "send_chunk_to: no socket for DS %d" ds_rank;
+        raise Fatal
+      end
+
 let send_chunk local_node to_rank int2node fn chunk_id is_last chunk_data =
   let chunk_msg = DS_to_DS (Chunk (fn, chunk_id, is_last, chunk_data)) in
-  send_to local_node int2node to_rank chunk_msg
+  send_chunk_to local_node int2node to_rank chunk_msg
 
 let bcast_chunk local_node to_ranks int2node fn chunk_id is_last root_rank step_num chunk_data =
   let bcast_chunk_msg =
@@ -240,8 +243,7 @@ let bcast_chunk local_node to_ranks int2node fn chunk_id is_last root_rank step_
   in
   List.iter (fun to_rank ->
       if to_rank <> !my_rank then
-        (* Log.debug "%d bcast to %d" (Node.get_rank local_node) to_rank; *)
-        send_to local_node int2node to_rank bcast_chunk_msg
+        send_chunk_to local_node int2node to_rank bcast_chunk_msg
     ) to_ranks
 
 let store_chunk to_mds to_cli fn chunk_id is_last data =
