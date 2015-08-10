@@ -5,6 +5,7 @@
 function reset () {
     pkill daft_mds    # kill MDS
     pkill daft_ds     # kill all DSs
+    pkill daft        # kill CLI
     \rm -rf /tmp/*.ds # clean previous local datastore
 }
 
