@@ -29,6 +29,12 @@ let fst3 (a, _, _) = a
 let snd3 (_, b, _) = b
 let trd3 (_, _, c) = c
 
+let getenv_or_fail variable_name =
+  try Sys.getenv variable_name
+  with Not_found ->
+    Log.error "getenv_or_fail: Sys.getenv: %s" variable_name;
+    ""
+
 let sleep_ms ms =
   let (_, _, _) = Unix.select [] [] [] (float_of_int ms /. 1000.) in
   ()
