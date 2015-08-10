@@ -223,9 +223,7 @@ let send_chunk_to local_node int2node ds_rank something =
     end
   else match int2node.(ds_rank) with
     | (_node, Some to_ds_i, _maybe_cli_sock) ->
-      (* chunk data is not sent asynchronously because it is too big and chunks
-         can pile up in memory *)
-      Socket.send ~async:false local_node to_ds_i something
+      Socket.send local_node to_ds_i something
     | (_, None, _maybe_cli_sock) ->
       begin
         Log.fatal "send_chunk_to: no socket for DS %d" ds_rank;
