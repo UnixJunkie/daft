@@ -20,16 +20,22 @@ let chain f = function
 let buff_size = 1_572_864
 let buffer = Bytes.create buff_size
 
+let flag_as_compressed (s: string): string =
+  "1" ^ s
+
+let flag_as_not_compressed (s: string): string =
+  "0" ^ s
+
 (* hot toggable compression: never inflate messages *)
 let compress (s: string): string =
   let before = String.length s in
   let after = LZ4.Bytes.compress_into (Bytes.of_string s) buffer in
   if after >= before then
-    "0" ^ s (* flag as not compressed and keep as is *)
+    flag_as_not_compressed s
   else
     let res = Bytes.sub_string buffer 0 after in
     (* Log.debug "z: %d -> %d" before after; *)
-    ("1" ^ res) (* flag as compressed *)
+    flag_as_compressed res
 
 exception Too_short
 exception Invalid_first_char
@@ -128,7 +134,12 @@ let decrypt (s: string option): string option =
 let encode (compression_flag: bool) (sender: Node.t) (m: 'a): string =
   let no_sharing = [Marshal.No_sharing] in
   let plain_text = Marshal.to_string m no_sharing in
-  let maybe_compressed' = may_do compression_flag compress plain_text in
+  let maybe_compressed =
+    if compression_flag then
+      compress plain_text
+    else
+      flag_as_not_compressed plain_text
+  in
   let maybe_encrypted =
     may_do encryption_flag
       (fun msg ->
@@ -141,7 +152,7 @@ let encode (compression_flag: bool) (sender: Node.t) (m: 'a): string =
          let res = encrypt to_encrypt in
          (* Log.debug "c: %d -> %d" (String.length msg) (String.length res); *)
          res
-      ) maybe_compressed'
+      ) maybe_compressed
   in
   may_do signature_flag
     (fun x ->
@@ -152,7 +163,7 @@ let encode (compression_flag: bool) (sender: Node.t) (m: 'a): string =
 
 (* full pipeline:
    check sign --> decrypt --> check nonce --> rm salt --> uncompress *)
-let decode (compression_flag: bool) (s: string): 'a option =
+let decode (s: string): 'a option =
   let sign_OK = may_do signature_flag check_sign (Some s) in
   let cipher_OK' = may_do encryption_flag decrypt sign_OK in
   match cipher_OK' with
@@ -172,15 +183,13 @@ let decode (compression_flag: bool) (s: string): 'a option =
         else
           Utils.ignore_first (Log.warn "nonce already seen: %s" nonce) None
     in
-    let compression_OK =
-      may_do compression_flag uncompress maybe_compressed
-    in
+    let compression_OK = uncompress maybe_compressed in
     chain (fun x -> Some (Marshal.from_string x 0: 'a)) compression_OK
 
 module CLI_socket = struct
 
   let send
-      ?compress:(compression_flag = true)
+      ?compress:(compression_flag = false)
       (sender: Node.t)
       (sock: [> `Push] ZMQ.Socket.t)
       (m: from_cli)
@@ -197,18 +206,15 @@ module CLI_socket = struct
     in
     ZMQ.Socket.send sock (translate_type m)
 
-  let receive
-      ?uncompress:(compression_flag = true)
-      (sock: [> `Pull] ZMQ.Socket.t)
-    : to_cli option =
-    decode compression_flag (ZMQ.Socket.recv sock)
+  let receive (sock: [> `Pull] ZMQ.Socket.t): to_cli option =
+    decode (ZMQ.Socket.recv sock)
 
 end
 
 module MDS_socket = struct
 
   let send
-      ?compress:(compression_flag = true)
+      ?compress:(compression_flag = false)
       (sender: Node.t)
       (sock: [> `Push] ZMQ.Socket.t)
       (m: from_mds)
@@ -223,18 +229,15 @@ module MDS_socket = struct
     in
     ZMQ.Socket.send sock (translate_type m)
 
-  let receive
-      ?uncompress:(compression_flag = true)
-      (sock: [> `Pull] ZMQ.Socket.t)
-    : to_mds option =
-    decode compression_flag (ZMQ.Socket.recv sock)
+  let receive (sock: [> `Pull] ZMQ.Socket.t): to_mds option =
+    decode (ZMQ.Socket.recv sock)
 
 end
 
 module DS_socket = struct
 
   let send
-      ?compress:(compression_flag = true)
+      ?compress:(compression_flag = false)
       (sender: Node.t)
       (sock: [> `Push] ZMQ.Socket.t)
       (m: from_ds)
@@ -252,10 +255,7 @@ module DS_socket = struct
     in
     ZMQ.Socket.send sock (translate_type m)
 
-  let receive
-      ?uncompress:(compression_flag = true)
-      (sock: [> `Pull] ZMQ.Socket.t)
-    : to_ds option =
-    decode compression_flag (ZMQ.Socket.recv sock)
+  let receive (sock: [> `Pull] ZMQ.Socket.t): to_ds option =
+    decode (ZMQ.Socket.recv sock)
 
 end
