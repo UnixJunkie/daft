@@ -14,10 +14,7 @@ let encryption_flag = false
 let encryption_flag = true
 *)
 
-(* DAFT flags      z     c     s *)
-let parano_mode = (true, true, true)
-
-let compression_flag, encryption_flag, signature_flag = parano_mode
+let encryption_flag, signature_flag = true, true
 
 let may_do cond f x =
   if cond then f x else x
@@ -135,7 +132,7 @@ let decrypt (s: string option): string option =
     Some turing#get_string
 
 (* full pipeline: compress --> salt --> nonce --> encrypt --> sign *)
-let encode (sender: Node.t) (m: 'a): string =
+let encode (compression_flag: bool) (sender: Node.t) (m: 'a): string =
   let no_sharing = [Marshal.No_sharing] in
   let plain_text = Marshal.to_string m no_sharing in
   let maybe_compressed' = may_do compression_flag compress plain_text in
@@ -162,7 +159,7 @@ let encode (sender: Node.t) (m: 'a): string =
 
 (* full pipeline:
    check sign --> decrypt --> check nonce --> rm salt --> uncompress *)
-let decode (s: string): 'a option =
+let decode (compression_flag: bool) (s: string): 'a option =
   let sign_OK = may_do signature_flag check_sign (Some s) in
   let cipher_OK' = may_do encryption_flag decrypt sign_OK in
   match cipher_OK' with
@@ -190,67 +187,82 @@ let decode (s: string): 'a option =
 module CLI_socket = struct
 
   let send
+      ?compress:(compression_flag = true)
       (sender: Node.t)
       (sock: [> `Push] ZMQ.Socket.t)
-      (m: from_cli): unit =
+      (m: from_cli)
+    : unit =
     (* marshalling + type translation so that message is OK to unmarshall
        at receiver's side *)
     let translate_type: from_cli -> string = function
       | CLI_to_MDS x ->
         let to_send: to_mds = CLI_to_MDS x in
-        encode sender to_send
+        encode compression_flag sender to_send
       | CLI_to_DS x ->
         let to_send: to_ds = CLI_to_DS x in
-        encode sender to_send
+        encode compression_flag sender to_send
     in
     ZMQ.Socket.send ~block:false sock (translate_type m)
 
-  let receive (sock: [> `Pull] ZMQ.Socket.t): to_cli option =
-    decode (ZMQ.Socket.recv sock)
+  let receive
+      ?uncompress:(compression_flag = true)
+      (sock: [> `Pull] ZMQ.Socket.t)
+    : to_cli option =
+    decode compression_flag (ZMQ.Socket.recv sock)
 
 end
 
 module MDS_socket = struct
 
   let send
+      ?compress:(compression_flag = true)
       (sender: Node.t)
       (sock: [> `Push] ZMQ.Socket.t)
-      (m: from_mds): unit =
+      (m: from_mds)
+    : unit =
     let translate_type: from_mds -> string = function
       | MDS_to_DS x ->
         let to_send: to_ds = MDS_to_DS x in
-        encode sender to_send
+        encode compression_flag sender to_send
       | MDS_to_CLI x ->
         let to_send: to_cli = MDS_to_CLI x in
-        encode sender to_send
+        encode compression_flag sender to_send
     in
     ZMQ.Socket.send ~block:false sock (translate_type m)
 
-  let receive (sock: [> `Pull] ZMQ.Socket.t): to_mds option =
-    decode (ZMQ.Socket.recv sock)
+  let receive
+      ?uncompress:(compression_flag = true)
+      (sock: [> `Pull] ZMQ.Socket.t)
+    : to_mds option =
+    decode compression_flag (ZMQ.Socket.recv sock)
 
 end
 
 module DS_socket = struct
 
   let send
+      ?compress:(compression_flag = true)
       (sender: Node.t)
       (sock: [> `Push] ZMQ.Socket.t)
-      (m: from_ds): unit =
+      (m: from_ds)
+    : unit =
     let translate_type: from_ds -> string = function
       | DS_to_MDS x ->
         let to_send: to_mds = DS_to_MDS x in
-        encode sender to_send
+        encode compression_flag sender to_send
       | DS_to_DS x ->
         let to_send: to_ds = DS_to_DS x in
-        encode sender to_send
+        encode compression_flag sender to_send
       | DS_to_CLI x ->
         let to_send: to_cli = DS_to_CLI x in
-        encode sender to_send
+        encode compression_flag sender to_send
     in
     ZMQ.Socket.send ~block:false sock (translate_type m)
 
-  let receive (sock: [> `Pull] ZMQ.Socket.t): to_ds option =
-    decode (ZMQ.Socket.recv sock)
+  let receive
+      ?uncompress:(compression_flag = true)
+      (sock: [> `Pull] ZMQ.Socket.t)
+    : to_ds option =
+    decode compression_flag (ZMQ.Socket.recv sock)
 
 end
