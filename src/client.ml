@@ -33,12 +33,6 @@ let abort msg =
 let do_nothing () =
   ()
 
-let getenv_or_fail variable_name =
-  try Sys.getenv variable_name
-  with Not_found ->
-    Log.error "getenv_or_fail: Sys.getenv: %s" variable_name;
-    ""
-
 let process_answer incoming continuation: unit =
   Log.debug "waiting msg";
   let message' = Socket.receive incoming in
@@ -167,7 +161,7 @@ let main () =
   if !cli_port_in = Utils.uninitialized then abort "-p is mandatory";
   if !mds_host = "" && !mds_port_in = Utils.uninitialized then
     begin
-      let daft_mds_env_var = getenv_or_fail "DAFT_MDS" in
+      let daft_mds_env_var = Utils.getenv_or_fail "DAFT_MDS" in
       if daft_mds_env_var = "" then
         abort "-mds option or DAFT_MDS env. var. mandatory"
       else
@@ -176,7 +170,7 @@ let main () =
   assert(!mds_host <> "" && !mds_port_in <> Utils.uninitialized);
   if !ds_host = "" && !ds_port_in = Utils.uninitialized then
     begin
-      let daft_ds_env_var = getenv_or_fail "DAFT_DS" in
+      let daft_ds_env_var = Utils.getenv_or_fail "DAFT_DS" in
       if daft_ds_env_var = "" then
         abort "-ds option or DAFT_DS env. var. mandatory"
       else
