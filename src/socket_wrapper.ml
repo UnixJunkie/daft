@@ -14,12 +14,10 @@ let encryption_flag = false
 let encryption_flag = true
 *)
 
-(* DAFT modes       z     c      s   *)
-let fast_mode    = (true ,false, false)
-let regular_mode = (true ,false, true )
-let parano_mode  = (true ,true , true )
+(* DAFT flags      z     c     s *)
+let parano_mode = (true, true, true)
 
-let compression_flag, encryption_flag, signature_flag = regular_mode
+let compression_flag, encryption_flag, signature_flag = parano_mode
 
 let may_do cond f x =
   if cond then f x else x
@@ -205,7 +203,7 @@ module CLI_socket = struct
         let to_send: to_ds = CLI_to_DS x in
         encode sender to_send
     in
-    ZMQ.Socket.send sock (translate_type m)
+    ZMQ.Socket.send ~block:false sock (translate_type m)
 
   let receive (sock: [> `Pull] ZMQ.Socket.t): to_cli option =
     decode (ZMQ.Socket.recv sock)
@@ -226,7 +224,7 @@ module MDS_socket = struct
         let to_send: to_cli = MDS_to_CLI x in
         encode sender to_send
     in
-    ZMQ.Socket.send sock (translate_type m)
+    ZMQ.Socket.send ~block:false sock (translate_type m)
 
   let receive (sock: [> `Pull] ZMQ.Socket.t): to_mds option =
     decode (ZMQ.Socket.recv sock)
@@ -250,7 +248,7 @@ module DS_socket = struct
         let to_send: to_cli = DS_to_CLI x in
         encode sender to_send
     in
-    ZMQ.Socket.send sock (translate_type m)
+    ZMQ.Socket.send ~block:false sock (translate_type m)
 
   let receive (sock: [> `Pull] ZMQ.Socket.t): to_ds option =
     decode (ZMQ.Socket.recv sock)
