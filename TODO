@@ -22,9 +22,6 @@ rput = rget . put
     - batch at most N messages before processing the state updates
       first. Process messages immediately if less than N are available
 
-- all the ZMQ.send can be made asynchronous
-  - only the receive must not be
-
 - command to test all files
   - optionally all chunks also
   It would compare their md5 to the one the MDS knows about.
