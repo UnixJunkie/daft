@@ -23,6 +23,7 @@ let cli_port_in = ref Utils.uninitialized
 let single_command = ref ""
 let interactive = ref false
 let machine_file = ref ""
+let verbose = ref false
 
 (* FBR: pass the Log module around if that's possible *)
 
@@ -127,20 +128,21 @@ let extract_cmd local_node src_fn dst_fn for_DS incoming =
   process_answer incoming do_nothing
 
 let read_one_command is_interactive =
-  let command_line =
+  let before, command_line =
     let command_str =
       if is_interactive then read_line ()
       else !single_command
     in
+    let before = Unix.gettimeofday () in
     Log.debug "command: '%s'" command_str;
-    BatString.nsplit ~by:" " command_str
+    before, BatString.nsplit ~by:" " command_str
   in
-  Command.of_list command_line
+  before, Command.of_list command_line
 
 let main () =
   let my_rank = ref Utils.uninitialized in
   (* setup logger *)
-  Logger.set_log_level Logger.DEBUG;
+  Logger.set_log_level Logger.INFO;
   Logger.set_output Legacy.stdout;
   Logger.color_on ();
   (* options parsing *)
@@ -153,7 +155,8 @@ let main () =
       "<host:port> MDS";
       "-ds", Arg.String (Utils.set_host_port ds_host ds_port_in),
       "<host:port> local DS" ;
-      "-r", Arg.Set_int my_rank, "<rank> rank of the local data node" ]
+      "-r", Arg.Set_int my_rank, "<rank> rank of the local data node";
+      "-v", Arg.Set verbose, " verbose mode"]
     (fun arg -> raise (Arg.Bad ("Bad argument: " ^ arg)))
     (sprintf "usage: %s <options>" Sys.argv.(0));
   (* check options *)
@@ -198,7 +201,8 @@ let main () =
     while !not_finished do
       not_finished := !interactive;
       let open Command in
-      match read_one_command !interactive with
+      let before, cmd = read_one_command !interactive in
+      match cmd with
       | Skip -> Log.info "\nusage: put|get|fetch|extract|exit|quit|ls|bcast"
       | Put src_fn ->
         Socket.send local_node for_DS
@@ -211,7 +215,12 @@ let main () =
         let fetch_cont =
           (fun () -> extract_cmd local_node src_fn dst_fn for_DS incoming) 
         in
-        process_answer incoming fetch_cont
+        process_answer incoming fetch_cont;
+        if !verbose then
+          begin
+            let after = Unix.gettimeofday () in
+            Log.info "%.3f" (after -. before)
+          end
       | Fetch src_fn ->
         Socket.send local_node for_DS
           (CLI_to_DS (Fetch_file_cmd_req (src_fn, Remote)));
