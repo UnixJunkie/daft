@@ -223,7 +223,9 @@ let send_chunk_to local_node int2node ds_rank something =
     end
   else match int2node.(ds_rank) with
     | (_node, Some to_ds_i, _maybe_cli_sock) ->
-      Socket.send local_node to_ds_i something
+      (* we only try to compress file data:
+         the gain is too small for commands *)
+      Socket.send ~compress:true local_node to_ds_i something
     | (_, None, _maybe_cli_sock) ->
       begin
         Log.fatal "send_chunk_to: no socket for DS %d" ds_rank;

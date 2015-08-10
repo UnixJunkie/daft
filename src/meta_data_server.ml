@@ -206,7 +206,8 @@ let main () =
                 abort
                   (sprintf "Ls_cmd_req: no CLI feedback sock for node %d" ds_rank)
               | Some to_cli_sock ->
-                Socket.send local_node to_cli_sock
+                (* ls' output can be pretty big *)
+                Socket.send ~compress:true local_node to_cli_sock
                   (MDS_to_CLI (Ls_cmd_ack !global_state))
             end
         | CLI_to_MDS Quit_cmd ->
