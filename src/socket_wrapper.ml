@@ -7,13 +7,6 @@ module Nonce_store = Types.Nonce_store
 module RNG = Types.RNG
 module Node = Types.Node
 
-(* FBR: one day, position those flags with (cppo) preprocessor directives; e.g.
-#ifdef NO_CRYPTO
-let encryption_flag = false
-#else
-let encryption_flag = true
-*)
-
 let encryption_flag, signature_flag = true, true
 
 let may_do cond f x =
@@ -187,7 +180,7 @@ let decode (compression_flag: bool) (s: string): 'a option =
 module CLI_socket = struct
 
   let send
-      ?async:(async_flag = true)
+      ?async:(async_flag = false)
       ?compress:(compression_flag = true)
       (sender: Node.t)
       (sock: [> `Push] ZMQ.Socket.t)
@@ -216,7 +209,7 @@ end
 module MDS_socket = struct
 
   let send
-      ?async:(async_flag = true)
+      ?async:(async_flag = false)
       ?compress:(compression_flag = true)
       (sender: Node.t)
       (sock: [> `Push] ZMQ.Socket.t)
@@ -243,7 +236,7 @@ end
 module DS_socket = struct
 
   let send
-      ?async:(async_flag = true)
+      ?async:(async_flag = false)
       ?compress:(compression_flag = true)
       (sender: Node.t)
       (sock: [> `Push] ZMQ.Socket.t)
