@@ -187,6 +187,7 @@ let decode (compression_flag: bool) (s: string): 'a option =
 module CLI_socket = struct
 
   let send
+      ?async:(async_flag = true)
       ?compress:(compression_flag = true)
       (sender: Node.t)
       (sock: [> `Push] ZMQ.Socket.t)
@@ -202,7 +203,7 @@ module CLI_socket = struct
         let to_send: to_ds = CLI_to_DS x in
         encode compression_flag sender to_send
     in
-    ZMQ.Socket.send ~block:false sock (translate_type m)
+    ZMQ.Socket.send ~block:async_flag sock (translate_type m)
 
   let receive
       ?uncompress:(compression_flag = true)
@@ -215,6 +216,7 @@ end
 module MDS_socket = struct
 
   let send
+      ?async:(async_flag = true)
       ?compress:(compression_flag = true)
       (sender: Node.t)
       (sock: [> `Push] ZMQ.Socket.t)
@@ -228,7 +230,7 @@ module MDS_socket = struct
         let to_send: to_cli = MDS_to_CLI x in
         encode compression_flag sender to_send
     in
-    ZMQ.Socket.send ~block:false sock (translate_type m)
+    ZMQ.Socket.send ~block:async_flag sock (translate_type m)
 
   let receive
       ?uncompress:(compression_flag = true)
@@ -241,6 +243,7 @@ end
 module DS_socket = struct
 
   let send
+      ?async:(async_flag = true)
       ?compress:(compression_flag = true)
       (sender: Node.t)
       (sock: [> `Push] ZMQ.Socket.t)
@@ -257,7 +260,7 @@ module DS_socket = struct
         let to_send: to_cli = DS_to_CLI x in
         encode compression_flag sender to_send
     in
-    ZMQ.Socket.send ~block:false sock (translate_type m)
+    ZMQ.Socket.send ~block:async_flag sock (translate_type m)
 
   let receive
       ?uncompress:(compression_flag = true)
