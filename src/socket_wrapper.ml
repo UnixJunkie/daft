@@ -131,7 +131,7 @@ let decrypt (s: string option): string option =
     Some turing#get_string
 
 (* full pipeline: compress --> salt --> nonce --> encrypt --> sign *)
-let encode (compression_flag: bool) (sender: Node.t) (m: 'a): string =
+let encode (compression_flag: bool) (counter: int ref) (sender: Node.t) (m: 'a): string =
   let no_sharing = [Marshal.No_sharing] in
   let plain_text = Marshal.to_string m no_sharing in
   let maybe_compressed =
@@ -145,7 +145,7 @@ let encode (compression_flag: bool) (sender: Node.t) (m: 'a): string =
       (fun msg ->
          let salt = RNG.int64 Int64.max_int in
          (* Log.debug "enc. salt = %s" (Int64.to_string salt); *)
-         let nonce = Nonce_store.fresh sender in
+         let nonce = Nonce_store.fresh counter sender in
          (* Log.debug "enc. nonce = %s" nonce; *)
          let s_n_mc = (salt, nonce, msg) in
          let to_encrypt = Marshal.to_string s_n_mc no_sharing in
@@ -190,6 +190,7 @@ module CLI_socket = struct
 
   let send
       ?compress:(compression_flag = false)
+      (counter: int ref)
       (sender: Node.t)
       (sock: [> `Push] ZMQ.Socket.t)
       (m: from_cli)
@@ -199,10 +200,10 @@ module CLI_socket = struct
     let translate_type: from_cli -> string = function
       | CLI_to_MDS x ->
         let to_send: to_mds = CLI_to_MDS x in
-        encode compression_flag sender to_send
+        encode compression_flag counter sender to_send
       | CLI_to_DS x ->
         let to_send: to_ds = CLI_to_DS x in
-        encode compression_flag sender to_send
+        encode compression_flag counter sender to_send
     in
     ZMQ.Socket.send sock (translate_type m)
 
@@ -215,6 +216,7 @@ module MDS_socket = struct
 
   let send
       ?compress:(compression_flag = false)
+      (counter: int ref)
       (sender: Node.t)
       (sock: [> `Push] ZMQ.Socket.t)
       (m: from_mds)
@@ -222,10 +224,10 @@ module MDS_socket = struct
     let translate_type: from_mds -> string = function
       | MDS_to_DS x ->
         let to_send: to_ds = MDS_to_DS x in
-        encode compression_flag sender to_send
+        encode compression_flag counter sender to_send
       | MDS_to_CLI x ->
         let to_send: to_cli = MDS_to_CLI x in
-        encode compression_flag sender to_send
+        encode compression_flag counter sender to_send
     in
     ZMQ.Socket.send sock (translate_type m)
 
@@ -238,6 +240,7 @@ module DS_socket = struct
 
   let send
       ?compress:(compression_flag = false)
+      (counter: int ref)
       (sender: Node.t)
       (sock: [> `Push] ZMQ.Socket.t)
       (m: from_ds)
@@ -245,13 +248,13 @@ module DS_socket = struct
     let translate_type: from_ds -> string = function
       | DS_to_MDS x ->
         let to_send: to_mds = DS_to_MDS x in
-        encode compression_flag sender to_send
+        encode compression_flag counter sender to_send
       | DS_to_DS x ->
         let to_send: to_ds = DS_to_DS x in
-        encode compression_flag sender to_send
+        encode compression_flag counter sender to_send
       | DS_to_CLI x ->
         let to_send: to_cli = DS_to_CLI x in
-        encode compression_flag sender to_send
+        encode compression_flag counter sender to_send
     in
     ZMQ.Socket.send sock (translate_type m)
 

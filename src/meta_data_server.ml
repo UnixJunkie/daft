@@ -14,9 +14,12 @@ module Logger = Log (* !!! keep this one before Log alias !!! *)
 (* prefix all logs *)
 module Log = Log.Make (struct let section = mds_in_blue end)
 module Node = Types.Node
-module Socket = Socket_wrapper.MDS_socket
 
 let global_state = ref FileSet.empty
+let msg_counter = ref 0
+
+let send = Socket_wrapper.MDS_socket.send
+let receive = Socket_wrapper.MDS_socket.receive
 
 let start_data_nodes _machine_fn =
   (* TODO: scp exe to each node *)
@@ -47,7 +50,7 @@ let fetch_mds local_node fn ds_rank int2node feedback_to_cli =
               MDS_to_DS
                 (Send_to_req (ds_rank, fn, chunk_id, is_last))
             in
-            Socket.send local_node to_ds_i send_order
+            send msg_counter local_node to_ds_i send_order
           | (_, None, _) -> assert(false)
         end
       ) chunks
@@ -60,7 +63,7 @@ let fetch_mds local_node fn ds_rank int2node feedback_to_cli =
         | None ->
           Log.warn "fetch_mds: no CLI feedback sock for node %d" ds_rank
         | Some to_cli_sock ->
-          Socket.send local_node to_cli_sock (MDS_to_CLI (Fetch_cmd_nack fn))
+          send msg_counter local_node to_cli_sock (MDS_to_CLI (Fetch_cmd_nack fn))
 
 (* CCO: better done with only one MDS -> local DS communication *)
 let bcast_mds
@@ -110,7 +113,7 @@ let main () =
     let not_finished = ref true in
     while !not_finished do
       Log.debug "waiting msg";
-      let message' = Socket.receive incoming in
+      let message' = receive incoming in
       Log.debug "got msg";
       match message' with
       | None -> Log.warn "junk"
@@ -152,7 +155,7 @@ let main () =
                   Add_file_ack f.name
                 end
               in
-              Socket.send local_node receiver (MDS_to_DS ack_or_nack)
+              send msg_counter local_node receiver (MDS_to_DS ack_or_nack)
           end
         | DS_to_MDS (Chunk_ack (fn, chunk_id, ds_rank)) ->
           begin
@@ -207,7 +210,7 @@ let main () =
                   (sprintf "Ls_cmd_req: no CLI feedback sock for node %d" ds_rank)
               | Some to_cli_sock ->
                 (* ls' output can be pretty big *)
-                Socket.send ~compress:true local_node to_cli_sock
+                send ~compress:true msg_counter local_node to_cli_sock
                   (MDS_to_CLI (Ls_cmd_ack !global_state))
             end
         | CLI_to_MDS Quit_cmd ->
@@ -216,7 +219,7 @@ let main () =
           (* send Quit to all DSs *)
           A.iteri (fun i (_ds, maybe_sock, _maybe_cli_sock) -> match maybe_sock with
               | None -> Log.warn "DS %d missing" i
-              | Some to_DS_i -> Socket.send local_node to_DS_i (MDS_to_DS Quit_cmd)
+              | Some to_DS_i -> send msg_counter local_node to_DS_i (MDS_to_DS Quit_cmd)
             ) int2node;
           not_finished := false
     done;

@@ -13,7 +13,9 @@ module S = String
 module Node = Types.Node
 module File = Types.File
 module FileSet = Types.FileSet
-module Socket = Socket_wrapper.CLI_socket
+
+let send = Socket_wrapper.CLI_socket.send
+let receive = Socket_wrapper.CLI_socket.receive
 
 let ds_host = ref ""
 let ds_port_in = ref Utils.uninitialized
@@ -24,6 +26,7 @@ let single_command = ref ""
 let interactive = ref false
 let machine_file = ref ""
 let verbose = ref false
+let msg_counter = ref 0
 
 (* FBR: pass the Log module around if that's possible *)
 
@@ -36,7 +39,7 @@ let do_nothing () =
 
 let process_answer incoming continuation: unit =
   Log.debug "waiting msg";
-  let message' = Socket.receive incoming in
+  let message' = receive incoming in
   Log.debug "got msg";
   match message' with
   | None -> Log.warn "junk"
@@ -123,7 +126,7 @@ module Command = struct
 end
 
 let extract_cmd local_node src_fn dst_fn for_DS incoming =
-  Socket.send local_node for_DS
+  send msg_counter local_node for_DS
     (CLI_to_DS (Extract_file_cmd_req (src_fn, dst_fn)));
   process_answer incoming do_nothing
 
@@ -188,9 +191,9 @@ let main () =
   Log.info "Client of MDS %s:%d" !mds_host !mds_port_in;
   let for_DS = Utils.(zmq_socket Push ctx !ds_host !ds_port_in) in
   (* register yourself to the local DS by telling it the port you listen to *)
-  Socket.send local_node for_DS (CLI_to_DS (Connect_cmd_push !cli_port_in));
+  send msg_counter local_node for_DS (CLI_to_DS (Connect_cmd_push !cli_port_in));
   (* register yourself to the MDS *)
-  Socket.send local_node for_MDS
+  send msg_counter local_node for_MDS
     (CLI_to_MDS (Connect_push (!my_rank, !cli_port_in)));
   let incoming = Utils.(zmq_socket Pull ctx "*" !cli_port_in) in
   Log.info "Client of DS %s:%d" !ds_host !ds_port_in;
@@ -205,12 +208,12 @@ let main () =
       match cmd with
       | Skip -> Log.info "\nusage: put|get|fetch|extract|exit|quit|ls|bcast"
       | Put src_fn ->
-        Socket.send local_node for_DS
+        send msg_counter local_node for_DS
           (CLI_to_DS (Fetch_file_cmd_req (src_fn, Local)));
         process_answer incoming do_nothing
       | Get (src_fn, dst_fn) ->
         (* get = extract . fetch *)
-        Socket.send local_node for_DS
+        send msg_counter local_node for_DS
           (CLI_to_DS (Fetch_file_cmd_req (src_fn, Remote)));
         let fetch_cont =
           (fun () -> extract_cmd local_node src_fn dst_fn for_DS incoming) 
@@ -222,22 +225,22 @@ let main () =
             Log.info "%.3f" (after -. before)
           end
       | Fetch src_fn ->
-        Socket.send local_node for_DS
+        send msg_counter local_node for_DS
           (CLI_to_DS (Fetch_file_cmd_req (src_fn, Remote)));
         process_answer incoming do_nothing
       | Extract (src_fn, dst_fn) ->
         extract_cmd local_node src_fn dst_fn for_DS incoming
       | Quit ->
-        Socket.send local_node for_MDS
+        send msg_counter local_node for_MDS
           (CLI_to_MDS Quit_cmd);
         not_finished := false;
       | Exit ->
         not_finished := false
       | Ls ->
-        Socket.send local_node for_MDS (CLI_to_MDS (Ls_cmd_req !my_rank));
+        send msg_counter local_node for_MDS (CLI_to_MDS (Ls_cmd_req !my_rank));
         process_answer incoming do_nothing
       | Bcast src_fn ->
-        Socket.send local_node for_DS
+        send msg_counter local_node for_DS
           (CLI_to_DS (Bcast_file_cmd_req src_fn));
         process_answer incoming do_nothing
     done;

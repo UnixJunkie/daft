@@ -86,9 +86,8 @@ end
 (* create fresh nonces and check their freshness *)
 module Nonce_store = struct
   type t = string
-  let counter = ref 0
   let nonces = ref StringSet.empty
-  let fresh (n: Node.t): t =
+  let fresh (counter: int ref) (n: Node.t): t =
     let nonce =
       sprintf "%s:%d:%d" (Node.get_host n) (Node.get_ds_port n) !counter
     in
