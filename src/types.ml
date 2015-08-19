@@ -1,5 +1,5 @@
 open Batteries
-open Printf
+open Legacy.Printf
 
 exception Loop_end
 

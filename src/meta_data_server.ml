@@ -1,5 +1,5 @@
 open Batteries
-open Printf
+open Legacy.Printf
 open Types.Protocol
 
 let mds_in_blue = Utils.fg_cyan ^ "MDS" ^ Utils.fg_reset
