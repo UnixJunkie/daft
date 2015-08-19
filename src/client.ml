@@ -113,6 +113,8 @@ module Command = struct
          | Put of filename (* FBR: put needs an optional dst_fn *)
          | Quit (* turn off whole system *)
          | Skip
+  let usage () =
+    Log.info "\nusage: put|get|help|fetch|extract|exit|quit|ls|bcast"
   (* quick and dirty way to understand a command ASAP *)
   let of_list: string list -> t = function
     | [] -> Skip
@@ -138,6 +140,7 @@ module Command = struct
             | Some (src_fn, dst_fn) -> Get (src_fn, dst_fn)
             | None -> Log.error "\nusage: get src_fn dst_fn" ; Skip
           end
+        | "h" | "help" -> usage(); Skip
         | "l" | "ls" -> Ls
         | "p" | "put" ->
           begin match get_one args with
@@ -146,8 +149,8 @@ module Command = struct
           end
         | "q" | "quit" -> Quit
         | "x" | "exit" -> Exit
-        | "" -> Log.error "empty command"; Skip
-        | cmd -> Log.error "unknown command: %s" cmd; Skip
+        | "" ->  Log.error "empty command";           usage(); Skip
+        | cmd -> Log.error "unknown command: %s" cmd; usage(); Skip
       end
 end
 
@@ -164,9 +167,22 @@ let read_one_command is_interactive =
     in
     let before = Unix.gettimeofday () in
     Log.debug "command: '%s'" command_str;
-    before, BatString.nsplit ~by:" " command_str
+    let to_parse =
+      if String.starts_with command_str "!" then
+        (* commands starting with ! are passed to the shell
+           like with any good old FTP client *)
+        let (_: Unix.process_status) =
+          Unix.system (String.lchop command_str)
+        in
+        []
+      else
+        match String.nsplit ~by:" " command_str with
+        | [] -> [""]
+        | x -> x
+    in
+    (before, to_parse)
   in
-  before, Command.of_list command_line
+  (before, Command.of_list command_line)
 
 let main () =
   let my_rank = ref Utils.uninitialized in
@@ -234,7 +250,7 @@ let main () =
       let open Command in
       let before, cmd = read_one_command !interactive in
       match cmd with
-      | Skip -> Log.info "\nusage: put|get|fetch|extract|exit|quit|ls|bcast"
+      | Skip -> ()
       | Put src_fn ->
         send msg_counter local_node for_DS
           (CLI_to_DS (Fetch_file_cmd_req (src_fn, Local)));
