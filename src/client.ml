@@ -2,7 +2,7 @@
    - all complex things should be handled by them and the CLI remain simple *)
 
 open Batteries
-open Printf
+open Legacy.Printf
 open Types.Protocol
 
 module Fn = Filename
@@ -27,8 +27,34 @@ let interactive = ref false
 let machine_file = ref ""
 let verbose = ref false
 let msg_counter = ref 0
+let msg_counter_fn = "CLI.msg_counter"
 
 (* FBR: pass the Log module around if that's possible *)
+
+let backup_counter () =
+  Utils.with_out_file msg_counter_fn (fun out ->
+      fprintf out "%d\n" !msg_counter
+    );
+  Unix.chmod msg_counter_fn 0o600; (* strict perms *)
+  Log.info "wrote out %s" msg_counter_fn
+
+let restore_counter () =
+  if Sys.file_exists msg_counter_fn then
+    begin
+      Log.info "read in %s" msg_counter_fn;
+      Utils.with_in_file msg_counter_fn (fun input ->
+          int_of_string (Legacy.input_line input)
+        )
+    end
+  else
+    0 (* start from fresh *)
+
+let forget_counter () =
+  if Sys.file_exists msg_counter_fn then
+    begin
+      FU.(rm ~force:Force [msg_counter_fn]);
+      Log.info "removed %s" msg_counter_fn
+    end
 
 let abort msg =
   Log.fatal "%s" msg;
@@ -190,6 +216,8 @@ let main () =
   let for_MDS = Utils.(zmq_socket Push ctx !mds_host !mds_port_in) in
   Log.info "Client of MDS %s:%d" !mds_host !mds_port_in;
   let for_DS = Utils.(zmq_socket Push ctx !ds_host !ds_port_in) in
+  (* continue from a previous session if counter file is found *)
+  msg_counter := restore_counter ();
   (* register yourself to the local DS by telling it the port you listen to *)
   send msg_counter local_node for_DS (CLI_to_DS (Connect_cmd_push !cli_port_in));
   (* register yourself to the MDS *)
@@ -231,10 +259,11 @@ let main () =
       | Extract (src_fn, dst_fn) ->
         extract_cmd local_node src_fn dst_fn for_DS incoming
       | Quit ->
-        send msg_counter local_node for_MDS
-          (CLI_to_MDS Quit_cmd);
-        not_finished := false;
+        send msg_counter local_node for_MDS (CLI_to_MDS Quit_cmd);
+        forget_counter ();
+        not_finished := false
       | Exit ->
+        backup_counter ();
         not_finished := false
       | Ls ->
         send msg_counter local_node for_MDS (CLI_to_MDS (Ls_cmd_req !my_rank));
