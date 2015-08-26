@@ -17,8 +17,7 @@ module FileSet = Types.FileSet
 module Chunk = File.Chunk
 module ChunkSet = File.ChunkSet
 
-let send = Socket_wrapper.DS_socket.send
-let receive = Socket_wrapper.DS_socket.receive
+let send, receive = Socket_wrapper.DS_socket.(send, receive)
 
 let msg_counter = ref 0
 

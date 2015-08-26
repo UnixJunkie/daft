@@ -14,8 +14,7 @@ module Node = Types.Node
 module File = Types.File
 module FileSet = Types.FileSet
 
-let send = Socket_wrapper.CLI_socket.send
-let receive = Socket_wrapper.CLI_socket.receive
+let send, receive = Socket_wrapper.CLI_socket.(send, receive)
 
 let ds_host = ref ""
 let ds_port_in = ref Utils.uninitialized
