@@ -170,7 +170,11 @@ let extract_cmd local_node src_fn dst_fn for_DS incoming =
 let read_one_command is_interactive =
   let before, command_line =
     let command_str =
-      if is_interactive then read_line ()
+      if is_interactive then
+        begin
+          printf "\027[1;31m> \027[0m"; (* bold-red prompt *)
+          read_line ()
+        end
       else !single_command
     in
     let before = Unix.gettimeofday () in
@@ -258,7 +262,6 @@ let main () =
   try
     while !not_finished do
       not_finished := !interactive;
-      printf "\027[1;31m> \027[0m"; (* bold red prompt *)
       let open Command in
       let before, cmd = read_one_command !interactive in
       match cmd with
