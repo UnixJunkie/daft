@@ -27,6 +27,9 @@ let fst3 (a, _, _) = a
 let snd3 (_, b, _) = b
 let trd3 (_, _, c) = c
 
+let string_of_list to_string sep l =
+  "[" ^ String.concat sep (L.map to_string l) ^ "]"
+
 let getenv_or_fail variable_name =
   try Sys.getenv variable_name
   with Not_found ->
