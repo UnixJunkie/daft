@@ -240,6 +240,10 @@ module File = struct
       Log.error "duplicate chunk: f: %s chunk: %d" f.name Chunk.(c.id)
     ;
     { f with chunks = new_set }
+  (* check if chunk is already present *)
+  let has_chunk (f: t) (cid: chunk_id) =
+    let chunk = Chunk.dummy cid in
+    ChunkSet.mem chunk f.chunks
   let update_chunk (f: t) (c: Chunk.t): t =
     { f with chunks = ChunkSet.update c f.chunks }
   let compare f1 f2 =
