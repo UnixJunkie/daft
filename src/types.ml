@@ -61,6 +61,8 @@ module Node = struct
     { rank; host; ds_port; cli_port }
   let dummy () =
     { rank = -1; host = "!!!dummy_hostname!!!"; ds_port = -1; cli_port = None }
+  let dummy_with_rank rank =
+    { rank; host = "!!!dummy_hostname!!!"; ds_port = -1; cli_port = None }
   let get_rank n =
     n.rank
   let get_host n =
@@ -180,6 +182,9 @@ module File = struct
           c.id (Node.to_string n)
       ;
       { c with nodes = new_set }
+    (* is this chunk on the node with that nid? *)
+    let has_source (c: t) (nid: rank): bool =
+      NodeSet.mem (Node.dummy_with_rank nid) c.nodes
   end
 
 (* FBR: adhere to the JS Core convention: in module with type t, the first
