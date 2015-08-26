@@ -113,7 +113,10 @@ module Command = struct
          | Quit (* turn off whole system *)
          | Skip
   let usage () =
-    Log.info "\nusage: put|get|help|fetch|extract|exit|quit|ls|bcast"
+    Log.info
+      ("\n" ^^
+       "usage: put|get|help|fetch|extract|exit|quit|ls|bcast\n" ^^
+       "hotkey ^   ^   ^    ^     ^        ^   ^    ^  ^")
   let bcast_of_string = function
     | "r" -> Relay
     | "a" -> Amoeba
