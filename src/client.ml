@@ -244,11 +244,14 @@ let main () =
   let for_DS = Utils.(zmq_socket Push ctx !ds_host !ds_port_in) in
   (* continue from a previous session if counter file is found *)
   msg_counter := restore_counter ();
-  (* register yourself to the local DS by telling it the port you listen to *)
-  send msg_counter local_node for_DS (CLI_to_DS (Connect_cmd_push !cli_port_in));
-  (* register yourself to the MDS *)
-  send msg_counter local_node for_MDS
-    (CLI_to_MDS (Connect_push (!my_rank, !cli_port_in)));
+  if !msg_counter = 0 then (* start a new session *)
+    begin
+      (* register yourself to the local DS by telling it the port you listen to *)
+      send msg_counter local_node for_DS (CLI_to_DS (Connect_cmd_push !cli_port_in));
+      (* register yourself to the MDS *)
+      send msg_counter local_node for_MDS
+        (CLI_to_MDS (Connect_push (!my_rank, !cli_port_in)))
+    end;
   let incoming = Utils.(zmq_socket Pull ctx "*" !cli_port_in) in
   Log.info "Client of DS %s:%d" !ds_host !ds_port_in;
   (* the CLI execute just one command then exit *)
@@ -257,6 +260,7 @@ let main () =
   try
     while !not_finished do
       not_finished := !interactive;
+      printf "> "; (* prompt *)
       let open Command in
       let before, cmd = read_one_command !interactive in
       match cmd with
@@ -297,7 +301,7 @@ let main () =
       | Bcast (src_fn, bcast_method) ->
         send msg_counter local_node for_DS
           (CLI_to_DS (Bcast_file_cmd_req (src_fn, bcast_method)));
-        process_answer incoming do_nothing
+        process_answer incoming do_nothing;
     done;
     raise Types.Loop_end;
   with exn -> begin
