@@ -237,8 +237,11 @@ let send_chunk_to local_node int2node ds_rank something =
       end
 
 let send_chunk local_node to_rank int2node fn chunk_id is_last chunk_data =
-  let chunk_msg = DS_to_DS (Chunk (fn, chunk_id, is_last, chunk_data)) in
-  send_chunk_to local_node int2node to_rank chunk_msg
+  if to_rank = !my_rank then
+    Log.warn "send_chunk: to self: fn: %s cid: %d" fn chunk_id
+  else
+    let chunk_msg = DS_to_DS (Chunk (fn, chunk_id, is_last, chunk_data)) in
+    send_chunk_to local_node int2node to_rank chunk_msg
 
 let bcast_chunk local_node to_ranks int2node fn chunk_id is_last root_rank step_num chunk_data =
   let bcast_chunk_msg =
@@ -262,66 +265,69 @@ let relay_chunk_or_stop local_node int2node fn chunk_id is_last root_rank chunk_
     send_chunk_to local_node int2node to_rank relay_chunk_msg
 
 let store_chunk to_mds to_cli fn chunk_id is_last data =
-  let size = String.length data in
-  let size64 = Int64.of_int size in
-  let curr_chunk_size =
-    if size <> !chunk_size then Some size64 else None
+  let file =
+    try FileSet.find_fn fn !local_state (* retrieve it *)
+    with Not_found -> (* or create it *)
+      let unknown_size = Int64.of_int (-1) in
+      let unknown_total_chunks = -1 in
+      File.create
+        fn unknown_size unknown_total_chunks ChunkSet.empty
   in
-  if not is_last && Option.is_some curr_chunk_size then
-    Log.error "store_chunk: invalid chunk size: fn: %s id: %d size: %d"
-      fn chunk_id size
-  else begin
-    (* 1) write chunk at offset *)
-    let offset = chunk_id * !chunk_size in
-    let local_file = fn_to_path fn in
-    let dest_dir = Fn.dirname local_file in
-    (* mkdir creates all necessary parent dirs *)
-    FU.mkdir ~parent:true ~mode:0o700 dest_dir;
-    Utils.with_out_file_descr local_file (fun out ->
-        assert(Unix.(lseek out offset SEEK_SET) = offset);
-        assert(Unix.write_substring out data 0 size = size)
-      );
-    (* 2) update local state *)
-    let file =
-      try FileSet.find_fn fn !local_state (* retrieve it *)
-      with Not_found -> (* or create it *)
-        let unknown_size = Int64.of_int (-1) in
-        let unknown_total_chunks = -1 in
-        File.create
-          fn unknown_size unknown_total_chunks ChunkSet.empty
+  if File.has_chunk file chunk_id then
+    Log.warn "chunk already here: fn: %s cid: %d" fn chunk_id
+  else
+    let size = String.length data in
+    let size64 = Int64.of_int size in
+    let curr_chunk_size =
+      if size <> !chunk_size then Some size64 else None
     in
-    let curr_chunk =
-      File.Chunk.create chunk_id curr_chunk_size !local_node
-    in
-    (* only once we receive the last chunk can we finalize the file's
-       description in local_state *)
-    let new_file =
-      if is_last then (* finalize file description *)
-        let full_size = Int64.(of_int offset + size64) in
-        let total_chunks = chunk_id + 1 in
-        let chunks = File.get_chunks (File.add_chunk file curr_chunk) in
-        File.create fn full_size total_chunks chunks
-      else
-        File.add_chunk file curr_chunk
-    in
-    local_state := FileSet.update new_file !local_state;
-    (* 3) notify MDS *)
-    send msg_counter !local_node to_mds
-      (DS_to_MDS (Chunk_ack (fn, chunk_id, !my_rank)));
-    (* 4) notify CLI if all file chunks have been received
-          and fix file perms in the local datastore *)
-    let must_have = File.get_nb_chunks new_file in
-    if must_have <> -1 then (* file has been finalized *)
-      let curr_nb_chunks = ChunkSet.cardinal (File.get_chunks new_file) in
-      if curr_nb_chunks = must_have then (* file is complete *)
-        begin
-          Unix.chmod local_file 0o400;
-          match to_cli with
-          | None -> () (* in case of broadcast: no feedback to CLI *)
-          | Some cli_sock ->
-            send msg_counter !local_node cli_sock (DS_to_CLI (Fetch_file_cmd_ack fn))
-        end
-  end
+    if not is_last && Option.is_some curr_chunk_size then
+      Log.error "store_chunk: invalid chunk size: fn: %s id: %d size: %d"
+        fn chunk_id size
+    else begin
+      (* 1) write chunk at offset *)
+      let offset = chunk_id * !chunk_size in
+      let local_file = fn_to_path fn in
+      let dest_dir = Fn.dirname local_file in
+      (* mkdir creates all necessary parent dirs *)
+      FU.mkdir ~parent:true ~mode:0o700 dest_dir;
+      Utils.with_out_file_descr local_file (fun out ->
+          assert(Unix.(lseek out offset SEEK_SET) = offset);
+          assert(Unix.write_substring out data 0 size = size)
+        );
+      (* 2) update local state *)
+      let curr_chunk =
+        File.Chunk.create chunk_id curr_chunk_size !local_node
+      in
+      (* only once we receive the last chunk can we finalize the file's
+         description in local_state *)
+      let new_file =
+        if is_last then (* finalize file description *)
+          let full_size = Int64.(of_int offset + size64) in
+          let total_chunks = chunk_id + 1 in
+          let chunks = File.get_chunks (File.add_chunk file curr_chunk) in
+          File.create fn full_size total_chunks chunks
+        else
+          File.add_chunk file curr_chunk
+      in
+      local_state := FileSet.update new_file !local_state;
+      (* 3) notify MDS *)
+      send msg_counter !local_node to_mds
+        (DS_to_MDS (Chunk_ack (fn, chunk_id, !my_rank)));
+      (* 4) notify CLI if all file chunks have been received
+            and fix file perms in the local datastore *)
+      let must_have = File.get_nb_chunks new_file in
+      if must_have <> -1 then (* file has been finalized *)
+        let curr_nb_chunks = ChunkSet.cardinal (File.get_chunks new_file) in
+        if curr_nb_chunks = must_have then (* file is complete *)
+          begin
+            Unix.chmod local_file 0o400;
+            match to_cli with
+            | None -> () (* in case of broadcast: no feedback to CLI *)
+            | Some cli_sock ->
+              send msg_counter !local_node cli_sock (DS_to_CLI (Fetch_file_cmd_ack fn))
+          end
+    end
 
 let deref cli_sock_ref = match !cli_sock_ref with
   | None -> failwith "deref: to_cli socket uninitialized"
@@ -415,7 +421,7 @@ let main () =
             (DS_to_CLI (Fetch_file_cmd_nack (fn, Already_here)))
         | DS_to_DS (Chunk (fn, chunk_id, is_last, data)) ->
           Log.debug "got Chunk";
-          store_chunk to_mds (Some (deref to_cli)) fn chunk_id is_last data
+          store_chunk to_mds !to_cli fn chunk_id is_last data
         | CLI_to_DS (Fetch_file_cmd_req (fn, Local)) ->
           Log.debug "got Fetch_file_cmd_req:Local";
           let res = add_file fn in
