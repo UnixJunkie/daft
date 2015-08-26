@@ -5,8 +5,6 @@ module A = Array
 module L = List
 module Node = Types.Node
 
-let default_bcast_algo = `Amoeba
-
 let uninitialized = -1
 let default_mds_host = "*" (* star means all interfaces *)
 let default_ds_port_in  = 8081

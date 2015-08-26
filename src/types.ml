@@ -292,10 +292,6 @@ module FileSet = struct
     Buffer.contents res
 end
 
-(* Compressed, Signed and Encrypted can be combined so there is
-   a total of eight modes. *)
-type data_mode = Raw | Compressed | Encrypted | Signed
-
 module Protocol = struct
 
   (* messages naming
@@ -307,11 +303,13 @@ module Protocol = struct
              be sent by the one receiving it
      *_cmd_*: related to a command from the CLI *)
 
+  type bcast_method = Seq | Relay | Amoeba
+
   type ds_to_mds =
     | Join_push of Node.t (* a DS registering itself with the MDS *)
     | Chunk_ack of filename * chunk_id * rank
     | Add_file_req of rank * File.t
-    | Bcast_file_req of rank * File.t
+    | Bcast_file_req of rank * File.t * bcast_method
     | Fetch_file_req of rank * filename
 
   type mds_to_ds =
@@ -325,6 +323,8 @@ module Protocol = struct
         filename * chunk_id * is_last * chunk_data
     | Bcast_chunk of
         filename * chunk_id * is_last * chunk_data * root_node * step_number
+    | Relay_chunk of
+        filename * chunk_id * is_last * chunk_data * root_node
 
   type cli_to_mds =
     | Ls_cmd_req of rank
@@ -341,7 +341,7 @@ module Protocol = struct
   type cli_to_ds =
     | Fetch_file_cmd_req of filename * file_loc
     | Extract_file_cmd_req of filename * filename
-    | Bcast_file_cmd_req of filename
+    | Bcast_file_cmd_req of filename * bcast_method
     | Connect_cmd_push of port (* CLI listening port on the same host
                                   than the DS receiving the command *)
 

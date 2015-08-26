@@ -104,7 +104,7 @@ let get_two: 'a list -> ('a * 'a) option = function
 module Command = struct
   type filename = string
   type port = int
-  type t = Bcast of filename
+  type t = Bcast of filename * bcast_method
          | Exit (* just exit CLI *)
          | Extract of filename * filename
          | Fetch of filename
@@ -115,15 +115,25 @@ module Command = struct
          | Skip
   let usage () =
     Log.info "\nusage: put|get|help|fetch|extract|exit|quit|ls|bcast"
+  let bcast_of_string = function
+    | "s" -> Seq
+    | "r" -> Relay
+    | "a" -> Amoeba
+    | x ->
+      let err_msg =
+        sprintf "broadcast_method: unsupported: %s (supported: s|r|a)" x
+      in
+      failwith err_msg
   (* quick and dirty way to understand a command ASAP *)
   let of_list: string list -> t = function
     | [] -> Skip
     | cmd :: args ->
       begin match cmd with
         | "b" | "bcast" ->
-          begin match get_one args with
-            | Some fn -> Bcast fn
-            | None -> Log.error "\nusage: bcast fn" ; Skip
+          begin match get_two args with
+            | Some (fn, bcast_method) ->
+              Bcast (fn, bcast_of_string bcast_method)
+            | None -> Log.error "\nusage: bcast fn {s|r|a}" ; Skip
           end
         | "e" | "extract" ->
           begin match get_two args with
@@ -284,9 +294,9 @@ let main () =
       | Ls ->
         send msg_counter local_node for_MDS (CLI_to_MDS (Ls_cmd_req !my_rank));
         process_answer incoming do_nothing
-      | Bcast src_fn ->
+      | Bcast (src_fn, bcast_method) ->
         send msg_counter local_node for_DS
-          (CLI_to_DS (Bcast_file_cmd_req src_fn));
+          (CLI_to_DS (Bcast_file_cmd_req (src_fn, bcast_method)));
         process_answer incoming do_nothing
     done;
     raise Types.Loop_end;

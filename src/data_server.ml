@@ -250,6 +250,17 @@ let bcast_chunk local_node to_ranks int2node fn chunk_id is_last root_rank step_
         send_chunk_to local_node int2node to_rank bcast_chunk_msg
     ) to_ranks
 
+(* broadcast by only sending to next node (next_node_rank = my_rank + 1) *)
+let relay_chunk_or_stop local_node int2node fn chunk_id is_last root_rank chunk_data =
+  let nb_nodes = A.length int2node in
+  let to_rank = (!my_rank + 1) mod nb_nodes in
+  if to_rank <> root_rank then
+    let relay_chunk_msg =
+      DS_to_DS
+        (Relay_chunk (fn, chunk_id, is_last, chunk_data, root_rank))
+    in
+    send_chunk_to local_node int2node to_rank relay_chunk_msg
+
 let store_chunk to_mds to_cli fn chunk_id is_last data =
   let size = String.length data in
   let size64 = Int64.of_int size in
@@ -419,8 +430,8 @@ let main () =
                 (DS_to_CLI (Fetch_file_cmd_nack (fn, err)))
             | Bcast_file_ack -> assert(false)
           end
-        | CLI_to_DS (Bcast_file_cmd_req fn) ->
-          Log.debug "got Bcast_file_cmd_req"; (* FBR: factor this code *)
+        | CLI_to_DS (Bcast_file_cmd_req (fn, bcast_method)) ->
+          Log.debug "got Bcast_file_cmd_req";
           let res = add_file fn in
           begin match res with
             | Fetch_file_cmd_nack (fn, Already_here) (* allow bcast after put *)
@@ -428,45 +439,58 @@ let main () =
 	      (* here starts the true business of the broadcast *)
               let file = FileSet.find_fn fn !local_state in
               let last_cid = (File.get_nb_chunks file) - 1 in
-              begin match Utils.default_bcast_algo with
-                | `Seq ->
+              let bcast_file_req =
+                Bcast_file_req (!my_rank, file, bcast_method)
+              in
+              (* notify MDS to allow this potentially new file *)
+	      send msg_counter !local_node to_mds (DS_to_MDS bcast_file_req);
+              (* unlock CLI *)
+              send msg_counter !local_node (deref to_cli)
+                (DS_to_CLI Bcast_file_ack);
+              begin match bcast_method with
+                | Seq -> () (* DS: nothing to do; MDS does it *)
+                | Amoeba ->
                   begin
-                    let bcast_file_req = Bcast_file_req (!my_rank, file) in
-                    (* broadcasting a file is also adding it: we cannot start
-                       broadcasting right here: we first need the MDS to allow
-                       this new file *)
-	            send
-                      msg_counter !local_node to_mds (DS_to_MDS bcast_file_req);
-                    (* unlock CLI *)
-                    send msg_counter !local_node (deref to_cli)
-                      (DS_to_CLI Bcast_file_ack)
+                    match Amoeba.fork (!my_rank, 0, !my_rank, nb_nodes) with
+                    | [], _ -> () (* job done *)
+                    | (to_ranks, (root_rank, step_num, _, _)) ->
+                      match to_ranks with
+                      | [_] | [_; _] -> (* one or two successors *)
+                        for chunk_id = 0 to last_cid do
+                          let chunk_data = retrieve_chunk fn chunk_id in
+                          let is_last = (chunk_id = last_cid) in
+                          bcast_chunk !local_node to_ranks int2node fn chunk_id is_last
+                            root_rank step_num chunk_data
+                        done
+                      | _ -> assert(false)
                   end
-                | `Amoeba ->
-                  let bcast_file_req = Bcast_file_req (!my_rank, file) in
-                  (* notify MDS to allow this potentially new file *)
-	          send msg_counter !local_node to_mds
-                    (DS_to_MDS bcast_file_req);
-                  (* unlock CLI *)
-                  send msg_counter !local_node (deref to_cli)
-                    (DS_to_CLI Bcast_file_ack);
-                  match Amoeba.fork (!my_rank, 0, !my_rank, nb_nodes) with
-                  | [], _ -> () (* job done *)
-                  | (to_ranks, (root_rank, step_num, _, _)) ->
-                    match to_ranks with
-                    | [_] | [_; _] -> (* one or two successors *)
-                      for chunk_id = 0 to last_cid do
-                        let chunk_data = retrieve_chunk fn chunk_id in
-                        let is_last = (chunk_id = last_cid) in
-                        bcast_chunk !local_node to_ranks int2node fn chunk_id is_last
-                          root_rank step_num chunk_data
-                      done
-                    | _ -> assert(false)
+                | Relay ->
+                  for chunk_id = 0 to last_cid do
+                    let chunk_data = retrieve_chunk fn chunk_id in
+                    let is_last = (chunk_id = last_cid) in
+                    relay_chunk_or_stop
+                      !local_node int2node fn chunk_id is_last !my_rank chunk_data
+                  done
               end
             | Fetch_file_cmd_nack (fn, err) ->
               send msg_counter !local_node (deref to_cli)
                 (DS_to_CLI (Fetch_file_cmd_nack (fn, err)))
             | Bcast_file_ack -> assert(false)
 	  end
+	| DS_to_DS
+            (Bcast_chunk
+               (fn, chunk_id, is_last, chunk_data, root_rank, step_num)) ->
+          begin
+            store_chunk to_mds None fn chunk_id is_last chunk_data;
+            match Amoeba.fork (root_rank, step_num, !my_rank, nb_nodes) with
+            | ([], _) -> () (* job done *)
+            | (to_ranks, (root_rank, step_num, _, _)) ->
+              match to_ranks with
+              | [_] | [_; _] -> (* one or two successors *)
+                bcast_chunk !local_node to_ranks int2node fn chunk_id is_last
+                  root_rank step_num chunk_data
+              | _ -> assert(false)
+          end
         | CLI_to_DS (Fetch_file_cmd_req (fn, Remote)) ->
           Log.debug "got Fetch_file_cmd_req:Remote";
           (* finish quickly in case file is already present locally *)
@@ -488,18 +512,11 @@ let main () =
           assert(Node.get_cli_port !local_node = None);
           local_node := Node.create !my_rank !ds_host !ds_port_in (Some cli_port)
 	| DS_to_DS
-            (Bcast_chunk
-               (fn, chunk_id, is_last, chunk_data, root_rank, step_num)) ->
-          begin
-            store_chunk to_mds None fn chunk_id is_last chunk_data;
-            match Amoeba.fork (root_rank, step_num, !my_rank, nb_nodes) with
-            | ([], _) -> () (* job done *)
-            | (to_ranks, (root_rank, step_num, _, _)) ->
-              match to_ranks with
-              | [_] | [_; _] -> (* one or two successors *)
-                bcast_chunk !local_node to_ranks int2node fn chunk_id is_last
-                  root_rank step_num chunk_data
-              | _ -> assert(false)
+            (Relay_chunk (fn, chunk_id, is_last, chunk_data, root_rank)) ->
+            begin
+              store_chunk to_mds None fn chunk_id is_last chunk_data;
+              relay_chunk_or_stop
+                !local_node int2node fn chunk_id is_last root_rank chunk_data
           end
     done;
     raise Types.Loop_end;
