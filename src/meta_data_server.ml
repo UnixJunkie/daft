@@ -18,8 +18,7 @@ module Node = Types.Node
 let global_state = ref FileSet.empty
 let msg_counter = ref 0
 
-let send = Socket_wrapper.MDS_socket.send
-let receive = Socket_wrapper.MDS_socket.receive
+let send, receive = Socket_wrapper.MDS_socket.(send, receive)
 
 let start_data_nodes _machine_fn =
   (* TODO: scp exe to each node *)
@@ -40,19 +39,24 @@ let fetch_mds local_node fn ds_rank int2node feedback_to_cli =
     (* randomized algorithm: for each chunk we ask a randomly selected
        chunk source to send the chunk to destination *)
     Types.File.ChunkSet.iter (fun chunk ->
-        let selected_src_node = Chunk.select_source_rand chunk in
-        let chosen = Node.get_rank selected_src_node in
-        begin match int2node.(chosen) with
-          | (_node, Some to_ds_i, _maybe_cli_sock) ->
-            let chunk_id = Chunk.get_id chunk in
-            let is_last = File.is_last_chunk chunk file in
-            let send_order =
-              MDS_to_DS
-                (Send_to_req (ds_rank, fn, chunk_id, is_last))
-            in
-            send msg_counter local_node to_ds_i send_order
-          | (_, None, _) -> assert(false)
-        end
+        let chunk_id = Chunk.get_id chunk in
+        (* cache lookup to not send if already there *)
+        if Chunk.has_source_nid chunk ds_rank then
+          Log.warn "fetch_mds: chunk already on node: fn: %s cid: %d nid: %d"
+            fn chunk_id ds_rank
+        else
+          let selected_src_node = Chunk.select_source_rand chunk in
+          let chosen = Node.get_rank selected_src_node in
+          begin match int2node.(chosen) with
+            | (_node, Some to_ds_i, _maybe_cli_sock) ->
+              let is_last = File.is_last_chunk chunk file in
+              let send_order =
+                MDS_to_DS
+                  (Send_to_req (ds_rank, fn, chunk_id, is_last))
+              in
+              send msg_counter local_node to_ds_i send_order
+            | (_, None, _) -> assert(false)
+          end
       ) chunks
   with Not_found ->
     if feedback_to_cli then
