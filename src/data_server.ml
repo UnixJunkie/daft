@@ -28,18 +28,32 @@ module Amoeba = struct
     (i + 1) mod nb_nodes
   (* when you receive a chunk to broadcast: you call fork to know
      if and to who you need to forward those chunks *)
-  let fork ((root_rank, step_num, my_rank, nb_nodes) as params) =
-    let i = (my_rank + step_num + 1) mod nb_nodes in
-    let j = incr_mod i nb_nodes in
-    if i = root_rank then ([], params)
-    else if j = root_rank then ([i], params)
-    else ([i; j], (root_rank, step_num + 1, incr_mod my_rank nb_nodes, nb_nodes))
+  let fork root_rank step_num my_rank nb_nodes =
+    assert(nb_nodes > 1); (* enforce distributed setting *)
+    let step_num' = step_num + 1 in
+    if nb_nodes = 2 then (* special case *)
+      if step_num = 0 then (* send to only other node *)
+        let next_rank = incr_mod my_rank nb_nodes in
+        ([next_rank], step_num')
+      else (* stop *)
+        ([], step_num')
+    else
+      let i = (my_rank + step_num + 1) mod nb_nodes in
+      let j = incr_mod i nb_nodes in
+      if i = root_rank || j = my_rank then
+        ([], step_num') (* stop *)
+      else if j = root_rank then
+        ([i], step_num') (* last send *)
+      else
+        ([i; j], step_num') (* generic case *)
   (* ranks is for tests in the toplevel only *)
   let rec ranks root_rank step_num my_rank nb_nodes acc =
-    match fork (root_rank, step_num, my_rank, nb_nodes) with
+    match fork root_rank step_num my_rank nb_nodes with
     | [], _ -> List.rev acc
     | [i], _ -> List.rev ((my_rank, [i]) :: acc)
-    | [i; j], (rr, sn, mr, nb) -> ranks rr sn mr nb ((my_rank, [i; j]) :: acc)
+    | [i; j], next_step ->
+      let next_rank = incr_mod my_rank nb_nodes in
+      ranks root_rank next_step next_rank nb_nodes ((my_rank, [i; j]) :: acc)
     | _ -> assert(false)
 end
 
@@ -243,6 +257,7 @@ let send_chunk local_node to_rank int2node fn chunk_id is_last chunk_data =
     send_chunk_to local_node int2node to_rank chunk_msg
 
 let bcast_chunk local_node to_ranks int2node fn chunk_id is_last root_rank step_num chunk_data =
+  Log.debug "to_ranks: %s" (Utils.string_of_list string_of_int "; " to_ranks);
   let bcast_chunk_msg =
     DS_to_DS
       (Bcast_chunk (fn, chunk_id, is_last, chunk_data, root_rank, step_num))
@@ -453,16 +468,16 @@ let main () =
               begin match bcast_method with
                 | Amoeba ->
                   begin
-                    match Amoeba.fork (!my_rank, 0, !my_rank, nb_nodes) with
+                    match Amoeba.fork !my_rank 0 !my_rank nb_nodes with
                     | [], _ -> () (* job done *)
-                    | (to_ranks, (root_rank, step_num, _, _)) ->
+                    | (to_ranks, step_num) ->
                       match to_ranks with
                       | [_] | [_; _] -> (* one or two successors *)
                         for chunk_id = 0 to last_cid do
                           let chunk_data = retrieve_chunk fn chunk_id in
                           let is_last = (chunk_id = last_cid) in
                           bcast_chunk !local_node to_ranks int2node fn chunk_id is_last
-                            root_rank step_num chunk_data
+                            !my_rank step_num chunk_data
                         done
                       | _ -> assert(false)
                   end
@@ -483,10 +498,11 @@ let main () =
             (Bcast_chunk
                (fn, chunk_id, is_last, chunk_data, root_rank, step_num)) ->
           begin
+            Log.debug "got Bcast_chunk";
             store_chunk to_mds None fn chunk_id is_last chunk_data;
-            match Amoeba.fork (root_rank, step_num, !my_rank, nb_nodes) with
+            match Amoeba.fork root_rank step_num !my_rank nb_nodes with
             | ([], _) -> () (* job done *)
-            | (to_ranks, (root_rank, step_num, _, _)) ->
+            | (to_ranks, step_num) ->
               match to_ranks with
               | [_] | [_; _] -> (* one or two successors *)
                 bcast_chunk !local_node to_ranks int2node fn chunk_id is_last
@@ -515,10 +531,11 @@ let main () =
           local_node := Node.create !my_rank !ds_host !ds_port_in (Some cli_port)
 	| DS_to_DS
             (Relay_chunk (fn, chunk_id, is_last, chunk_data, root_rank)) ->
-            begin
-              store_chunk to_mds None fn chunk_id is_last chunk_data;
-              relay_chunk_or_stop
-                !local_node int2node fn chunk_id is_last root_rank chunk_data
+          begin
+            Log.debug "got Relay_chunk";
+            store_chunk to_mds None fn chunk_id is_last chunk_data;
+            relay_chunk_or_stop
+              !local_node int2node fn chunk_id is_last root_rank chunk_data
           end
     done;
     raise Types.Loop_end;
