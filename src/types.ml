@@ -183,7 +183,7 @@ module File = struct
       ;
       { c with nodes = new_set }
     (* is this chunk on the node with that nid? *)
-    let has_source (c: t) (nid: rank): bool =
+    let has_source_nid (c: t) (nid: rank): bool =
       NodeSet.mem (Node.dummy_with_rank nid) c.nodes
   end
 
