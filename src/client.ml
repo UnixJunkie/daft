@@ -259,7 +259,7 @@ let main () =
   try
     while !not_finished do
       not_finished := !interactive;
-      printf "> "; (* prompt *)
+      printf "\027[1;31m> \027[0m"; (* bold red prompt *)
       let open Command in
       let before, cmd = read_one_command !interactive in
       match cmd with
