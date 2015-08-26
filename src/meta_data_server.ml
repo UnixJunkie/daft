@@ -65,24 +65,6 @@ let fetch_mds local_node fn ds_rank int2node feedback_to_cli =
         | Some to_cli_sock ->
           send msg_counter local_node to_cli_sock (MDS_to_CLI (Fetch_cmd_nack fn))
 
-let bcast_mds
-    (algorithm: bcast_method)
-    (local_node: Types.Node.t)
-    (f: File.t)
-    (root: Types.rank)
-    int2node =
-  let fn = File.(f.name) in
-  if FileSet.contains_fn fn !global_state then
-    Log.warn "bcast_mds: file already added: %s" fn
-  else
-    global_state := FileSet.add f !global_state;
-  match algorithm with
-  | Relay | Amoeba -> () (* DSs do the job themselves *)
-  | Seq -> (* the MDS has to start the broadcast *)
-    Array.iteri (fun i _ ->
-        if i <> root then fetch_mds local_node fn i int2node false
-      ) int2node
-
 let main () =
   (* setup logger *)
   Logger.set_log_level Logger.DEBUG;
@@ -185,9 +167,12 @@ let main () =
         | DS_to_MDS (Fetch_file_req (ds_rank, fn)) ->
 	  Log.debug "got Fetch_file_req";
 	  fetch_mds local_node fn ds_rank int2node true
-        | DS_to_MDS (Bcast_file_req (ds_rank, fn, algo)) ->
+        | DS_to_MDS (Bcast_file_req f) ->
           Log.debug "got Bcast_file_req";
-	  bcast_mds algo local_node fn ds_rank int2node
+          if FileSet.mem f !global_state then
+            Log.warn "file already added: %s" (File.(f.name))
+          else
+            global_state := FileSet.add f !global_state
         | CLI_to_MDS (Connect_push (ds_rank, cli_port)) ->
           Log.debug "got Connect_push rank: %d port: %d" ds_rank cli_port;
           if Utils.out_of_bounds ds_rank int2node then

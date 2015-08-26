@@ -307,13 +307,13 @@ module Protocol = struct
              be sent by the one receiving it
      *_cmd_*: related to a command from the CLI *)
 
-  type bcast_method = Seq | Relay | Amoeba
+  type bcast_method = Relay | Amoeba
 
   type ds_to_mds =
     | Join_push of Node.t (* a DS registering itself with the MDS *)
     | Chunk_ack of filename * chunk_id * rank
     | Add_file_req of rank * File.t
-    | Bcast_file_req of rank * File.t * bcast_method
+    | Bcast_file_req of File.t
     | Fetch_file_req of rank * filename
 
   type mds_to_ds =

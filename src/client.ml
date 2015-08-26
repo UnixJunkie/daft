@@ -116,7 +116,6 @@ module Command = struct
   let usage () =
     Log.info "\nusage: put|get|help|fetch|extract|exit|quit|ls|bcast"
   let bcast_of_string = function
-    | "s" -> Seq
     | "r" -> Relay
     | "a" -> Amoeba
     | x ->

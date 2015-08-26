@@ -445,16 +445,13 @@ let main () =
 	      (* here starts the true business of the broadcast *)
               let file = FileSet.find_fn fn !local_state in
               let last_cid = (File.get_nb_chunks file) - 1 in
-              let bcast_file_req =
-                Bcast_file_req (!my_rank, file, bcast_method)
-              in
+              let bcast_file_req = Bcast_file_req file in
               (* notify MDS to allow this potentially new file *)
 	      send msg_counter !local_node to_mds (DS_to_MDS bcast_file_req);
               (* unlock CLI *)
               send msg_counter !local_node (deref to_cli)
                 (DS_to_CLI Bcast_file_ack);
               begin match bcast_method with
-                | Seq -> () (* DS: nothing to do; MDS does it *)
                 | Amoeba ->
                   begin
                     match Amoeba.fork (!my_rank, 0, !my_rank, nb_nodes) with
