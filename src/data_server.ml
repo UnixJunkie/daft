@@ -551,10 +551,12 @@ let main () =
                (fn, chunk_id, is_last, chunk_data, plan)) ->
           begin
             Log.debug "got Bcast_chunk_well_exhaust";
-            let to_ranks = IntMap.find !my_rank plan in
             store_chunk to_mds None fn chunk_id is_last chunk_data;
-            bcast_chunk_well_exhaust
-              !local_node to_ranks int2node fn chunk_id is_last plan chunk_data
+            try (* do I have to continue this broadcast? *)
+              let to_ranks = IntMap.find !my_rank plan in
+              bcast_chunk_well_exhaust
+                !local_node to_ranks int2node fn chunk_id is_last plan chunk_data
+            with Not_found -> ()
           end
         | CLI_to_DS (Fetch_file_cmd_req (fn, Remote)) ->
           Log.debug "got Fetch_file_cmd_req:Remote";

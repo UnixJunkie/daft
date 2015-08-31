@@ -120,6 +120,7 @@ module Command = struct
   let bcast_of_string = function
     | "r" -> Relay
     | "a" -> Amoeba
+    | "w" -> Well_exhaust
     | x ->
       let err_msg =
         sprintf "broadcast_method: unsupported: %s (supported: s|r|a)" x
@@ -134,7 +135,7 @@ module Command = struct
           begin match get_two args with
             | Some (fn, bcast_method) ->
               Bcast (fn, bcast_of_string bcast_method)
-            | None -> Log.error "\nusage: bcast fn {s|r|a}" ; Skip
+            | None -> Log.error "\nusage: bcast fn {r|a|w}" ; Skip
           end
         | "e" | "extract" ->
           begin match get_two args with
