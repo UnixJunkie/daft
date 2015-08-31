@@ -7,6 +7,8 @@ let ds_in_yellow = Utils.fg_yellow ^ "DS" ^ Utils.fg_reset
 module A  = Array
 module Fn = Filename
 module FU = FileUtil
+module IntMap = Map.Make(Int)
+module IntSet = Set.Make(Int)
 module Logger = Log
 (* prefix all logs *)
 module Log = Log.Make (struct let section = ds_in_yellow end)
@@ -55,6 +57,47 @@ module Amoeba = struct
       let next_rank = incr_mod my_rank nb_nodes in
       ranks root_rank next_step next_rank nb_nodes ((my_rank, [i; j]) :: acc)
     | _ -> assert(false)
+end
+
+type broadcast_plan = int list IntMap.t
+(* maximize the number of data sources at each step of the broadcast *)
+module Well_exhaust = struct
+  let plan (src_node: int) (nb_nodes: int): broadcast_plan =
+    (* IntSet union of all keys and all values lists *)
+    let bindings_union m =
+      let res =
+        IntMap.fold (fun k v acc1 ->
+            let acc2 = IntSet.add k acc1 in
+            List.fold_left (fun acc3 x ->
+                IntSet.add x acc3
+              ) acc2 v
+          ) m IntSet.empty
+      in
+      IntSet.elements res
+    in
+    assert(nb_nodes > 1);
+    let all_nodes = List.range 0 `To (nb_nodes - 1) in
+    let dst_nodes = List.filter ((<>) src_node) all_nodes in
+    let src_nodes = [src_node] in
+    let rec loop acc sources destinations = match sources, destinations with
+      | (_, []) -> acc
+      | ([], _) ->
+        if acc = IntMap.empty then
+          failwith "compute_plan: no sources but some destinations"
+        else
+          loop acc (bindings_union acc) destinations
+      | (src :: other_src, dst :: other_dst) ->
+        let new_acc =
+          try
+            let prev = IntMap.find src acc in
+            let curr = prev @ [dst] in (* @ is needed to keep sources ordered *)
+            IntMap.add src curr acc
+          with Not_found ->
+            IntMap.add src [dst] acc
+        in
+        loop new_acc other_src other_dst
+    in
+    loop IntMap.empty src_nodes dst_nodes
 end
 
 (* setup data server *)
