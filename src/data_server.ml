@@ -552,7 +552,8 @@ let main () =
           begin
             Log.debug "got Bcast_chunk_well_exhaust";
             store_chunk to_mds None fn chunk_id is_last chunk_data;
-            try (* do I have to continue this broadcast? *)
+            try
+              (* I have to continue this broadcast *)
               let to_ranks = IntMap.find !my_rank plan in
               bcast_chunk_well_exhaust
                 !local_node to_ranks int2node fn chunk_id is_last plan chunk_data
