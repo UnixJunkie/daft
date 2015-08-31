@@ -59,10 +59,9 @@ module Amoeba = struct
     | _ -> assert(false)
 end
 
-type broadcast_plan = int list IntMap.t
 (* maximize the number of data sources at each step of the broadcast *)
 module Well_exhaust = struct
-  let plan (src_node: int) (nb_nodes: int): broadcast_plan =
+  let plan (src_node: int) (nb_nodes: int): bcast_plan =
     (* IntSet union of all keys and all values lists *)
     let bindings_union m =
       let res =
@@ -270,15 +269,29 @@ let send_chunk local_node to_rank int2node fn chunk_id is_last chunk_data =
     let chunk_msg = DS_to_DS (Chunk (fn, chunk_id, is_last, chunk_data)) in
     send_chunk_to local_node int2node to_rank chunk_msg
 
-let bcast_chunk local_node to_ranks int2node fn chunk_id is_last root_rank step_num chunk_data =
-  Log.debug "to_ranks: %s" (Utils.string_of_list string_of_int "; " to_ranks);
+let bcast_chunk_amoeba
+    local_node to_ranks int2node fn chunk_id is_last root_rank step_num chunk_data =
+  (* Log.debug "to_ranks: %s" (Utils.string_of_list string_of_int "; " to_ranks); *)
   let bcast_chunk_msg =
     DS_to_DS
-      (Bcast_chunk (fn, chunk_id, is_last, chunk_data, root_rank, step_num))
+      (Bcast_chunk_amoeba (fn, chunk_id, is_last, chunk_data, root_rank, step_num))
   in
   List.iter (fun to_rank ->
       if to_rank <> !my_rank then
         send_chunk_to local_node int2node to_rank bcast_chunk_msg
+    ) to_ranks
+
+let bcast_chunk_well_exhaust
+    local_node to_ranks int2node fn chunk_id is_last plan chunk_data =
+  (* Log.debug "to_ranks: %s" (Utils.string_of_list string_of_int "; " to_ranks); *)
+  let remaining_plan = IntMap.remove !my_rank plan in
+  let bcast_chunk_msg =
+    DS_to_DS
+      (Bcast_chunk_well_exhaust
+         (fn, chunk_id, is_last, chunk_data, remaining_plan))
+  in
+  List.iter (fun to_rank ->
+      send_chunk_to local_node int2node to_rank bcast_chunk_msg
     ) to_ranks
 
 (* broadcast by only sending to next node (next_node_rank = my_rank + 1) *)
@@ -490,7 +503,8 @@ let main () =
                         for chunk_id = 0 to last_cid do
                           let chunk_data = retrieve_chunk fn chunk_id in
                           let is_last = (chunk_id = last_cid) in
-                          bcast_chunk !local_node to_ranks int2node fn chunk_id is_last
+                          bcast_chunk_amoeba
+                            !local_node to_ranks int2node fn chunk_id is_last
                             !my_rank step_num chunk_data
                         done
                       | _ -> assert(false)
@@ -502,6 +516,15 @@ let main () =
                     relay_chunk_or_stop
                       !local_node int2node fn chunk_id is_last !my_rank chunk_data
                   done
+                | Well_exhaust ->
+                  let plan = Well_exhaust.plan !my_rank nb_nodes in
+                  let to_ranks = IntMap.find !my_rank plan in
+                  for chunk_id = 0 to last_cid do
+                    let chunk_data = retrieve_chunk fn chunk_id in
+                    let is_last = (chunk_id = last_cid) in
+                    bcast_chunk_well_exhaust
+                      !local_node to_ranks int2node fn chunk_id is_last plan chunk_data
+                  done                  
               end
             | Fetch_file_cmd_nack (fn, err) ->
               send msg_counter !local_node (deref to_cli)
@@ -509,19 +532,29 @@ let main () =
             | Bcast_file_ack -> assert(false)
 	  end
 	| DS_to_DS
-            (Bcast_chunk
+            (Bcast_chunk_amoeba
                (fn, chunk_id, is_last, chunk_data, root_rank, step_num)) ->
           begin
-            Log.debug "got Bcast_chunk";
+            Log.debug "got Bcast_chunk_amoeba";
             store_chunk to_mds None fn chunk_id is_last chunk_data;
             match Amoeba.fork root_rank step_num !my_rank nb_nodes with
             | ([], _) -> () (* job done *)
             | (to_ranks, step_num) ->
               match to_ranks with
               | [_] | [_; _] -> (* one or two successors *)
-                bcast_chunk !local_node to_ranks int2node fn chunk_id is_last
+                bcast_chunk_amoeba !local_node to_ranks int2node fn chunk_id is_last
                   root_rank step_num chunk_data
               | _ -> assert(false)
+          end
+	| DS_to_DS
+            (Bcast_chunk_well_exhaust
+               (fn, chunk_id, is_last, chunk_data, plan)) ->
+          begin
+            Log.debug "got Bcast_chunk_well_exhaust";
+            let to_ranks = IntMap.find !my_rank plan in
+            store_chunk to_mds None fn chunk_id is_last chunk_data;
+            bcast_chunk_well_exhaust
+              !local_node to_ranks int2node fn chunk_id is_last plan chunk_data
           end
         | CLI_to_DS (Fetch_file_cmd_req (fn, Remote)) ->
           Log.debug "got Fetch_file_cmd_req:Remote";

@@ -4,6 +4,7 @@ open Legacy.Printf
 exception Loop_end
 
 module FU = FileUtil
+module IntMap = Map.Make(Int)
 
 (* some type aliases to make signatures more readable *)
 type chunk_data = string
@@ -312,7 +313,11 @@ module Protocol = struct
              be sent by the one receiving it
      *_cmd_*: related to a command from the CLI *)
 
-  type bcast_method = Relay | Amoeba
+  type bcast_plan =
+    int list IntMap.t (* keys: source nodes
+                         values: list of destination nodes once the
+                                 corresponding key/source has been filled *)
+  type bcast_method = Relay | Amoeba | Well_exhaust
 
   type ds_to_mds =
     | Join_push of Node.t (* a DS registering itself with the MDS *)
@@ -330,8 +335,10 @@ module Protocol = struct
   type ds_to_ds =
     | Chunk of
         filename * chunk_id * is_last * chunk_data
-    | Bcast_chunk of
+    | Bcast_chunk_amoeba of
         filename * chunk_id * is_last * chunk_data * root_node * step_number
+    | Bcast_chunk_well_exhaust of
+        filename * chunk_id * is_last * chunk_data * bcast_plan
     | Relay_chunk of
         filename * chunk_id * is_last * chunk_data * root_node
 
