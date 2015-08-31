@@ -57,35 +57,6 @@ module Amoeba = struct
     | _ -> assert(false)
 end
 
-let compute_children_bino (my_rank_i: int) (max_rank_i: int): int list =
-  (* for CCO: there is a bug: 9 appears two times as a dest
-     0 1
-     0 2
-     0 4
-     0 8
-     1 3
-     1 5
-     1 9
-     2 6
-     3 9 *)
-  let logbin a =
-    if a = 0.0 then -1.0
-    else log a /. log 2.0
-  in
-  (* Who are my children? *)
-  let ds_rank = float_of_int my_rank_i in
-  let max_rank = float_of_int max_rank_i in
-  let baselog = ref (logbin ds_rank) in
-  let children = ref [] in
-  let child = ref ds_rank in
-  while !child < max_rank do
-    baselog := !baselog +. 1.0;
-    child := ds_rank +. 2. ** !baselog;
-    children := (int_of_float !child) :: !children;
-    Log.debug "%d %f" my_rank_i !child
-  done;
-  !children
-
 (* setup data server *)
 let ds_log_fn = ref ""
 let ds_host = ref "localhost"
