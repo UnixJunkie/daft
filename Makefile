@@ -12,9 +12,9 @@ clean:
 	obuild clean
 
 install:
-	ln -sf ${PWD}/dist/build/daft/daft         ${HOME}/bin/
-	ln -sf ${PWD}/dist/build/daft_mds/daft_mds ${HOME}/bin/
-	ln -sf ${PWD}/dist/build/daft_ds/daft_ds   ${HOME}/bin/
+	ln -sf ${PWD}/bin/daft_ds.sh               ${HOME}/bin/
+	ln -sf ${PWD}/bin/daft_mds.sh              ${HOME}/bin/
+	ln -sf ${PWD}/bin/daft.sh                  ${HOME}/bin/
 
 dist:
 	cd .. && tar cvzf daft.tgz --exclude=\.git daft
