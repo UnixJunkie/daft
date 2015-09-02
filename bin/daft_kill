@@ -1,0 +1,5 @@
+#!/bin/bash
+
+pkill -9 daft_mds
+pkill -9 daft_ds
+pkill -9 daft
