@@ -229,5 +229,5 @@ let hostname (): string =
           (Log.warn "hostname: host alias (%s) longer than FQDN (%s)" n2 n1)
           n2
   in
-  if count_char '.' res <> 2 then Log.warn "hostname: FQ hostname: %s" res;
+  if count_char '.' res < 2 then Log.warn "hostname: FQ hostname: %s" res;
   res
