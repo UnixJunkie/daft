@@ -216,14 +216,18 @@ let hostname (): string =
   let host_entry = gethostbyname (gethostname ()) in
   let n1 = host_entry.h_name in
   let l1 = String.length n1 in
-  let n2 = host_entry.h_aliases.(0) in
-  let l2 = String.length n2 in
   let res =
-    if l1 > l2 then n1
+    if A.length host_entry.h_aliases = 0 then
+      n1
     else
-      ignore_first
-        (Log.warn "hostname: host alias (%s) longer than FQDN (%s)" n2 n1)
-        n2
+      let n2 = host_entry.h_aliases.(0) in
+      let l2 = String.length n2 in
+      if l1 > l2 then
+        n1
+      else
+        ignore_first
+          (Log.warn "hostname: host alias (%s) longer than FQDN (%s)" n2 n1)
+          n2
   in
   if count_char '.' res <> 2 then Log.warn "hostname: FQ hostname: %s" res;
   res
