@@ -358,7 +358,7 @@ module Protocol = struct
                                      listening on 'port' has connected *)
 
   type mds_to_cli =
-    | Ls_cmd_ack of FileSet.t
+    | Ls_cmd_ack of FileSet.t * string
     | Fetch_cmd_nack of filename
 
   type file_loc = Local (* local disk *) | Remote (* remote host *)

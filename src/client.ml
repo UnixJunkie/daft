@@ -70,10 +70,11 @@ let process_answer incoming continuation: unit =
   | None -> Log.warn "junk"
   | Some message ->
     match message with
-    | MDS_to_CLI (Ls_cmd_ack f) ->
+    | MDS_to_CLI (Ls_cmd_ack (f, feedback)) ->
       Log.debug "got Ls_cmd_ack";
       let listing = FileSet.to_string f in
-      Printf.printf "%s\n" listing
+      Printf.printf "%s\n" listing;
+      if feedback <> "" then Printf.printf "%s\n" feedback
     | MDS_to_CLI (Fetch_cmd_nack fn) ->
       Log.debug "got Fetch_cmd_nack";
       Log.error "no such file: %s" fn
@@ -280,7 +281,7 @@ let main () =
     while !not_finished do
       not_finished := !interactive;
       let open Command in
-      let before, cmd = read_one_command !interactive in
+      let _before, cmd = read_one_command !interactive in
       match cmd with
       | Skip -> ()
       | Put src_fn ->
