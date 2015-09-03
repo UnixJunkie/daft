@@ -103,12 +103,12 @@ let get_two: 'a list -> ('a * 'a) option = function
 module Command = struct
   type filename = string
   type port = int
-  type t = Bcast of filename * bcast_method
-         | Exit (* just exit CLI *)
+  type t = Bcast of filename * bcast_method (* FBR: bcast needs an optional dst_fn *)
+         | Exit (* to leave the CLI just temporarily *)
          | Extract of filename * filename
          | Fetch of filename
          | Get of filename * filename (* src_fn dst_fn *) (* FBR: dst_fn should be optional *)
-         | Ls
+         | Ls of bool * filename option (* ls [-a] [filename] *)
          | Put of filename (* FBR: put needs an optional dst_fn *)
          | Quit (* turn off whole system *)
          | Skip
@@ -116,7 +116,9 @@ module Command = struct
     Log.info
       ("\n" ^^
        "usage: put|get|help|fetch|extract|exit|quit|ls|bcast\n" ^^
-       "hotkey ^   ^   ^    ^     ^        ^   ^    ^  ^")
+       "hotkey ^   ^   ^    ^     ^        ^   ^    ^  ^\n" ^^
+       "ls [-a] [filename]")
+      (* FBR: give a whole listing of commands with parameters *)
   let bcast_of_string = function
     | "r" -> Relay
     | "a" -> Amoeba
@@ -153,7 +155,17 @@ module Command = struct
             | None -> Log.error "\nusage: get src_fn dst_fn" ; Skip
           end
         | "h" | "help" -> usage(); Skip
-        | "l" | "ls" -> Ls
+        | "l" | "ls" ->
+          begin match get_two args with
+            | Some (_, fn) -> Ls (true, Some fn)
+            | None ->
+              begin match get_one args with
+                | Some str ->
+                  if str = "-a" then Ls (true, None)
+                  else Ls (false, Some str)
+                | None -> Ls (false, None)
+              end
+          end
         | "p" | "put" ->
           begin match get_one args with
             | Some fn -> Put fn
@@ -300,8 +312,9 @@ let main () =
       | Exit ->
         backup_counter ();
         not_finished := false
-      | Ls ->
-        send msg_counter local_node for_MDS (CLI_to_MDS (Ls_cmd_req !my_rank));
+      | Ls (detailed, maybe_fn) ->
+        send msg_counter local_node for_MDS
+          (CLI_to_MDS (Ls_cmd_req (!my_rank, detailed, maybe_fn)));
         process_answer incoming do_nothing
       | Bcast (src_fn, bcast_method) ->
         send msg_counter local_node for_DS

@@ -20,6 +20,19 @@ let msg_counter = ref 0
 
 let send, receive = Socket_wrapper.MDS_socket.(send, receive)
 
+let exec_ls_command (detailed: bool) (maybe_fn: string option): FileSet.t =
+  match maybe_fn with
+  | None ->
+    if detailed then !global_state
+    else FileSet.forget_chunks !global_state
+  | Some fn ->
+    try
+      let f = FileSet.find_fn fn !global_state in
+      FileSet.singleton
+        (if detailed then f
+         else File.forget_chunks f)
+    with Not_found -> FileSet.empty
+
 let start_data_nodes _machine_fn =
   (* TODO: scp exe to each node *)
   (* TODO: ssh node to start it *)
@@ -187,7 +200,7 @@ let main () =
             assert(Option.is_none maybe_cli_sock); (* not yet a CLI sock *)
             let cli_sock = Utils.(zmq_socket Push ctx (Node.get_host node) cli_port) in
             A.set int2node ds_rank (node, ds_sock, Some cli_sock)
-        | CLI_to_MDS (Ls_cmd_req ds_rank) ->
+        | CLI_to_MDS (Ls_cmd_req (ds_rank, detailed, maybe_fn)) ->
           Log.debug "got Ls_cmd_req";
           if Utils.out_of_bounds ds_rank int2node then
             Log.error "Ls_cmd_req: invalid ds_rank: %d" ds_rank
@@ -197,9 +210,10 @@ let main () =
                 abort
                   (sprintf "Ls_cmd_req: no CLI feedback sock for node %d" ds_rank)
               | Some to_cli_sock ->
-                (* ls' output can be pretty big *)
+                let files_list = exec_ls_command detailed maybe_fn in
+                (* ls output can be pretty big hence it is compressed *)
                 send ~compress:true msg_counter local_node to_cli_sock
-                  (MDS_to_CLI (Ls_cmd_ack !global_state))
+                  (MDS_to_CLI (Ls_cmd_ack files_list))
             end
         | CLI_to_MDS Quit_cmd ->
           Log.debug "got Quit_cmd";
