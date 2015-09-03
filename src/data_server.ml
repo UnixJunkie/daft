@@ -111,6 +111,7 @@ let chunk_size = ref Utils.default_chunk_size (* DAFT global constant *)
 let local_state = ref FileSet.empty
 let data_store_root = ref ""
 let local_node = ref (Node.dummy ()) (* this node *)
+let verbose = ref false
 
 let abort msg =
   Log.fatal "%s" msg;
@@ -376,7 +377,7 @@ let deref cli_sock_ref = match !cli_sock_ref with
 
 let main () =
   (* setup logger *)
-  Logger.set_log_level Logger.DEBUG;
+  Logger.set_log_level Logger.INFO;
   Logger.set_output Legacy.stdout;
   Logger.color_on ();
   ds_host := Utils.hostname ();
@@ -389,11 +390,13 @@ let main () =
       "-m", Arg.Set_string machine_file,
       "machine_file list of [user@]host:port (one per line)";
       "-mds", Arg.Set_string mds_host, "<server> MDS host";
-      "-mdsp", Arg.Set_int mds_port_in, "<port> MDS port" ]
+      "-mdsp", Arg.Set_int mds_port_in, "<port> MDS port";
+      "-v", Arg.Set verbose, " verbose mode"]
     (fun arg -> raise (Arg.Bad ("Bad argument: " ^ arg)))
     (sprintf "usage: %s <options>" Sys.argv.(0))
   ;
   (* check options *)
+  if !verbose then Logger.set_log_level Logger.DEBUG;
   if !ds_log_fn <> "" then begin (* don't log anything before that *)
     let log_out = Legacy.open_out !ds_log_fn in
     Logger.set_output log_out

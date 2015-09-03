@@ -233,6 +233,7 @@ let main () =
     (fun arg -> raise (Arg.Bad ("Bad argument: " ^ arg)))
     (sprintf "usage: %s <options>" Sys.argv.(0));
   (* check options *)
+  if !verbose then Logger.set_log_level Logger.DEBUG;
   if !my_rank = Utils.uninitialized then abort "-r is mandatory";
   if !cli_port_in = Utils.uninitialized then abort "-p is mandatory";
   if !mds_host = "" && !mds_port_in = Utils.uninitialized then

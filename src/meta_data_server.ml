@@ -17,6 +17,7 @@ module Node = Types.Node
 
 let global_state = ref FileSet.empty
 let msg_counter = ref 0
+let verbose = ref false
 
 let send, receive = Socket_wrapper.MDS_socket.(send, receive)
 
@@ -84,7 +85,7 @@ let fetch_mds local_node fn ds_rank int2node feedback_to_cli =
 
 let main () =
   (* setup logger *)
-  Logger.set_log_level Logger.DEBUG;
+  Logger.set_log_level Logger.INFO;
   Logger.set_output Legacy.stdout;
   Logger.color_on ();
   (* setup MDS *)
@@ -97,6 +98,7 @@ let main () =
     (fun arg -> raise (Arg.Bad ("Bad argument: " ^ arg)))
     (sprintf "usage: %s <options>" Sys.argv.(0));
   (* check options *)
+  if !verbose then Logger.set_log_level Logger.DEBUG;
   if !machine_file = "" then abort "-m is mandatory";
   let int2node = Utils.data_nodes_array !machine_file in
   Log.info "read %d host(s)" (A.length int2node);
