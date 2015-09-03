@@ -112,6 +112,7 @@ let local_state = ref FileSet.empty
 let data_store_root = ref ""
 let local_node = ref (Node.dummy ()) (* this node *)
 let verbose = ref false
+let delete_datastore = ref false
 
 let abort msg =
   Log.fatal "%s" msg;
@@ -130,9 +131,9 @@ let create_data_store (): string =
   Log.info "I store in %s" data_store_root;
   data_store_root
 
-(* destroy a data store *)
-let delete_data_store (ds: string): int =
-  Sys.command ("rm -rf " ^ ds)
+let delete_data_store (ds: string): unit =
+  let (_: int) = Sys.command ("rm -rf " ^ ds) in
+  ()
 
 (* how many there are and size of the last one if < chunk_size *)
 let compute_chunks (size: int64) =
@@ -384,6 +385,7 @@ let main () =
   (* options parsing *)
   Arg.parse
     [ "-cs", Arg.Set_int chunk_size, "<size> file chunk size";
+      "-d", Arg.Set delete_datastore, " delete datastore at exit";
       "-l", Arg.Set_string ds_log_fn, "<filename> where to log";
       "-p", Arg.Set_int ds_port_in, "<port> where to listen";
       "-r", Arg.Set_int my_rank, "<rank> rank among other data nodes";
@@ -593,8 +595,7 @@ let main () =
     done;
     raise Types.Loop_end;
   with exn -> begin
-      (* it's useful to see the local data store state for debug *)
-      (* let (_: int) = delete_data_store !data_store_root in *)
+      if !delete_datastore then delete_data_store !data_store_root;
       ZMQ.Socket.close incoming;
       ZMQ.Socket.close to_mds;
       (match !to_cli with
