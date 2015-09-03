@@ -258,8 +258,10 @@ module File = struct
   let compare f1 f2 =
     String.compare f1.name f2.name
   let to_string f =
-    sprintf "fn: %s size: %Ld #chunks: %d\n%s"
-      f.name f.size f.nb_chunks (ChunkSet.to_string f.chunks)
+    sprintf "fn: %s size: %Ld #chunks: %d%s"
+      f.name f.size f.nb_chunks
+      (if f.chunks = ChunkSet.empty then ""
+       else ("\n" ^ ChunkSet.to_string f.chunks))
   let get_chunks (f: t): ChunkSet.t =
     f.chunks
   let find_chunk_id (id: chunk_id) (f: t): Chunk.t =
