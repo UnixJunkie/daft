@@ -246,6 +246,9 @@ module File = struct
       Log.error "duplicate chunk: f: %s chunk: %d" f.name Chunk.(c.id)
     ;
     { f with chunks = new_set }
+  (* to list files without chunk details *)
+  let forget_chunks (f: t): t =
+    { f with chunks = ChunkSet.empty }
   (* check if chunk is already present *)
   let has_chunk (f: t) (cid: chunk_id) =
     let chunk = Chunk.dummy cid in
@@ -288,6 +291,10 @@ module FileSet = struct
     find (dummy_file fn) s
   let remove_fn fn s =
     remove (dummy_file fn) s
+  let forget_chunks s =
+    fold (fun f acc ->
+        add (File.forget_chunks f) acc
+      ) s empty
   let update latest s =
     (* FBR: use faster one from batteries once available *)
     add latest (remove_fn File.(latest.name) s)
@@ -310,7 +317,7 @@ module Protocol = struct
      *_ack: positive answer to a request
      *_nack: negative answer to a request
      *_push: message that doesn't need an answer or whose answer will not
-             be sent by the one receiving it
+             be sent by the actor receiving the message
      *_cmd_*: related to a command from the CLI *)
 
   type bcast_plan =
@@ -343,7 +350,7 @@ module Protocol = struct
         filename * chunk_id * is_last * chunk_data * root_node
 
   type cli_to_mds =
-    | Ls_cmd_req of rank
+    | Ls_cmd_req of rank * bool * filename option
     | Quit_cmd
     | Connect_push of rank * port (* a CLI local to DS of rank 'rank' and
                                      listening on 'port' has connected *)
