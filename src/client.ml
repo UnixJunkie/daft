@@ -217,7 +217,7 @@ let main () =
   let my_rank = ref Utils.uninitialized in
   (* setup logger *)
   Logger.set_log_level Logger.INFO;
-  Logger.set_output Legacy.stdout;
+  Logger.set_output Legacy.stderr;
   Logger.color_on ();
   (* options parsing *)
   Arg.parse

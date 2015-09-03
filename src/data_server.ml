@@ -379,7 +379,7 @@ let deref cli_sock_ref = match !cli_sock_ref with
 let main () =
   (* setup logger *)
   Logger.set_log_level Logger.INFO;
-  Logger.set_output Legacy.stdout;
+  Logger.set_output Legacy.stderr;
   Logger.color_on ();
   ds_host := Utils.hostname ();
   (* options parsing *)

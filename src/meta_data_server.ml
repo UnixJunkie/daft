@@ -89,7 +89,7 @@ let fetch_mds local_node fn ds_rank int2node feedback_to_cli =
 let main () =
   (* setup logger *)
   Logger.set_log_level Logger.INFO;
-  Logger.set_output Legacy.stdout;
+  Logger.set_output Legacy.stderr;
   Logger.color_on ();
   (* setup MDS *)
   let port_in = ref Utils.default_mds_port_in in
