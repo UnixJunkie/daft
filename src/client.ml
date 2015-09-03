@@ -295,11 +295,8 @@ let main () =
           (fun () -> extract_cmd local_node src_fn dst_fn for_DS incoming) 
         in
         process_answer incoming fetch_cont;
-        if !verbose then
-          begin
-            let after = Unix.gettimeofday () in
-            Log.info "%.3f" (after -. before)
-          end
+        (* let after = Unix.gettimeofday () in *)
+        (* Log.info "%.3f" (after -. before) *)
       | Fetch src_fn ->
         send msg_counter local_node for_DS
           (CLI_to_DS (Fetch_file_cmd_req (src_fn, Remote)));
