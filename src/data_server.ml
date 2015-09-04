@@ -384,18 +384,21 @@ let main () =
   Logger.set_output Legacy.stderr;
   Logger.color_on ();
   (* options parsing *)
+  let ds_port = ref Utils.default in
   Arg.parse
     [ "-cs", Arg.Set_int chunk_size, "<size> file chunk size";
       "-d", Arg.Set delete_datastore, " delete datastore at exit";
       "-o", Arg.Set_string ds_log_fn, "<filename> where to log";
       "-m", Arg.Set_string machine_file,
       "machine_file list of host:port[:mds_port] (one per line)";
+      "-p", Arg.Set_int ds_port, "<port> where the CLI is listening";
       "-v", Arg.Set verbose, " verbose mode"]
     (fun arg -> raise (Arg.Bad ("Bad argument: " ^ arg)))
     (sprintf "usage: %s <options>" Sys.argv.(0))
   ;
   (* check options *)
   if !verbose then Logger.set_log_level Logger.DEBUG;
+  if !ds_port = Utils.default then abort "-p is mandatory";
   if !ds_log_fn <> "" then begin (* don't log anything before that *)
     let log_out = Legacy.open_out !ds_log_fn in
     Logger.set_output log_out
@@ -405,14 +408,14 @@ let main () =
   let ctx = ZMQ.Context.create () in
   let hostname = Utils.hostname () in
   let int2node, local_node', mds_node =
-    Utils.data_nodes_array hostname !machine_file
+    Utils.data_nodes_array hostname (Some !ds_port) !machine_file
   in
-  let local_node = ref local_node' in
+  let local_node = ref (Option.get local_node') in
   let mds_host = Node.get_host mds_node in
   let mds_port = Node.get_port mds_node in
   let my_rank = Node.get_rank !local_node in
   let ds_host = Node.get_host !local_node in
-  let ds_port = Node.get_port !local_node in
+  assert(!ds_port = Node.get_port !local_node);
   (* create a push socket for each DS, except the current one because we
      will never send to self *)
   A.iteri (fun i (node, _ds_sock, cli_sock) ->
@@ -427,8 +430,8 @@ let main () =
   Log.info "Client of MDS %s:%d" mds_host mds_port;
   data_store_root := create_data_store !local_node;
   (* setup server *)
-  Log.info "binding server to %s:%d" "*" ds_port;
-  let incoming = Utils.(zmq_socket Pull ctx "*" ds_port) in
+  Log.info "binding server to %s:%d" "*" !ds_port;
+  let incoming = Utils.(zmq_socket Pull ctx "*" !ds_port) in
   (* feedback socket to the local CLI *)
   let to_cli = ref None in
   (* register at the MDS *)
@@ -584,7 +587,7 @@ let main () =
           to_cli := Some (Utils.(zmq_socket Push ctx ds_host cli_port));
           (* complete local_node *)
           assert(Node.get_cli_port !local_node = None);
-          local_node := Node.create my_rank ds_host ds_port (Some cli_port)
+          local_node := Node.create my_rank ds_host !ds_port (Some cli_port)
 	| DS_to_DS
             (Relay_chunk (fn, chunk_id, is_last, chunk_data, root_rank)) ->
           begin

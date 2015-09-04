@@ -229,9 +229,10 @@ let main () =
   if !verbose then Logger.set_log_level Logger.DEBUG;
   if !machine_file = "" then abort "-m is mandatory";
   let hostname = Utils.hostname () in
-  let _int2node, ds_node, mds_node =
-    Utils.data_nodes_array hostname !machine_file
+  let _int2node, maybe_ds_node, mds_node =
+    Utils.data_nodes_array hostname None !machine_file
   in
+  let ds_node = Option.get maybe_ds_node in
   let mds_host = Node.get_host mds_node in
   let mds_port_in = Node.get_port mds_node in
   let ds_host = Node.get_host ds_node in

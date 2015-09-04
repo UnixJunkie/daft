@@ -146,10 +146,15 @@ let string_to_host_port (s: string): string * int * int option =
 
 (* returns (ds_nodes, local_node, mds_node) *)
 let parse_machine_file
-    (hostname: string) (fn: string): Node.t list * Node.t * Node.t =
+    (hostname: string) (ds_port: int option) (fn: string): Node.t list * Node.t option * Node.t =
+  let port_equal maybe_port p =
+    match maybe_port with
+    | None -> true
+    | Some q -> (q = p)
+  in
   let dummy_node = Node.dummy () in
   let mds_node = ref dummy_node in
-  let local_ds_node = ref dummy_node in
+  let local_ds_node = ref None in
   let parse_machine_line (rank: int) (l: string): Node.t =
     let host, port, maybe_mds_port = string_to_host_port l in
     begin match maybe_mds_port with
@@ -162,10 +167,8 @@ let parse_machine_file
           mds_node := Node.create (-1) host mds_port None
     end;
     let res = Node.create rank host port None in
-    (* FBR: look here the day you want to allow several DSs on the same node
-            - add back -p option to DS and check the port number along
-              with the hostname in here *)
-    if host = hostname then local_ds_node := res;
+    if host = hostname && port_equal ds_port port
+    then local_ds_node := Some res;
     res
   in
   let res = ref [] in
@@ -195,8 +198,8 @@ let get_ds_rank (host: string) (port: int) (nodes: Node.t list): int =
     failwith (sprintf "get_ds_rank: no such ds: %s:%d" host port)
   with Found i -> i
 
-let data_nodes_array (hostname: string) (fn: string) =
-  let machines, local_ds_node, mds_node = parse_machine_file hostname fn in
+let data_nodes_array (hostname: string) (ds_port: int option) (fn: string) =
+  let machines, local_ds_node, mds_node = parse_machine_file hostname ds_port fn in
   let len = L.length machines in
   let res = A.make len (Node.dummy (), None, None) in
   L.iter (fun node -> A.set res (Node.get_rank node) (node, None, None)

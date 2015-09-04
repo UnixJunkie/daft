@@ -102,7 +102,10 @@ let main () =
   if !verbose then Logger.set_log_level Logger.DEBUG;
   if !machine_file = "" then abort "-m is mandatory";
   let hostname = Utils.hostname () in
-  let int2node, _, local_node = Utils.data_nodes_array hostname !machine_file in
+  let int2node, local_ds_node, local_node =
+    Utils.data_nodes_array hostname None !machine_file
+  in
+  assert(local_ds_node = None);
   Log.info "read %d host(s)" (A.length int2node);
   start_data_nodes !machine_file;
   let mds_port = Node.get_port local_node in
