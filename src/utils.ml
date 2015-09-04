@@ -177,7 +177,8 @@ let parse_machine_file
        try
          let i = ref 0 in
          while true do
-           res := (parse_machine_line !i (Legacy.input_line input)) :: !res;
+           let line = String.strip (Legacy.input_line input) in
+           res := (parse_machine_line !i line) :: !res;
            incr i;
          done
        with End_of_file -> ()
