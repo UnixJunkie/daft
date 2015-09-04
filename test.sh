@@ -12,9 +12,11 @@ function reset () {
 
 reset
 
-./daft_mds -m machines & # one MDS
+./daft_mds -v -m machines &
 
-./daft_ds -m machines & # one DS
+./daft_ds -v -m machines -p 8083 &
+./daft_ds -v -m machines -p 8084 &
+./daft_ds -v -m machines -p 8085 &
 
 sleep 1s
 ./daft -m machines -c quit
