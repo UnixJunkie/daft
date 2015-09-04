@@ -238,8 +238,9 @@ let main () =
   let ds_host = Node.get_host ds_node in
   let ds_port_in = Node.get_port ds_node in
   let my_rank = Node.get_rank ds_node in (* same rank as our DS node *)
+  assert(my_rank <> Utils.default);
   (* local_node does not correspond to a DS; it is initialized dirtily *)
-  let local_node = Node.create (-1) hostname !cli_port_in None in
+  let local_node = Node.create my_rank hostname !cli_port_in None in
   let ctx = ZMQ.Context.create () in
   let for_MDS = Utils.(zmq_socket Push ctx mds_host mds_port_in) in
   Log.info "Client of MDS %s:%d" mds_host mds_port_in;
