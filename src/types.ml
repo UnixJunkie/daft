@@ -68,7 +68,7 @@ module Node = struct
     n.rank
   let get_host n =
     n.host
-  let get_ds_port n =
+  let get_port n =
     n.ds_port
   let get_cli_port n =
     n.cli_port
@@ -92,7 +92,7 @@ module Nonce_store = struct
   let nonces = ref StringSet.empty
   let fresh (counter: int ref) (n: Node.t): t =
     let nonce =
-      sprintf "%s:%d:%d" (Node.get_host n) (Node.get_ds_port n) !counter
+      sprintf "%s:%d:%d" (Node.get_host n) (Node.get_port n) !counter
     in
     if !counter = -1 then failwith "fresh: counter has looped";
     incr counter;
