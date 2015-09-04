@@ -18,8 +18,9 @@ module Node = Types.Node
 let global_state = ref FileSet.empty
 let msg_counter = ref 0
 
+let bcast_counter = ref (-1)
 let bcast_start = ref (Unix.gettimeofday ())
-let possible_bcast_end = ref !bcast_start
+let bcast_end = ref !bcast_start
 
 let send, receive = Socket_wrapper.MDS_socket.(send, receive)
 
@@ -163,7 +164,13 @@ let main () =
           end
         | DS_to_MDS (Chunk_ack (fn, chunk_id, ds_rank)) ->
           begin
-            possible_bcast_end := Unix.gettimeofday();
+            bcast_counter := !bcast_counter - 1;
+            if !bcast_counter = 0 then
+              begin
+                bcast_end := Unix.gettimeofday();
+                let delta = !bcast_end -. !bcast_start in
+                Log.info "bcast-chrono: %.3f" delta
+              end;
             Log.debug "got Chunk_ack";
             try
               (* 1) do we have this file ? *)
@@ -198,7 +205,10 @@ let main () =
             if FileSet.mem f !global_state then
               Log.warn "file already added: %s" (File.(f.name))
             else
-              global_state := FileSet.add f !global_state
+              global_state := FileSet.add f !global_state;
+            (* for bcast_chrono *)
+            bcast_counter := (File.get_nb_chunks f) * (A.length int2node - 1);
+            Log.info "bcast_counter: %d" !bcast_counter;
           end
         | CLI_to_MDS (Connect_push (ds_rank, cli_port)) ->
           Log.debug "got Connect_push rank: %d port: %d" ds_rank cli_port;
@@ -221,11 +231,7 @@ let main () =
                   (sprintf "Ls_cmd_req: no CLI feedback sock for node %d" ds_rank)
               | Some to_cli_sock ->
                 let files_list = exec_ls_command detailed maybe_fn in
-                (* let feedback = "" in *)
-                let feedback =
-                  let delta = !possible_bcast_end -. !bcast_start in
-                  sprintf "bcast-chrono: %.3f" delta
-                in
+                let feedback = "" in
                 (* ls output can be pretty big hence it is compressed *)
                 send ~compress:true msg_counter local_node to_cli_sock
                   (MDS_to_CLI (Ls_cmd_ack (files_list, feedback)))
