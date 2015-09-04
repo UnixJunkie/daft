@@ -171,8 +171,9 @@ let main () =
               begin
                 bcast_end := Unix.gettimeofday();
                 let delta = !bcast_end -. !bcast_start in
-                Log.info "bcast-chrono: %s %s %.3f"
-                  fn (Utils.string_of_bcast !bcast_algo) delta;
+                Log.info "bcast-chrono: %d %s %s %.3f"
+                  (A.length int2node) (Utils.string_of_bcast !bcast_algo)
+                  fn  delta;
                 (* hack for timing experiments: unlock CLI *)
                 let to_cli_sock = Option.get (Utils.trd3 int2node.(!bcast_root_rank)) in
                 send msg_counter local_node to_cli_sock (MDS_to_CLI Unlock);
