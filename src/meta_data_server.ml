@@ -92,26 +92,24 @@ let main () =
   Logger.set_output Legacy.stderr;
   Logger.color_on ();
   (* setup MDS *)
-  let port_in = ref Utils.default_mds_port_in in
   let machine_file = ref "" in
   Arg.parse
-    [ "-p", Arg.Set_int port_in, "port where to listen";
-      "-m", Arg.Set_string machine_file,
+    [ "-m", Arg.Set_string machine_file,
       "machine_file list of [user@]host:port (one per line)" ]
     (fun arg -> raise (Arg.Bad ("Bad argument: " ^ arg)))
     (sprintf "usage: %s <options>" Sys.argv.(0));
   (* check options *)
   if !verbose then Logger.set_log_level Logger.DEBUG;
   if !machine_file = "" then abort "-m is mandatory";
-  let int2node = Utils.data_nodes_array !machine_file in
+  let hostname = Utils.hostname () in
+  let int2node, _, local_node = Utils.data_nodes_array hostname !machine_file in
   Log.info "read %d host(s)" (A.length int2node);
   start_data_nodes !machine_file;
-  let hostname = Utils.hostname () in
-  let local_node = Types.Node.create (-1) hostname !port_in None in
+  let mds_port = Node.get_port local_node in
   (* start server *)
-  Log.info "binding server to %s:%d" "*" !port_in;
+  Log.info "binding server to %s:%d" "*" mds_port;
   let ctx = ZMQ.Context.create () in
-  let incoming = Utils.(zmq_socket Pull ctx "*" !port_in ) in
+  let incoming = Utils.(zmq_socket Pull ctx "*" mds_port) in
   try (* loop on messages until quit command *)
     let not_finished = ref true in
     while !not_finished do

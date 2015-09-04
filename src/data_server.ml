@@ -99,18 +99,15 @@ module Well_exhaust = struct
     loop IntMap.empty src_nodes dst_nodes
 end
 
+let dummy_node = Node.dummy ()
+
 (* setup data server *)
 let ds_log_fn = ref ""
-let ds_host = ref "localhost"
-let ds_port_in = ref Utils.default_ds_port_in
-let my_rank = ref Utils.uninitialized
 let machine_file = ref ""
-let mds_host = ref "localhost"
-let mds_port_in = ref Utils.default_mds_port_in
 let chunk_size = ref Utils.default_chunk_size (* DAFT global constant *)
 let local_state = ref FileSet.empty
 let data_store_root = ref ""
-let local_node = ref (Node.dummy ()) (* this node *)
+let local_node = ref dummy_node
 let verbose = ref false
 let delete_datastore = ref false
 
@@ -121,11 +118,11 @@ let abort msg =
 (* create local data store with unix UGO rights 700
    we take into account the port so that several DSs can be started on one
    host at the same time, for tests *)
-let create_data_store (): string =
-  assert(!local_node <> Node.dummy ());
+let create_data_store local_node: string =
+  assert(local_node <> dummy_node);
   let tmp_dir = Fn.get_temp_dir_name () in
   let data_store_root =
-    sprintf "%s/%s.ds" tmp_dir (Node.to_string_id !local_node)
+    sprintf "%s/%s.ds" tmp_dir (Node.to_string_id local_node)
   in
   Unix.mkdir data_store_root 0o700; (* access rights for owner only *)
   Log.info "I store in %s" data_store_root;
@@ -196,7 +193,7 @@ let add_file (fn: string): ds_to_cli =
 (* same return type than add_file, to keep the protocol small *)
 let extract_file (src_fn: Types.filename) (dst_fn: Types.filename): ds_to_cli =
   if FileSet.contains_fn src_fn !local_state then
-    if Utils.file_or_link_exists dst_fn then
+    if Sys.file_exists dst_fn then
       Fetch_file_cmd_nack (dst_fn, Already_here)
     else
       let dest_dir = Fn.dirname dst_fn in
@@ -265,7 +262,8 @@ let send_chunk_to local_node int2node ds_rank something =
       end
 
 let send_chunk local_node to_rank int2node fn chunk_id is_last chunk_data =
-  if to_rank = !my_rank then
+  let my_rank = Node.get_rank local_node in
+  if to_rank = my_rank then
     Log.warn "send_chunk: to self: fn: %s cid: %d" fn chunk_id
   else
     let chunk_msg = DS_to_DS (Chunk (fn, chunk_id, is_last, chunk_data)) in
@@ -278,15 +276,17 @@ let bcast_chunk_amoeba
     DS_to_DS
       (Bcast_chunk_amoeba (fn, chunk_id, is_last, chunk_data, root_rank, step_num))
   in
+  let my_rank = Node.get_rank local_node in
   List.iter (fun to_rank ->
-      if to_rank <> !my_rank then
+      if to_rank <> my_rank then
         send_chunk_to local_node int2node to_rank bcast_chunk_msg
     ) to_ranks
 
 let bcast_chunk_well_exhaust
     local_node to_ranks int2node fn chunk_id is_last plan chunk_data =
   (* Log.debug "to_ranks: %s" (Utils.string_of_list string_of_int "; " to_ranks); *)
-  let remaining_plan = IntMap.remove !my_rank plan in
+  let my_rank = Node.get_rank local_node in
+  let remaining_plan = IntMap.remove my_rank plan in
   let bcast_chunk_msg =
     DS_to_DS
       (Bcast_chunk_well_exhaust
@@ -299,7 +299,8 @@ let bcast_chunk_well_exhaust
 (* broadcast by only sending to next node (next_node_rank = my_rank + 1) *)
 let relay_chunk_or_stop local_node int2node fn chunk_id is_last root_rank chunk_data =
   let nb_nodes = A.length int2node in
-  let to_rank = (!my_rank + 1) mod nb_nodes in
+  let my_rank = Node.get_rank local_node in
+  let to_rank = (my_rank + 1) mod nb_nodes in
   if to_rank <> root_rank then
     let relay_chunk_msg =
       DS_to_DS
@@ -307,7 +308,7 @@ let relay_chunk_or_stop local_node int2node fn chunk_id is_last root_rank chunk_
     in
     send_chunk_to local_node int2node to_rank relay_chunk_msg
 
-let store_chunk to_mds to_cli fn chunk_id is_last data =
+let store_chunk local_node to_mds to_cli fn chunk_id is_last data =
   let file =
     try FileSet.find_fn fn !local_state (* retrieve it *)
     with Not_found -> (* or create it *)
@@ -340,7 +341,7 @@ let store_chunk to_mds to_cli fn chunk_id is_last data =
         );
       (* 2) update local state *)
       let curr_chunk =
-        File.Chunk.create chunk_id curr_chunk_size !local_node
+        File.Chunk.create chunk_id curr_chunk_size local_node
       in
       (* only once we receive the last chunk can we finalize the file's
          description in local_state *)
@@ -355,8 +356,9 @@ let store_chunk to_mds to_cli fn chunk_id is_last data =
       in
       local_state := FileSet.update new_file !local_state;
       (* 3) notify MDS *)
-      send msg_counter !local_node to_mds
-        (DS_to_MDS (Chunk_ack (fn, chunk_id, !my_rank)));
+      let my_rank = Node.get_rank local_node in
+      send msg_counter local_node to_mds
+        (DS_to_MDS (Chunk_ack (fn, chunk_id, my_rank)));
       (* 4) notify CLI if all file chunks have been received
             and fix file perms in the local datastore *)
       let must_have = File.get_nb_chunks new_file in
@@ -368,7 +370,7 @@ let store_chunk to_mds to_cli fn chunk_id is_last data =
             match to_cli with
             | None -> () (* in case of broadcast: no feedback to CLI *)
             | Some cli_sock ->
-              send msg_counter !local_node cli_sock (DS_to_CLI (Fetch_file_cmd_ack fn))
+              send msg_counter local_node cli_sock (DS_to_CLI (Fetch_file_cmd_ack fn))
           end
     end
 
@@ -381,18 +383,13 @@ let main () =
   Logger.set_log_level Logger.INFO;
   Logger.set_output Legacy.stderr;
   Logger.color_on ();
-  ds_host := Utils.hostname ();
   (* options parsing *)
   Arg.parse
     [ "-cs", Arg.Set_int chunk_size, "<size> file chunk size";
       "-d", Arg.Set delete_datastore, " delete datastore at exit";
-      "-l", Arg.Set_string ds_log_fn, "<filename> where to log";
-      "-p", Arg.Set_int ds_port_in, "<port> where to listen";
-      "-r", Arg.Set_int my_rank, "<rank> rank among other data nodes";
+      "-o", Arg.Set_string ds_log_fn, "<filename> where to log";
       "-m", Arg.Set_string machine_file,
-      "machine_file list of [user@]host:port (one per line)";
-      "-mds", Arg.Set_string mds_host, "<server> MDS host";
-      "-mdsp", Arg.Set_int mds_port_in, "<port> MDS port";
+      "machine_file list of host:port[:mds_port] (one per line)";
       "-v", Arg.Set verbose, " verbose mode"]
     (fun arg -> raise (Arg.Bad ("Bad argument: " ^ arg)))
     (sprintf "usage: %s <options>" Sys.argv.(0))
@@ -403,36 +400,40 @@ let main () =
     let log_out = Legacy.open_out !ds_log_fn in
     Logger.set_output log_out
   end;
-  if !chunk_size = Utils.uninitialized then abort "-cs is mandatory";
-  if !mds_host = "" then abort "-mds is mandatory";
-  if !mds_port_in = Utils.uninitialized then abort "-sp is mandatory";
-  if !my_rank = Utils.uninitialized then abort "-r is mandatory";
-  if !ds_port_in = Utils.uninitialized then abort "-p is mandatory";
+  if !chunk_size = Utils.default then abort "-cs is mandatory";
   if !machine_file = "" then abort "-m is mandatory";
   let ctx = ZMQ.Context.create () in
-  let int2node = Utils.data_nodes_array !machine_file in
+  let hostname = Utils.hostname () in
+  let int2node, local_node', mds_node =
+    Utils.data_nodes_array hostname !machine_file
+  in
+  let local_node = ref local_node' in
+  let mds_host = Node.get_host mds_node in
+  let mds_port = Node.get_port mds_node in
+  let my_rank = Node.get_rank !local_node in
+  let ds_host = Node.get_host !local_node in
+  let ds_port = Node.get_port !local_node in
   (* create a push socket for each DS, except the current one because we
      will never send to self *)
   A.iteri (fun i (node, _ds_sock, cli_sock) ->
-      if i <> !my_rank then
+      if i <> my_rank then
         let sock =
-          Utils.(zmq_socket Push ctx (Node.get_host node) (Node.get_ds_port node))
+          Utils.(zmq_socket Push ctx (Node.get_host node) (Node.get_port node))
         in
         A.set int2node i (node, Some sock, cli_sock)
     ) int2node;
   let nb_nodes = A.length int2node in
   Log.info "read %d host(s)" nb_nodes;
-  local_node := Node.create !my_rank !ds_host !ds_port_in None;
-  Log.info "Client of MDS %s:%d" !mds_host !mds_port_in;
-  data_store_root := create_data_store ();
+  Log.info "Client of MDS %s:%d" mds_host mds_port;
+  data_store_root := create_data_store !local_node;
   (* setup server *)
-  Log.info "binding server to %s:%d" "*" !ds_port_in;
-  let incoming = Utils.(zmq_socket Pull ctx "*" !ds_port_in) in
+  Log.info "binding server to %s:%d" "*" ds_port;
+  let incoming = Utils.(zmq_socket Pull ctx "*" ds_port) in
   (* feedback socket to the local CLI *)
   let to_cli = ref None in
   (* register at the MDS *)
-  Log.info "connecting to MDS %s:%d" !mds_host !mds_port_in;
-  let to_mds = Utils.(zmq_socket Push ctx !mds_host !mds_port_in) in
+  Log.info "connecting to MDS %s:%d" mds_host mds_port;
+  let to_mds = Utils.(zmq_socket Push ctx mds_host mds_port) in
   send msg_counter !local_node to_mds (DS_to_MDS (Join_push !local_node));
   try (* loop on messages until quit command *)
     let not_finished = ref true in
@@ -467,7 +468,7 @@ let main () =
             (DS_to_CLI (Fetch_file_cmd_nack (fn, Already_here)))
         | DS_to_DS (Chunk (fn, chunk_id, is_last, data)) ->
           Log.debug "got Chunk";
-          store_chunk to_mds !to_cli fn chunk_id is_last data
+          store_chunk !local_node to_mds !to_cli fn chunk_id is_last data
         | CLI_to_DS (Fetch_file_cmd_req (fn, Local)) ->
           Log.debug "got Fetch_file_cmd_req:Local";
           let res = add_file fn in
@@ -475,7 +476,7 @@ let main () =
             | Fetch_file_cmd_ack fn ->
               (* notify MDS about this new file *)
               let file = FileSet.find_fn fn !local_state in
-              let add_file_req = Add_file_req (!my_rank, file) in
+              let add_file_req = Add_file_req (my_rank, file) in
               send msg_counter !local_node to_mds (DS_to_MDS add_file_req)
             | Fetch_file_cmd_nack (fn, err) ->
               send msg_counter !local_node (deref to_cli)
@@ -500,7 +501,7 @@ let main () =
               begin match bcast_method with
                 | Amoeba ->
                   begin
-                    match Amoeba.fork !my_rank 0 !my_rank nb_nodes with
+                    match Amoeba.fork my_rank 0 my_rank nb_nodes with
                     | [], _ -> () (* job done *)
                     | (to_ranks, step_num) ->
                       match to_ranks with
@@ -510,7 +511,7 @@ let main () =
                           let is_last = (chunk_id = last_cid) in
                           bcast_chunk_amoeba
                             !local_node to_ranks int2node fn chunk_id is_last
-                            !my_rank step_num chunk_data
+                            my_rank step_num chunk_data
                         done
                       | _ -> assert(false)
                   end
@@ -519,11 +520,11 @@ let main () =
                     let chunk_data = retrieve_chunk fn chunk_id in
                     let is_last = (chunk_id = last_cid) in
                     relay_chunk_or_stop
-                      !local_node int2node fn chunk_id is_last !my_rank chunk_data
+                      !local_node int2node fn chunk_id is_last my_rank chunk_data
                   done
                 | Well_exhaust ->
-                  let plan = Well_exhaust.plan !my_rank nb_nodes in
-                  let to_ranks = IntMap.find !my_rank plan in
+                  let plan = Well_exhaust.plan my_rank nb_nodes in
+                  let to_ranks = IntMap.find my_rank plan in
                   for chunk_id = 0 to last_cid do
                     let chunk_data = retrieve_chunk fn chunk_id in
                     let is_last = (chunk_id = last_cid) in
@@ -541,8 +542,8 @@ let main () =
                (fn, chunk_id, is_last, chunk_data, root_rank, step_num)) ->
           begin
             Log.debug "got Bcast_chunk_amoeba";
-            store_chunk to_mds None fn chunk_id is_last chunk_data;
-            match Amoeba.fork root_rank step_num !my_rank nb_nodes with
+            store_chunk !local_node to_mds None fn chunk_id is_last chunk_data;
+            match Amoeba.fork root_rank step_num my_rank nb_nodes with
             | ([], _) -> () (* job done *)
             | (to_ranks, step_num) ->
               match to_ranks with
@@ -556,10 +557,10 @@ let main () =
                (fn, chunk_id, is_last, chunk_data, plan)) ->
           begin
             Log.debug "got Bcast_chunk_well_exhaust";
-            store_chunk to_mds None fn chunk_id is_last chunk_data;
+            store_chunk !local_node to_mds None fn chunk_id is_last chunk_data;
             try
               (* I have to continue this broadcast *)
-              let to_ranks = IntMap.find !my_rank plan in
+              let to_ranks = IntMap.find my_rank plan in
               bcast_chunk_well_exhaust
                 !local_node to_ranks int2node fn chunk_id is_last plan chunk_data
             with Not_found -> ()
@@ -580,15 +581,15 @@ let main () =
         | CLI_to_DS (Connect_cmd_push cli_port) ->
           Log.debug "got Connect_cmd_push";
           (* setup socket to CLI *)
-          to_cli := Some (Utils.(zmq_socket Push ctx !ds_host cli_port));
+          to_cli := Some (Utils.(zmq_socket Push ctx ds_host cli_port));
           (* complete local_node *)
           assert(Node.get_cli_port !local_node = None);
-          local_node := Node.create !my_rank !ds_host !ds_port_in (Some cli_port)
+          local_node := Node.create my_rank ds_host ds_port (Some cli_port)
 	| DS_to_DS
             (Relay_chunk (fn, chunk_id, is_last, chunk_data, root_rank)) ->
           begin
             Log.debug "got Relay_chunk";
-            store_chunk to_mds None fn chunk_id is_last chunk_data;
+            store_chunk !local_node to_mds None fn chunk_id is_last chunk_data;
             relay_chunk_or_stop
               !local_node int2node fn chunk_id is_last root_rank chunk_data
           end
