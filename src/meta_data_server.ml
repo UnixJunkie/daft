@@ -17,7 +17,6 @@ module Node = Types.Node
 
 let global_state = ref FileSet.empty
 let msg_counter = ref 0
-let verbose = ref false
 
 let bcast_start = ref (Unix.gettimeofday ())
 let possible_bcast_end = ref !bcast_start
@@ -93,19 +92,20 @@ let main () =
   Logger.color_on ();
   (* setup MDS *)
   let machine_file = ref "" in
+  let verbose = ref false in
   Arg.parse
     [ "-m", Arg.Set_string machine_file,
-      "machine_file list of [user@]host:port (one per line)" ]
+      "machine_file list of [user@]host:port (one per line)";
+      "-v", Arg.Set verbose, " verbose mode"]
     (fun arg -> raise (Arg.Bad ("Bad argument: " ^ arg)))
     (sprintf "usage: %s <options>" Sys.argv.(0));
   (* check options *)
   if !verbose then Logger.set_log_level Logger.DEBUG;
   if !machine_file = "" then abort "-m is mandatory";
   let hostname = Utils.hostname () in
-  let int2node, local_ds_node, local_node =
+  let int2node, _local_ds_node, local_node =
     Utils.data_nodes_array hostname None !machine_file
   in
-  assert(local_ds_node = None);
   Log.info "read %d host(s)" (A.length int2node);
   start_data_nodes !machine_file;
   let mds_port = Node.get_port local_node in
