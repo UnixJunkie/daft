@@ -65,7 +65,6 @@ module Node = struct
   let dummy_with_rank rank =
     { rank; host = "!!!dummy_hostname!!!"; ds_port = -1; cli_port = None }
   let get_rank n =
-    assert(n.rank <> -1);
     n.rank
   let get_host n =
     n.host
