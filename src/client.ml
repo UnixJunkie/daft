@@ -16,11 +16,7 @@ module FileSet = Types.FileSet
 
 let send, receive = Socket_wrapper.CLI_socket.(send, receive)
 
-let ds_host = ref ""
-let ds_port_in = ref Utils.uninitialized
-let mds_host = ref ""
-let mds_port_in = ref Utils.uninitialized
-let cli_port_in = ref Utils.uninitialized
+let cli_port_in = ref 8000 (* default CLI listening port *)
 let single_command = ref ""
 let interactive = ref false
 let machine_file = ref ""
@@ -214,7 +210,6 @@ let read_one_command is_interactive =
   (before, Command.of_list command_line)
 
 let main () =
-  let my_rank = ref Utils.uninitialized in
   (* setup logger *)
   Logger.set_log_level Logger.INFO;
   Logger.set_output Legacy.stderr;
@@ -224,44 +219,30 @@ let main () =
     [ "-i", Arg.Set interactive, " interactive mode of the CLI";
       "-c", Arg.Set_string single_command,
       "'command' execute a single command; use quotes if several words";
+      "-m", Arg.Set_string machine_file,
+      "machine_file list of host:port[:mds_port] (one per line)";
       "-p", Arg.Set_int cli_port_in, "<port> where the CLI is listening";
-      "-mds", Arg.String (Utils.set_host_port mds_host mds_port_in),
-      "<host:port> MDS";
-      "-ds", Arg.String (Utils.set_host_port ds_host ds_port_in),
-      "<host:port> local DS" ;
-      "-r", Arg.Set_int my_rank, "<rank> rank of the local data node";
       "-v", Arg.Set verbose, " verbose mode"]
     (fun arg -> raise (Arg.Bad ("Bad argument: " ^ arg)))
     (sprintf "usage: %s <options>" Sys.argv.(0));
   (* check options *)
   if !verbose then Logger.set_log_level Logger.DEBUG;
-  if !my_rank = Utils.uninitialized then abort "-r is mandatory";
-  if !cli_port_in = Utils.uninitialized then abort "-p is mandatory";
-  if !mds_host = "" && !mds_port_in = Utils.uninitialized then
-    begin
-      let daft_mds_env_var = Utils.getenv_or_fail "DAFT_MDS" in
-      if daft_mds_env_var = "" then
-        abort "-mds option or DAFT_MDS env. var. mandatory"
-      else
-        Utils.set_host_port mds_host mds_port_in daft_mds_env_var
-    end;
-  assert(!mds_host <> "" && !mds_port_in <> Utils.uninitialized);
-  if !ds_host = "" && !ds_port_in = Utils.uninitialized then
-    begin
-      let daft_ds_env_var = Utils.getenv_or_fail "DAFT_DS" in
-      if daft_ds_env_var = "" then
-        abort "-ds option or DAFT_DS env. var. mandatory"
-      else
-        Utils.set_host_port ds_host ds_port_in daft_ds_env_var
-    end;
-  assert(!ds_host <> "" && !ds_port_in <> Utils.uninitialized);
+  if !machine_file = "" then abort "-m is mandatory";
   let hostname = Utils.hostname () in
+  let _int2node, ds_node, mds_node =
+    Utils.data_nodes_array hostname !machine_file
+  in
+  let mds_host = Node.get_host mds_node in
+  let mds_port_in = Node.get_port mds_node in
+  let ds_host = Node.get_host ds_node in
+  let ds_port_in = Node.get_port ds_node in
+  let my_rank = Node.get_rank ds_node in (* same rank as our DS node *)
   (* local_node does not correspond to a DS; it is initialized dirtily *)
-  let local_node = Node.create Utils.uninitialized hostname !cli_port_in None in
+  let local_node = Node.create (-1) hostname !cli_port_in None in
   let ctx = ZMQ.Context.create () in
-  let for_MDS = Utils.(zmq_socket Push ctx !mds_host !mds_port_in) in
-  Log.info "Client of MDS %s:%d" !mds_host !mds_port_in;
-  let for_DS = Utils.(zmq_socket Push ctx !ds_host !ds_port_in) in
+  let for_MDS = Utils.(zmq_socket Push ctx mds_host mds_port_in) in
+  Log.info "Client of MDS %s:%d" mds_host mds_port_in;
+  let for_DS = Utils.(zmq_socket Push ctx ds_host ds_port_in) in
   (* continue from a previous session if counter file is found *)
   msg_counter := restore_counter ();
   if !msg_counter = 0 then (* start a new session *)
@@ -270,10 +251,10 @@ let main () =
       send msg_counter local_node for_DS (CLI_to_DS (Connect_cmd_push !cli_port_in));
       (* register yourself to the MDS *)
       send msg_counter local_node for_MDS
-        (CLI_to_MDS (Connect_push (!my_rank, !cli_port_in)))
+        (CLI_to_MDS (Connect_push (my_rank, !cli_port_in)))
     end;
   let incoming = Utils.(zmq_socket Pull ctx "*" !cli_port_in) in
-  Log.info "Client of DS %s:%d" !ds_host !ds_port_in;
+  Log.info "Client of DS %s:%d" ds_host ds_port_in;
   (* the CLI execute just one command then exit *)
   (* we could have a batch mode, executing several commands from a file *)
   let not_finished = ref true in
@@ -293,7 +274,7 @@ let main () =
         send msg_counter local_node for_DS
           (CLI_to_DS (Fetch_file_cmd_req (src_fn, Remote)));
         let fetch_cont =
-          (fun () -> extract_cmd local_node src_fn dst_fn for_DS incoming) 
+          (fun () -> extract_cmd local_node src_fn dst_fn for_DS incoming)
         in
         process_answer incoming fetch_cont;
         (* let after = Unix.gettimeofday () in *)
@@ -313,7 +294,7 @@ let main () =
         not_finished := false
       | Ls (detailed, maybe_fn) ->
         send msg_counter local_node for_MDS
-          (CLI_to_MDS (Ls_cmd_req (!my_rank, detailed, maybe_fn)));
+          (CLI_to_MDS (Ls_cmd_req (my_rank, detailed, maybe_fn)));
         process_answer incoming do_nothing
       | Bcast (src_fn, bcast_method) ->
         send msg_counter local_node for_DS
