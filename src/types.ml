@@ -332,7 +332,7 @@ module Protocol = struct
     | Join_push of Node.t (* a DS registering itself with the MDS *)
     | Chunk_ack of filename * chunk_id * rank
     | Add_file_req of rank * File.t
-    | Bcast_file_req of File.t
+    | Bcast_file_req of rank * File.t * bcast_method
     | Fetch_file_req of rank * filename
 
   type mds_to_ds =
@@ -360,6 +360,7 @@ module Protocol = struct
   type mds_to_cli =
     | Ls_cmd_ack of FileSet.t * string
     | Fetch_cmd_nack of filename
+    | Unlock (* hack for experiments *)
 
   type file_loc = Local (* local disk *) | Remote (* remote host *)
 

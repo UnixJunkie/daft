@@ -74,6 +74,8 @@ let process_answer incoming continuation: unit =
     | MDS_to_CLI (Fetch_cmd_nack fn) ->
       Log.debug "got Fetch_cmd_nack";
       Log.error "no such file: %s" fn
+    | MDS_to_CLI Unlock ->
+      continuation ()
     | DS_to_CLI (Fetch_file_cmd_ack fn) ->
       begin
         Log.debug "got Fetch_file_cmd_ack";
@@ -116,15 +118,6 @@ module Command = struct
        "hotkey ^   ^   ^    ^     ^        ^   ^    ^  ^\n" ^^
        "ls [-a] [filename]")
       (* FBR: give a whole listing of commands with parameters *)
-  let bcast_of_string = function
-    | "r" -> Relay
-    | "a" -> Amoeba
-    | "w" -> Well_exhaust
-    | x ->
-      let err_msg =
-        sprintf "broadcast_method: unsupported: %s (supported: s|r|a)" x
-      in
-      failwith err_msg
   (* quick and dirty way to understand a command ASAP *)
   let of_list: string list -> t = function
     | [] -> Skip
@@ -133,7 +126,7 @@ module Command = struct
         | "b" | "bcast" ->
           begin match get_two args with
             | Some (fn, bcast_method) ->
-              Bcast (fn, bcast_of_string bcast_method)
+              Bcast (fn, Utils.bcast_of_string bcast_method)
             | None -> Log.error "\nusage: bcast fn {r|a|w}" ; Skip
           end
         | "e" | "extract" ->

@@ -246,3 +246,18 @@ let hostname (): string =
   in
   if count_char '.' res < 2 then Log.warn "hostname: FQ hostname: %s" res;
   res
+
+let bcast_of_string = function
+  | "r" -> Types.Protocol.Relay
+  | "a" -> Types.Protocol.Amoeba
+  | "w" -> Types.Protocol.Well_exhaust
+  | x ->
+    let err_msg =
+      sprintf "broadcast_method: unsupported: %s (supported: s|r|a)" x
+    in
+    failwith err_msg
+
+let string_of_bcast = function
+  | Types.Protocol.Relay -> "r"
+  | Types.Protocol.Amoeba -> "a"
+  | Types.Protocol.Well_exhaust -> "w"

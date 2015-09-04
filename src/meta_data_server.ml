@@ -21,6 +21,8 @@ let msg_counter = ref 0
 let bcast_counter = ref (-1)
 let bcast_start = ref (Unix.gettimeofday ())
 let bcast_end = ref !bcast_start
+let bcast_root_rank = ref (-1)
+let bcast_algo = ref Amoeba
 
 let send, receive = Socket_wrapper.MDS_socket.(send, receive)
 
@@ -169,7 +171,11 @@ let main () =
               begin
                 bcast_end := Unix.gettimeofday();
                 let delta = !bcast_end -. !bcast_start in
-                Log.info "bcast-chrono: %.3f" delta
+                Log.info "bcast-chrono: %s %s %.3f"
+                  fn (Utils.string_of_bcast !bcast_algo) delta;
+                (* hack for timing experiments: unlock CLI *)
+                let to_cli_sock = Option.get (Utils.trd3 int2node.(!bcast_root_rank)) in
+                send msg_counter local_node to_cli_sock (MDS_to_CLI Unlock);
               end;
             Log.debug "got Chunk_ack";
             try
@@ -198,9 +204,11 @@ let main () =
         | DS_to_MDS (Fetch_file_req (ds_rank, fn)) ->
 	  Log.debug "got Fetch_file_req";
 	  fetch_mds local_node fn ds_rank int2node true
-        | DS_to_MDS (Bcast_file_req f) ->
+        | DS_to_MDS (Bcast_file_req (ds_rank, f, bcast_method)) ->
           begin
             bcast_start := Unix.gettimeofday();
+            bcast_root_rank := ds_rank;
+            bcast_algo := bcast_method;
             Log.debug "got Bcast_file_req";
             if FileSet.mem f !global_state then
               Log.warn "file already added: %s" (File.(f.name))
