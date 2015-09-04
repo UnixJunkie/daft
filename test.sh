@@ -19,6 +19,6 @@ reset
 ./daft_ds -v -m machines -p 8085 &
 
 sleep 1s
-./daft -m machines -c quit
+./daft -v -m machines -c quit
 
 ps
