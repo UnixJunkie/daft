@@ -107,7 +107,6 @@ let machine_file = ref ""
 let chunk_size = ref Utils.default_chunk_size (* DAFT global constant *)
 let local_state = ref FileSet.empty
 let data_store_root = ref ""
-let local_node = ref dummy_node
 let verbose = ref false
 let delete_datastore = ref false
 
@@ -153,7 +152,7 @@ let fn_to_path (fn: Types.filename): string =
   if S.starts_with fn "/" then fn
   else "/" ^ fn
 
-let add_file (fn: string): ds_to_cli =
+let add_file (local_node: Node.t) (fn: string): ds_to_cli =
   if FileSet.contains_fn fn !local_state then
     Fetch_file_cmd_nack (fn, Already_here)
   else begin
@@ -181,7 +180,7 @@ let add_file (fn: string): ds_to_cli =
           else begin (* update local state *)
             let nb_chunks, last_chunk_size = compute_chunks size in
             let all_chunks =
-              File.all_chunks nb_chunks last_chunk_size !local_node
+              File.all_chunks nb_chunks last_chunk_size local_node
             in
             let new_file = File.create fn size nb_chunks all_chunks in
             local_state := FileSet.add new_file !local_state;
@@ -414,6 +413,7 @@ let main () =
   let mds_host = Node.get_host mds_node in
   let mds_port = Node.get_port mds_node in
   let my_rank = Node.get_rank !local_node in
+  assert(my_rank <> Utils.default);
   let ds_host = Node.get_host !local_node in
   assert(!ds_port = Node.get_port !local_node);
   (* create a push socket for each DS, except the current one because we
@@ -474,7 +474,7 @@ let main () =
           store_chunk !local_node to_mds !to_cli fn chunk_id is_last data
         | CLI_to_DS (Fetch_file_cmd_req (fn, Local)) ->
           Log.debug "got Fetch_file_cmd_req:Local";
-          let res = add_file fn in
+          let res = add_file !local_node fn in
           begin match res with
             | Fetch_file_cmd_ack fn ->
               (* notify MDS about this new file *)
@@ -488,7 +488,7 @@ let main () =
           end
         | CLI_to_DS (Bcast_file_cmd_req (fn, bcast_method)) ->
           Log.debug "got Bcast_file_cmd_req";
-          let res = add_file fn in
+          let res = add_file !local_node fn in
           begin match res with
             | Fetch_file_cmd_nack (fn, Already_here) (* allow bcast after put *)
             | Fetch_file_cmd_ack fn ->
