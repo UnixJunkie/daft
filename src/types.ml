@@ -157,10 +157,10 @@ module File = struct
     let to_string (c: t): string =
       let string_of_size = function
         | None -> ""
-        | Some s -> sprintf "size: %Ld " s
+        | Some s -> sprintf " size: %Ld" s
       in
-      sprintf "cid: %d %snodes: %s"
-        c.id (string_of_size c.size) (NodeSet.to_string c.nodes)
+      sprintf "cid: %d nodes: %s%s"
+        c.id (NodeSet.to_string c.nodes) (string_of_size c.size)
     exception Found of Node.t
     (* randomly select a DS having this chunk *)
     let select_source_rand (c: t): Node.t =
