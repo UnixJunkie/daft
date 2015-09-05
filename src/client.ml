@@ -7,8 +7,6 @@ open Types.Protocol
 
 module Fn = Filename
 module FU = FileUtil
-module Logger = Log
-module Log = Log.Make (struct let section = "CLI" end) (* prefix all logs *)
 module S = String
 module Node = Types.Node
 module File = Types.File
@@ -23,8 +21,6 @@ let machine_file = ref ""
 let verbose = ref false
 let msg_counter = ref 0
 let msg_counter_fn = "CLI.msg_counter"
-
-(* FBR: pass the Log module around if that's possible *)
 
 let backup_counter () =
   Utils.with_out_file msg_counter_fn (fun out ->
@@ -204,9 +200,10 @@ let read_one_command is_interactive =
 
 let main () =
   (* setup logger *)
-  Logger.set_log_level Logger.INFO;
-  Logger.set_output Legacy.stderr;
-  Logger.color_on ();
+  Log.set_log_level Log.INFO;
+  Log.set_output Legacy.stderr;
+  Log.color_on ();
+  Log.set_prefix (Utils.fg_yellow ^ " CLI" ^ Utils.fg_reset);
   (* options parsing *)
   Arg.parse
     [ "-i", Arg.Set interactive, " interactive mode of the CLI";
@@ -219,7 +216,7 @@ let main () =
     (fun arg -> raise (Arg.Bad ("Bad argument: " ^ arg)))
     (sprintf "usage: %s <options>" Sys.argv.(0));
   (* check options *)
-  if !verbose then Logger.set_log_level Logger.DEBUG;
+  if !verbose then Log.set_log_level Log.DEBUG;
   if !machine_file = "" then abort "-m is mandatory";
   let hostname = Utils.hostname () in
   let _int2node, maybe_ds_node, mds_node =

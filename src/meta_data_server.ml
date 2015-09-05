@@ -2,17 +2,12 @@ open Batteries
 open Legacy.Printf
 open Types.Protocol
 
-let mds_in_blue = Utils.fg_cyan ^ "MDS" ^ Utils.fg_reset
-
 module A = Array
 module Ht = Hashtbl
 module FileSet = Types.FileSet
 module File = Types.File
 module Chunk = Types.File.Chunk
 module L = List
-module Logger = Log (* !!! keep this one before Log alias !!! *)
-(* prefix all logs *)
-module Log = Log.Make (struct let section = mds_in_blue end)
 module Node = Types.Node
 
 let global_state = ref FileSet.empty
@@ -90,9 +85,10 @@ let fetch_mds local_node fn ds_rank int2node feedback_to_cli =
 
 let main () =
   (* setup logger *)
-  Logger.set_log_level Logger.INFO;
-  Logger.set_output Legacy.stderr;
-  Logger.color_on ();
+  Log.set_log_level Log.INFO;
+  Log.set_output Legacy.stderr;
+  Log.color_on ();
+  Log.set_prefix (Utils.fg_yellow ^ " MDS" ^ Utils.fg_reset);
   (* setup MDS *)
   let machine_file = ref "" in
   let verbose = ref false in
@@ -103,7 +99,7 @@ let main () =
     (fun arg -> raise (Arg.Bad ("Bad argument: " ^ arg)))
     (sprintf "usage: %s <options>" Sys.argv.(0));
   (* check options *)
-  if !verbose then Logger.set_log_level Logger.DEBUG;
+  if !verbose then Log.set_log_level Log.DEBUG;
   if !machine_file = "" then abort "-m is mandatory";
   let hostname = Utils.hostname () in
   let int2node, _local_ds_node, local_node =

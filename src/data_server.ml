@@ -2,16 +2,11 @@ open Batteries
 open Legacy.Printf
 open Types.Protocol
 
-let ds_in_yellow = Utils.fg_yellow ^ "DS" ^ Utils.fg_reset
-
 module A  = Array
 module Fn = Filename
 module FU = FileUtil
 module IntMap = Map.Make(Int)
 module IntSet = Set.Make(Int)
-module Logger = Log
-(* prefix all logs *)
-module Log = Log.Make (struct let section = ds_in_yellow end)
 module S = String
 module Node = Types.Node
 module File = Types.File
@@ -379,9 +374,9 @@ let deref cli_sock_ref = match !cli_sock_ref with
 
 let main () =
   (* setup logger *)
-  Logger.set_log_level Logger.INFO;
-  Logger.set_output Legacy.stderr;
-  Logger.color_on ();
+  Log.set_log_level Log.INFO;
+  Log.set_output Legacy.stderr;
+  Log.color_on ();
   (* options parsing *)
   let ds_port = ref Utils.default in
   Arg.parse
@@ -396,11 +391,11 @@ let main () =
     (sprintf "usage: %s <options>" Sys.argv.(0))
   ;
   (* check options *)
-  if !verbose then Logger.set_log_level Logger.DEBUG;
+  if !verbose then Log.set_log_level Log.DEBUG;
   if !ds_port = Utils.default then abort "-p is mandatory";
   if !ds_log_fn <> "" then begin (* don't log anything before that *)
     let log_out = Legacy.open_out !ds_log_fn in
-    Logger.set_output log_out
+    Log.set_output log_out
   end;
   if !chunk_size = Utils.default then abort "-cs is mandatory";
   if !machine_file = "" then abort "-m is mandatory";
@@ -413,6 +408,7 @@ let main () =
   let mds_host = Node.get_host mds_node in
   let mds_port = Node.get_port mds_node in
   let my_rank = Node.get_rank !local_node in
+  Log.set_prefix (Utils.fg_yellow ^ (sprintf " DS-%d" my_rank) ^ Utils.fg_reset);
   assert(my_rank <> Utils.default);
   let ds_host = Node.get_host !local_node in
   assert(!ds_port = Node.get_port !local_node);
