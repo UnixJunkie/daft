@@ -28,6 +28,7 @@ for large files.
 Prerequisite: you need opam installed;
 c.f. [opam] http://opam.ocaml.org/doc/Install.html.
 
+```shell
 opam install depext
 opam depext ZMQ
 opam depext cryptokit
@@ -36,6 +37,7 @@ opam install dolog batteries fileutils ZMQ cryptokit lz4
 make config
 make build
 make install
+```
 
 ### Example user session
 
