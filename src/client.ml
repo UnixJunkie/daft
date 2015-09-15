@@ -204,6 +204,7 @@ let read_one_command is_interactive =
 
 let main () =
   (* setup logger *)
+  let log_fn = ref "" in
   Log.set_log_level Log.INFO;
   Log.set_output Legacy.stderr;
   Log.color_on ();
@@ -215,12 +216,14 @@ let main () =
       "'command' execute a single command; use quotes if several words";
       "-m", Arg.Set_string machine_file,
       "machine_file list of host:port[:mds_port] (one per line)";
+      "-o", Arg.Set_string log_fn, "<filename> where to log";
       "-p", Arg.Set_int cli_port_in, "<port> where the CLI is listening";
       "-v", Arg.Set verbose, " verbose mode"]
     (fun arg -> raise (Arg.Bad ("Bad argument: " ^ arg)))
     (sprintf "usage: %s <options>" Sys.argv.(0));
   (* check options *)
   if !verbose then Log.set_log_level Log.DEBUG;
+  if !log_fn <> "" then Log.set_output (Legacy.open_out !log_fn);
   if !machine_file = "" then abort "-m is mandatory";
   let hostname = Utils.hostname () in
   let _int2node, maybe_ds_node, mds_node =

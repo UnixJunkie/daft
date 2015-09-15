@@ -97,7 +97,6 @@ end
 let dummy_node = Node.dummy ()
 
 (* setup data server *)
-let ds_log_fn = ref ""
 let machine_file = ref ""
 let chunk_size = ref Utils.default_chunk_size (* DAFT global constant *)
 let local_state = ref FileSet.empty
@@ -378,12 +377,13 @@ let main () =
   Log.set_log_level Log.INFO;
   Log.set_output Legacy.stderr;
   Log.color_on ();
+  let log_fn = ref "" in
   (* options parsing *)
   let ds_port = ref Utils.default in
   Arg.parse
     [ "-cs", Arg.Set_int chunk_size, "<size> file chunk size";
       "-d", Arg.Set delete_datastore, " delete datastore at exit";
-      "-o", Arg.Set_string ds_log_fn, "<filename> where to log";
+      "-o", Arg.Set_string log_fn, "<filename> where to log";
       "-m", Arg.Set_string machine_file,
       "machine_file list of host:port[:mds_port] (one per line)";
       "-p", Arg.Set_int ds_port, "<port> where the CLI is listening";
@@ -393,11 +393,8 @@ let main () =
   ;
   (* check options *)
   if !verbose then Log.set_log_level Log.DEBUG;
+  if !log_fn <> "" then Log.set_output (Legacy.open_out !log_fn);
   if !ds_port = Utils.default then abort "-p is mandatory";
-  if !ds_log_fn <> "" then begin (* don't log anything before that *)
-    let log_out = Legacy.open_out !ds_log_fn in
-    Log.set_output log_out
-  end;
   if !chunk_size = Utils.default then abort "-cs is mandatory";
   if !machine_file = "" then abort "-m is mandatory";
   let ctx = ZMQ.Context.create () in

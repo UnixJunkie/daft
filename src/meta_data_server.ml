@@ -92,14 +92,17 @@ let main () =
   (* setup MDS *)
   let machine_file = ref "" in
   let verbose = ref false in
+  let log_fn = ref "" in
   Arg.parse
     [ "-m", Arg.Set_string machine_file,
       "machine_file list of [user@]host:port (one per line)";
+      "-o", Arg.Set_string log_fn, "<filename> where to log";
       "-v", Arg.Set verbose, " verbose mode"]
     (fun arg -> raise (Arg.Bad ("Bad argument: " ^ arg)))
     (sprintf "usage: %s <options>" Sys.argv.(0));
   (* check options *)
   if !verbose then Log.set_log_level Log.DEBUG;
+  if !log_fn <> "" then Log.set_output (Legacy.open_out !log_fn);
   if !machine_file = "" then abort "-m is mandatory";
   let hostname = Utils.hostname () in
   let int2node, _local_ds_node, local_node =
