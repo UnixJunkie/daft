@@ -116,7 +116,7 @@ module Command = struct
       (* FBR: give a whole listing of commands with parameters *)
   (* quick and dirty way to understand a command ASAP *)
   let of_list: string list -> t = function
-    | [] -> Skip
+    | [] | ["skip"] -> Skip
     | cmd :: args ->
       begin match cmd with
         | "b" | "bcast" ->
@@ -184,7 +184,9 @@ let read_one_command is_interactive =
     let before = Unix.gettimeofday () in
     Log.debug "command: '%s'" command_str;
     let to_parse =
-      if String.starts_with command_str "!" then
+      if String.starts_with command_str "#" then
+        ["skip"] (* comment *)
+      else if String.starts_with command_str "!" then
         (* commands starting with ! are passed to the shell
            like with any good old FTP client *)
         let (_: Unix.process_status) =
