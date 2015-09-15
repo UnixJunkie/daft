@@ -17,7 +17,7 @@ let bcast_counter = ref (-1)
 let bcast_start = ref (Unix.gettimeofday ())
 let bcast_end = ref !bcast_start
 let bcast_root_rank = ref (-1)
-let bcast_algo = ref Amoeba
+let bcast_algo = ref Binomial
 
 let send, receive = Socket_wrapper.MDS_socket.(send, receive)
 

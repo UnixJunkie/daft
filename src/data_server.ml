@@ -18,7 +18,7 @@ let send, receive = Socket_wrapper.DS_socket.(send, receive)
 
 let msg_counter = ref 0
 
-module Amoeba = struct
+module Binary = struct
   (* broadcasting technique:
      compute two children per node and stop once we are looping *)
   let incr_mod i nb_nodes =
@@ -55,7 +55,7 @@ module Amoeba = struct
 end
 
 (* maximize the number of data sources at each step of the broadcast *)
-module Well_exhaust = struct
+module Binomial = struct
   let plan (src_node: int) (nb_nodes: int): bcast_plan =
     (* IntSet union of all keys and all values lists *)
     let bindings_union m =
@@ -263,12 +263,13 @@ let send_chunk local_node to_rank int2node fn chunk_id is_last chunk_data =
     let chunk_msg = DS_to_DS (Chunk (fn, chunk_id, is_last, chunk_data)) in
     send_chunk_to local_node int2node to_rank chunk_msg
 
-let bcast_chunk_amoeba
+let bcast_chunk_binary
     local_node to_ranks int2node fn chunk_id is_last root_rank step_num chunk_data =
   (* Log.debug "to_ranks: %s" (Utils.string_of_list string_of_int "; " to_ranks); *)
   let bcast_chunk_msg =
     DS_to_DS
-      (Bcast_chunk_amoeba (fn, chunk_id, is_last, chunk_data, root_rank, step_num))
+      (Bcast_chunk_binary
+         (fn, chunk_id, is_last, chunk_data, root_rank, step_num))
   in
   let my_rank = Node.get_rank local_node in
   List.iter (fun to_rank ->
@@ -276,14 +277,14 @@ let bcast_chunk_amoeba
         send_chunk_to local_node int2node to_rank bcast_chunk_msg
     ) to_ranks
 
-let bcast_chunk_well_exhaust
+let bcast_chunk_binomial
     local_node to_ranks int2node fn chunk_id is_last plan chunk_data =
   (* Log.debug "to_ranks: %s" (Utils.string_of_list string_of_int "; " to_ranks); *)
   let my_rank = Node.get_rank local_node in
   let remaining_plan = IntMap.remove my_rank plan in
   let bcast_chunk_msg =
     DS_to_DS
-      (Bcast_chunk_well_exhaust
+      (Bcast_chunk_binomial
          (fn, chunk_id, is_last, chunk_data, remaining_plan))
   in
   List.iter (fun to_rank ->
@@ -498,9 +499,9 @@ let main () =
               (* send msg_counter !local_node (deref to_cli) *)
               (*   (DS_to_CLI Bcast_file_ack); *)
               begin match bcast_method with
-                | Amoeba ->
+                | Binary ->
                   begin
-                    match Amoeba.fork my_rank 0 my_rank nb_nodes with
+                    match Binary.fork my_rank 0 my_rank nb_nodes with
                     | [], _ -> () (* job done *)
                     | (to_ranks, step_num) ->
                       match to_ranks with
@@ -508,26 +509,26 @@ let main () =
                         for chunk_id = 0 to last_cid do
                           let chunk_data = retrieve_chunk fn chunk_id in
                           let is_last = (chunk_id = last_cid) in
-                          bcast_chunk_amoeba
+                          bcast_chunk_binary
                             !local_node to_ranks int2node fn chunk_id is_last
                             my_rank step_num chunk_data
                         done
                       | _ -> assert(false)
                   end
-                | Relay ->
+                | Chain ->
                   for chunk_id = 0 to last_cid do
                     let chunk_data = retrieve_chunk fn chunk_id in
                     let is_last = (chunk_id = last_cid) in
                     relay_chunk_or_stop
                       !local_node int2node fn chunk_id is_last my_rank chunk_data
                   done
-                | Well_exhaust ->
-                  let plan = Well_exhaust.plan my_rank nb_nodes in
+                | Binomial ->
+                  let plan = Binomial.plan my_rank nb_nodes in
                   let to_ranks = IntMap.find my_rank plan in
                   for chunk_id = 0 to last_cid do
                     let chunk_data = retrieve_chunk fn chunk_id in
                     let is_last = (chunk_id = last_cid) in
-                    bcast_chunk_well_exhaust
+                    bcast_chunk_binomial
                       !local_node to_ranks int2node fn chunk_id is_last plan chunk_data
                   done                  
               end
@@ -537,30 +538,31 @@ let main () =
             | Bcast_file_ack -> assert(false)
 	  end
 	| DS_to_DS
-            (Bcast_chunk_amoeba
+            (Bcast_chunk_binary
                (fn, chunk_id, is_last, chunk_data, root_rank, step_num)) ->
           begin
-            Log.debug "got Bcast_chunk_amoeba";
+            Log.debug "got Bcast_chunk_binary";
             store_chunk !local_node to_mds None fn chunk_id is_last chunk_data;
-            match Amoeba.fork root_rank step_num my_rank nb_nodes with
+            match Binary.fork root_rank step_num my_rank nb_nodes with
             | ([], _) -> () (* job done *)
             | (to_ranks, step_num) ->
               match to_ranks with
               | [_] | [_; _] -> (* one or two successors *)
-                bcast_chunk_amoeba !local_node to_ranks int2node fn chunk_id is_last
+                bcast_chunk_binary
+                  !local_node to_ranks int2node fn chunk_id is_last
                   root_rank step_num chunk_data
               | _ -> assert(false)
           end
 	| DS_to_DS
-            (Bcast_chunk_well_exhaust
+            (Bcast_chunk_binomial
                (fn, chunk_id, is_last, chunk_data, plan)) ->
           begin
-            Log.debug "got Bcast_chunk_well_exhaust";
+            Log.debug "got Bcast_chunk_binomial";
             store_chunk !local_node to_mds None fn chunk_id is_last chunk_data;
             try
               (* I have to continue this broadcast *)
               let to_ranks = IntMap.find my_rank plan in
-              bcast_chunk_well_exhaust
+              bcast_chunk_binomial
                 !local_node to_ranks int2node fn chunk_id is_last plan chunk_data
             with Not_found -> ()
           end

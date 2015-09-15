@@ -248,9 +248,9 @@ let hostname (): string =
   res
 
 let bcast_of_string = function
-  | "r" -> Types.Protocol.Relay
-  | "a" -> Types.Protocol.Amoeba
-  | "w" -> Types.Protocol.Well_exhaust
+  | "c" -> Types.Protocol.Chain
+  | "bina" -> Types.Protocol.Binary
+  | "bino" -> Types.Protocol.Binomial
   | x ->
     let err_msg =
       sprintf "broadcast_method: unsupported: %s (supported: s|r|a)" x
@@ -258,6 +258,6 @@ let bcast_of_string = function
     failwith err_msg
 
 let string_of_bcast = function
-  | Types.Protocol.Relay -> "r"
-  | Types.Protocol.Amoeba -> "a"
-  | Types.Protocol.Well_exhaust -> "w"
+  | Types.Protocol.Chain -> "c"
+  | Types.Protocol.Binary -> "bina"
+  | Types.Protocol.Binomial -> "bino"

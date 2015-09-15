@@ -326,7 +326,7 @@ module Protocol = struct
     int list IntMap.t (* keys: source nodes
                          values: list of destination nodes once the
                                  corresponding key/source has been filled *)
-  type bcast_method = Relay | Amoeba | Well_exhaust
+  type bcast_method = Chain | Binary | Binomial
 
   type ds_to_mds =
     | Join_push of Node.t (* a DS registering itself with the MDS *)
@@ -344,9 +344,9 @@ module Protocol = struct
   type ds_to_ds =
     | Chunk of
         filename * chunk_id * is_last * chunk_data
-    | Bcast_chunk_amoeba of
+    | Bcast_chunk_binary of
         filename * chunk_id * is_last * chunk_data * root_node * step_number
-    | Bcast_chunk_well_exhaust of
+    | Bcast_chunk_binomial of
         filename * chunk_id * is_last * chunk_data * bcast_plan
     | Relay_chunk of
         filename * chunk_id * is_last * chunk_data * root_node
