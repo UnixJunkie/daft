@@ -175,7 +175,9 @@ let read_one_command is_interactive =
       if is_interactive then
         begin
           printf "\027[1;31m> \027[0m"; (* bold-red prompt *)
-          read_line ()
+          try
+            read_line ()
+          with End_of_file -> "x" (* default to exit command *)
         end
       else !single_command
     in
