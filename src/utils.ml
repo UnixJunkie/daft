@@ -253,7 +253,7 @@ let bcast_of_string = function
   | "bino" -> Types.Protocol.Binomial
   | x ->
     let err_msg =
-      sprintf "broadcast_method: unsupported: %s (supported: s|r|a)" x
+      sprintf "broadcast_method: unsupported: %s (supported: c|bina|bino)" x
     in
     failwith err_msg
 
