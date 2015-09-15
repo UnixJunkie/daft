@@ -186,6 +186,10 @@ let decode (s: string): 'a option =
     let compression_OK = uncompress maybe_compressed in
     chain (fun x -> Some (Marshal.from_string x 0: 'a)) compression_OK
 
+let try_send (sock: [> `Push] ZMQ.Socket.t) (m: string): unit =
+  try       ZMQ.Socket.send ~block:false sock m
+  with _ -> ZMQ.Socket.send ~block:true  sock m
+
 module CLI_socket = struct
 
   let send
@@ -205,7 +209,7 @@ module CLI_socket = struct
         let to_send: to_ds = CLI_to_DS x in
         encode compression_flag counter sender to_send
     in
-    ZMQ.Socket.send sock (translate_type m)
+    try_send sock (translate_type m)
 
   let receive (sock: [> `Pull] ZMQ.Socket.t): to_cli option =
     decode (ZMQ.Socket.recv sock)
@@ -229,7 +233,7 @@ module MDS_socket = struct
         let to_send: to_cli = MDS_to_CLI x in
         encode compression_flag counter sender to_send
     in
-    ZMQ.Socket.send sock (translate_type m)
+    try_send sock (translate_type m)
 
   let receive (sock: [> `Pull] ZMQ.Socket.t): to_mds option =
     decode (ZMQ.Socket.recv sock)
@@ -256,7 +260,7 @@ module DS_socket = struct
         let to_send: to_cli = DS_to_CLI x in
         encode compression_flag counter sender to_send
     in
-    ZMQ.Socket.send sock (translate_type m)
+    try_send sock (translate_type m)
 
   let receive (sock: [> `Pull] ZMQ.Socket.t): to_ds option =
     decode (ZMQ.Socket.recv sock)
