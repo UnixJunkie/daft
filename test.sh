@@ -27,3 +27,5 @@ sleep 1s
 ./daft -v -m machines -c quit
 
 ps
+
+reset
