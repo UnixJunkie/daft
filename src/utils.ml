@@ -151,6 +151,8 @@ let string_list_of_file f =
 let parse_machine_file
     (hostname: string) (ds_port: int option) (fn: string)
   : string * string * Node.t list * Node.t option * Node.t =
+  (* check file perms since it stores keys *)
+  if Unix.((stat fn).st_perm) <> 0o600 then Log.error "perms too wide for %s" fn;
   let port_equal maybe_port p =
     match maybe_port with
     | None -> true

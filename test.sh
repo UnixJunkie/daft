@@ -5,7 +5,11 @@
 ./reset.sh
 
 host=`hostname -f`
-echo "skey:abcdefghijklmnopqrst"  > machines
+
+\rm -f machines
+touch machines
+chmod 600 machines
+echo "skey:abcdefghijklmnopqrst" >> machines
 echo "ckey:poiuytrewqlkjhgf"     >> machines
 echo $host:8083:8080             >> machines
 echo $host:8084                  >> machines
