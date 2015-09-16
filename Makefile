@@ -10,6 +10,7 @@ config:
 
 clean:
 	obuild clean
+	\rm -rf cde-package
 
 install:
 	ln -sf ${PWD}/bin/daft_ds  ${HOME}/bin/
