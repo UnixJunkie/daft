@@ -67,16 +67,31 @@ let uncompress (s: string option): string option =
     | Invalid_first_char ->
       Utils.ignore_first (Log.error "uncompress: invalid first char") None
 
-(* FBR: constant default keys for the moment
-        in the future they will be asked interactively
-        to the user at runtime *)
-let signing_key    = "sadkl;vjawfgipabvaskd;jf"
-let encryption_key = "asdfasdhfklarjbvfawejkna"
+(* options are used to crash at runtime if keys are not setup *)
+let (sign_key: string option ref) = ref None
+let (cipher_key: string option ref) = ref None
+
+let get_key = function
+  | `Sign ->
+    begin match !sign_key with
+      | Some key -> key
+      | None ->
+        let _ = Log.fatal "no sign key setup" in
+        exit 1
+    end
+  | `Cipher ->
+    begin match !cipher_key with
+      | Some key -> key
+      | None ->
+        let _ = Log.fatal "no cipher key setup" in
+        exit 1
+    end
 
 let create_signer () =
-  assert(String.length signing_key >= 20);
-  assert(encryption_key <> signing_key);
-  Cryptokit.MAC.hmac_ripemd160 signing_key
+  (* FBR: DO THIS AT KEY SETUP TIME *)
+  (* assert(String.length signing_key >= 20); *)
+  (* assert(encryption_key <> signing_key); *)
+  Cryptokit.MAC.hmac_ripemd160 (get_key `Sign)
 
 (* prefix the message with its signature
    msg --> signature|msg ; length(signature) = 20B = 160bits *)
@@ -111,7 +126,7 @@ let encrypt (msg: string): string =
   let enigma =
     new Cryptokit.Block.cipher_padded_encrypt Cryptokit.Padding.length
       (new Cryptokit.Block.cbc_encrypt
-        (new Cryptokit.Block.blowfish_encrypt encryption_key))
+        (new Cryptokit.Block.blowfish_encrypt (get_key `Cipher)))
   in
   enigma#put_string msg;
   enigma#finish;
@@ -124,7 +139,7 @@ let decrypt (s: string option): string option =
     let turing =
       new Cryptokit.Block.cipher_padded_decrypt Cryptokit.Padding.length
         (new Cryptokit.Block.cbc_decrypt
-          (new Cryptokit.Block.blowfish_decrypt encryption_key))
+          (new Cryptokit.Block.blowfish_decrypt (get_key `Cipher)))
     in
     turing#put_string msg;
     turing#finish;
