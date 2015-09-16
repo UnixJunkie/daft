@@ -1,3 +1,5 @@
+#!/bin/bash
+
 # to run local tests
 
 #set -x
