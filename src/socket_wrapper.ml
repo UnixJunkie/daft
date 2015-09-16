@@ -71,6 +71,14 @@ let uncompress (s: string option): string option =
 let (sign_key: string option ref) = ref None
 let (cipher_key: string option ref) = ref None
 
+(* check keys then store them *)
+let setup_keys skey ckey =
+  assert(String.length skey >= 20 && "length(sign_key) < 20 chars" <> "");
+  assert(String.length ckey >= 16 && "length(cipher_key) < 16 chars" <> "");
+  assert(skey <> ckey && "sign_key = cipher_key" <> "");
+  sign_key := Some skey;
+  cipher_key := Some ckey
+
 let get_key = function
   | `Sign ->
     begin match !sign_key with
