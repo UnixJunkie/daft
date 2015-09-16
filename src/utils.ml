@@ -144,9 +144,13 @@ let string_to_host_port (s: string): string * int * int option =
     (host, int_of_string ds_port_str, Some mds_port)
   | _ -> ignore_first (Log.fatal "string_to_host_port: %s" s) (exit 1)
 
+let string_list_of_file f =
+  List.of_enum (File.lines_of f)
+
 (* returns (ds_nodes, local_node, mds_node) *)
 let parse_machine_file
-    (hostname: string) (ds_port: int option) (fn: string): Node.t list * Node.t option * Node.t =
+    (hostname: string) (ds_port: int option) (fn: string)
+  : string * string * Node.t list * Node.t option * Node.t =
   let port_equal maybe_port p =
     match maybe_port with
     | None -> true
@@ -171,22 +175,28 @@ let parse_machine_file
     then local_ds_node := Some res;
     res
   in
-  let res = ref [] in
-  with_in_file fn
-    (fun input ->
-       try
-         let i = ref 0 in
-         while true do
-           let line = String.strip (Legacy.input_line input) in
-           res := (parse_machine_line !i line) :: !res;
-           incr i;
-         done
-       with End_of_file -> ()
-    );
+  (* read all lines *)
+  let lines = List.map String.strip (string_list_of_file fn) in
+  (* remove key lines *)
+  let skey_lines, other_lines =
+    List.partition (fun s -> String.starts_with s "skey:") lines
+  in
+  let ckey_lines, machine_lines =
+    List.partition (fun s -> String.starts_with s "ckey:") other_lines
+  in
+  let nb_skey_lines = List.length skey_lines in
+  let nb_ckey_lines = List.length ckey_lines in
+  if nb_skey_lines = 0 then failwith ("not skey: line in " ^ fn);
+  if nb_ckey_lines = 0 then failwith ("not ckey: line in " ^ fn);
+  if nb_skey_lines > 1 then failwith ("too many skey: lines in " ^ fn);
+  if nb_ckey_lines > 1 then failwith ("too many ckey: lines in " ^ fn);
+  let skey = String.lchop ~n:(String.length "skey:") (List.hd skey_lines) in
+  let ckey = String.lchop ~n:(String.length "ckey:") (List.hd ckey_lines) in
+  let res = List.mapi parse_machine_line machine_lines in
   if !mds_node = dummy_node then
     failwith ("missing 'host:ds_port:mds_port' line in " ^ fn)
   else
-    (L.rev !res, !local_ds_node, !mds_node)
+    (skey, ckey, res, !local_ds_node, !mds_node)
 
 exception Found of int
 
@@ -200,12 +210,14 @@ let get_ds_rank (host: string) (port: int) (nodes: Node.t list): int =
   with Found i -> i
 
 let data_nodes_array (hostname: string) (ds_port: int option) (fn: string) =
-  let machines, local_ds_node, mds_node = parse_machine_file hostname ds_port fn in
+  let skey, ckey, machines, local_ds_node, mds_node =
+    parse_machine_file hostname ds_port fn
+  in
   let len = L.length machines in
   let res = A.make len (Node.dummy (), None, None) in
   L.iter (fun node -> A.set res (Node.get_rank node) (node, None, None)
          ) machines;
-  (res, local_ds_node, mds_node)
+  (skey, ckey, res, local_ds_node, mds_node)
 
 let cleanup_data_nodes_array warn a =
   A.iteri (fun i (_ds, maybe_ds_sock, maybe_cli_sock) ->

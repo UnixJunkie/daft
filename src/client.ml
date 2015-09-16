@@ -226,9 +226,10 @@ let main () =
   if !log_fn <> "" then Log.set_output (Legacy.open_out !log_fn);
   if !machine_file = "" then abort "-m is mandatory";
   let hostname = Utils.hostname () in
-  let _int2node, maybe_ds_node, mds_node =
+  let skey, ckey, _int2node, maybe_ds_node, mds_node =
     Utils.data_nodes_array hostname None !machine_file
   in
+  Socket_wrapper.setup_keys skey ckey;
   let ds_node = Option.get maybe_ds_node in
   let mds_host = Node.get_host mds_node in
   let mds_port_in = Node.get_port mds_node in

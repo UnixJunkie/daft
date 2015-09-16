@@ -399,9 +399,10 @@ let main () =
   if !machine_file = "" then abort "-m is mandatory";
   let ctx = ZMQ.Context.create () in
   let hostname = Utils.hostname () in
-  let int2node, local_node', mds_node =
+  let skey, ckey, int2node, local_node', mds_node =
     Utils.data_nodes_array hostname (Some !ds_port) !machine_file
   in
+  Socket_wrapper.setup_keys skey ckey;
   let local_node = ref (Option.get local_node') in
   let mds_host = Node.get_host mds_node in
   let mds_port = Node.get_port mds_node in

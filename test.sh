@@ -5,9 +5,11 @@
 ./reset.sh
 
 host=`hostname -f`
-echo $host:8083:8080 > machines
-echo $host:8084 >> machines
-echo $host:8085 >> machines
+echo "skey:abcdefghijklmnopqrst"  > machines
+echo "ckey:poiuytrewqlkjhgf"     >> machines
+echo $host:8083:8080             >> machines
+echo $host:8084                  >> machines
+echo $host:8085                  >> machines
 
 ./daft_mds -v -m machines &
 
@@ -19,5 +21,3 @@ sleep 1s
 ./daft -v -m machines -c quit
 
 ps
-
-reset

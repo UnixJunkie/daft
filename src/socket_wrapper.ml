@@ -73,9 +73,9 @@ let (cipher_key: string option ref) = ref None
 
 (* check keys then store them *)
 let setup_keys skey ckey =
-  assert(String.length skey >= 20 && "length(sign_key) < 20 chars" <> "");
-  assert(String.length ckey >= 16 && "length(cipher_key) < 16 chars" <> "");
-  assert(skey <> ckey && "sign_key = cipher_key" <> "");
+  if String.length skey < 20 then failwith "length(sign_key) < 20 chars";
+  if String.length ckey < 16 then failwith "length(cipher_key) < 16 chars";
+  if skey = ckey then failwith "sign_key = cipher_key";
   sign_key := Some skey;
   cipher_key := Some ckey
 
