@@ -147,7 +147,7 @@ module Command = struct
             | None ->
               begin match get_one args with
                 | Some str ->
-                  if str = "-a" then Ls (true, None)
+                  if str = "-l" then Ls (true, None)
                   else Ls (false, Some str)
                 | None -> Ls (false, None)
               end
