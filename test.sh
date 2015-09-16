@@ -2,15 +2,7 @@
 
 #set -x
 
-function reset () {
-    pkill daft_mds    # kill MDS
-    pkill daft_ds     # kill all DSs
-    pkill daft        # kill CLI
-    \rm -rf /tmp/*.ds # clean previous local datastore
-    \rm -f CLI.msg_counter # force to start a new session
-}
-
-reset
+./reset.sh
 
 host=`hostname -f`
 echo $host:8083:8080 > machines

@@ -5,13 +5,7 @@
 obuild configure --enable-executable-debugging
 obuild build
 
-function reset () {
-    pkill daft_mds    # kill MDS
-    pkill daft_ds     # kill all DSs
-    \rm -rf /tmp/*.ds # clean previous local datastore
-}
-
-reset
+./reset.sh
 
 ./daft_mds.d -m machines -cli `hostname -f`:8000 & # one MDS
 
