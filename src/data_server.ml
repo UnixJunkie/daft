@@ -15,6 +15,7 @@ module Chunk = File.Chunk
 module ChunkSet = File.ChunkSet
 
 let send, receive = Socket_wrapper.DS_socket.(send, receive)
+let send_as_is = Socket_wrapper.DS_socket.send_as_is
 
 let msg_counter = ref 0
 
@@ -103,10 +104,6 @@ let local_state = ref FileSet.empty
 let data_store_root = ref ""
 let verbose = ref false
 let delete_datastore = ref false
-
-let abort msg =
-  Log.fatal "%s" msg;
-  exit 1
 
 (* create local data store with unix UGO rights 700
    we take into account the port so that several DSs can be started on one
@@ -199,8 +196,6 @@ let extract_file (src_fn: Types.filename) (dst_fn: Types.filename): ds_to_cli =
   else
     Fetch_file_cmd_nack (src_fn, No_such_file)
 
-exception Fatal (* throw this when we are doomed *)
-
 (* retrieve a chunk from disk *)
 let retrieve_chunk (fn: string) (chunk_id: int): string =
   try (* 1) check we have this file *)
@@ -226,33 +221,25 @@ let retrieve_chunk (fn: string) (chunk_id: int): string =
           buff
         )
     with Not_found ->
-      begin
-        Log.fatal "retrieve_chunk: no such chunk: fn: %s id: %d" fn chunk_id;
-        raise Fatal
-      end
+      Utils.abort
+        (Log.fatal "retrieve_chunk: no such chunk: fn: %s id: %d" fn chunk_id)
   with Not_found ->
-    begin
-      Log.fatal "retrieve_chunk: no such file: %s" fn;
-      raise Fatal
-    end
+    Utils.abort
+      (Log.fatal "retrieve_chunk: no such file: %s" fn)
 
 let send_chunk_to local_node int2node ds_rank something =
   (* enforce ds_rank bounds because array access soon *)
   if Utils.out_of_bounds ds_rank int2node then
-    begin
-      Log.fatal "send_chunk_to: out of bounds rank: %d" ds_rank;
-      raise Fatal
-    end
+    Utils.abort
+      (Log.fatal "send_chunk_to: out of bounds rank: %d" ds_rank)
   else match int2node.(ds_rank) with
     | (_node, Some to_ds_i, _maybe_cli_sock) ->
       (* we only try to compress file data:
          the gain is too small for commands *)
       send ~compress:true msg_counter local_node to_ds_i something
     | (_, None, _maybe_cli_sock) ->
-      begin
-        Log.fatal "send_chunk_to: no socket for DS %d" ds_rank;
-        raise Fatal
-      end
+      Utils.abort
+        (Log.fatal "send_chunk_to: no socket for DS %d" ds_rank)
 
 let send_chunk local_node to_rank int2node fn chunk_id is_last chunk_data =
   let my_rank = Node.get_rank local_node in
@@ -290,17 +277,20 @@ let bcast_chunk_binomial
       send_chunk_to local_node int2node to_rank bcast_chunk_msg
     ) to_ranks
 
-(* broadcast by only sending to next node (next_node_rank = my_rank + 1) *)
-let relay_chunk_or_stop local_node int2node fn chunk_id is_last root_rank chunk_data =
+(* broadcast by only sending to next node (mod nb_nodes) in rank order *)
+let relay_chunk_or_stop local_node int2node root_rank raw_message =
   let nb_nodes = A.length int2node in
   let my_rank = Node.get_rank local_node in
   let to_rank = (my_rank + 1) mod nb_nodes in
-  if to_rank <> root_rank then
-    let relay_chunk_msg =
-      DS_to_DS
-        (Relay_chunk (fn, chunk_id, is_last, chunk_data, root_rank))
-    in
-    send_chunk_to local_node int2node to_rank relay_chunk_msg
+  if to_rank <> root_rank && to_rank >= 0 && to_rank < nb_nodes then
+    match int2node.(to_rank) with
+    | (_node, Some to_ds_i, _maybe_cli_sock) -> send_as_is to_ds_i raw_message
+    | (_, None, _maybe_cli_sock) ->
+      Utils.abort
+        (Log.fatal "relay_chunk_or_stop: no socket for DS %d" to_rank)
+  else
+    Log.warn "relay_chunk_or_stop: invalid to_rank: %d root_rank: %d"
+      to_rank root_rank
 
 let store_chunk local_node to_mds to_cli fn chunk_id is_last data =
   let file =
@@ -372,6 +362,9 @@ let deref cli_sock_ref = match !cli_sock_ref with
   | None -> failwith "deref: to_cli socket uninitialized"
   | Some sock -> sock
 
+let abort msg =
+  Utils.abort (Log.fatal "%s" msg)
+
 let main () =
   (* setup logger *)
   Log.set_log_level Log.INFO;
@@ -440,7 +433,7 @@ let main () =
       let message' = receive incoming in
       match message' with
       | None -> Log.warn "junk"
-      | Some message ->
+      | Some (message, raw_message) ->
         match message with
         | MDS_to_DS (Send_to_req (to_rank, fn, chunk_id, is_last)) ->
           begin
@@ -515,10 +508,7 @@ let main () =
                   end
                 | Chain ->
                   for chunk_id = 0 to last_cid do
-                    let chunk_data = retrieve_chunk fn chunk_id in
-                    let is_last = (chunk_id = last_cid) in
-                    relay_chunk_or_stop
-                      !local_node int2node fn chunk_id is_last my_rank chunk_data
+                    relay_chunk_or_stop !local_node int2node my_rank raw_message
                   done
                 | Binomial ->
                   let plan = Binomial.plan my_rank nb_nodes in
@@ -528,7 +518,7 @@ let main () =
                     let is_last = (chunk_id = last_cid) in
                     bcast_chunk_binomial
                       !local_node to_ranks int2node fn chunk_id is_last plan chunk_data
-                  done                  
+                  done
               end
             | Fetch_file_cmd_nack (fn, err) ->
               send msg_counter !local_node (deref to_cli)
@@ -589,8 +579,7 @@ let main () =
           begin
             Log.debug "got Relay_chunk";
             store_chunk !local_node to_mds None fn chunk_id is_last chunk_data;
-            relay_chunk_or_stop
-              !local_node int2node fn chunk_id is_last root_rank chunk_data
+            relay_chunk_or_stop !local_node int2node root_rank raw_message
           end
     done;
     raise Types.Loop_end;
