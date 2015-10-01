@@ -275,3 +275,8 @@ let string_of_bcast = function
   | Types.Protocol.Chain -> "c"
   | Types.Protocol.Binary -> "bina"
   | Types.Protocol.Binomial -> "bino"
+
+exception Fatal (* throw this when we are doomed *)
+
+let abort _log =
+  raise Fatal
