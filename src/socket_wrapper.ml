@@ -285,7 +285,15 @@ module DS_socket = struct
     in
     try_send sock (translate_type m)
 
-  let receive (sock: [> `Pull] ZMQ.Socket.t): to_ds option =
-    decode (ZMQ.Socket.recv sock)
+  (* send a packet that was already encoded previously *)
+  let send_as_is (sock: [> `Push] ZMQ.Socket.t) (m: string): unit =
+    try_send sock m
+
+  let receive (sock: [> `Pull] ZMQ.Socket.t): (to_ds * string) option =
+    let raw_message = ZMQ.Socket.recv sock in
+    let decoded = decode raw_message in
+    match decoded with
+    | None -> None
+    | Some message -> Some (message, raw_message)
 
 end
