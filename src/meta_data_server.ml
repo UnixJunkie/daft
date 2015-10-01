@@ -39,10 +39,6 @@ let start_data_nodes _machine_fn =
   (* TODO: ssh node to start it *)
   ()
 
-let abort msg =
-  Log.fatal "%s" msg;
-  exit 1
-
 let fetch_mds local_node fn ds_rank int2node feedback_to_cli =
   try
     let file = FileSet.find_fn fn !global_state in
@@ -103,7 +99,7 @@ let main () =
   (* check options *)
   if !verbose then Log.set_log_level Log.DEBUG;
   if !log_fn <> "" then Log.set_output (Legacy.open_out !log_fn);
-  if !machine_file = "" then abort "-m is mandatory";
+  if !machine_file = "" then Utils.abort (Log.fatal "-m is mandatory");
   let hostname = Utils.hostname () in
   let skey, ckey, int2node, _local_ds_node, local_node =
     Utils.data_nodes_array hostname None !machine_file
@@ -236,8 +232,9 @@ let main () =
           else
             begin match Utils.trd3 int2node.(ds_rank) with
               | None ->
-                abort
-                  (sprintf "Ls_cmd_req: no CLI feedback sock for node %d" ds_rank)
+                Utils.abort
+                  (Log.fatal "Ls_cmd_req: no CLI feedback sock for node %d"
+                     ds_rank)
               | Some to_cli_sock ->
                 let files_list = exec_ls_command detailed maybe_fn in
                 let feedback = "" in

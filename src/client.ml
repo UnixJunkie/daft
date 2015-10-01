@@ -47,10 +47,6 @@ let forget_counter () =
       Log.info "removed %s" msg_counter_fn
     end
 
-let abort msg =
-  Log.fatal "%s" msg;
-  exit 1
-
 let do_nothing () =
   ()
 
@@ -224,7 +220,7 @@ let main () =
   (* check options *)
   if !verbose then Log.set_log_level Log.DEBUG;
   if !log_fn <> "" then Log.set_output (Legacy.open_out !log_fn);
-  if !machine_file = "" then abort "-m is mandatory";
+  if !machine_file = "" then Utils.abort (Log.fatal "-m is mandatory");
   let hostname = Utils.hostname () in
   let skey, ckey, _int2node, maybe_ds_node, mds_node =
     Utils.data_nodes_array hostname None !machine_file
