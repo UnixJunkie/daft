@@ -278,19 +278,33 @@ let bcast_chunk_binomial
     ) to_ranks
 
 (* broadcast by only sending to next node (mod nb_nodes) in rank order *)
-let relay_chunk_or_stop local_node int2node root_rank raw_message =
+let relay_chunk_or_stop my_rank int2node root_rank raw_message =
+  let nb_nodes = A.length int2node in
+  let to_rank = (my_rank + 1) mod nb_nodes in
+  if to_rank = root_rank then () (* stop *)
+  else
+    if to_rank >= 0 && to_rank < nb_nodes then
+      match int2node.(to_rank) with
+      | (_node, Some to_ds_i, _maybe_cli_sock) -> send_as_is to_ds_i raw_message
+      | (_, None, _maybe_cli_sock) ->
+        Utils.abort
+          (Log.fatal "relay_chunk_or_stop: no socket for DS %d" to_rank)
+    else
+      Log.warn "relay_chunk_or_stop: invalid to_rank: %d root_rank: %d"
+        to_rank root_rank
+
+let chain_broadcast local_node int2node fn chunk_id is_last root_rank =
   let nb_nodes = A.length int2node in
   let my_rank = Node.get_rank local_node in
   let to_rank = (my_rank + 1) mod nb_nodes in
-  if to_rank <> root_rank && to_rank >= 0 && to_rank < nb_nodes then
-    match int2node.(to_rank) with
-    | (_node, Some to_ds_i, _maybe_cli_sock) -> send_as_is to_ds_i raw_message
-    | (_, None, _maybe_cli_sock) ->
-      Utils.abort
-        (Log.fatal "relay_chunk_or_stop: no socket for DS %d" to_rank)
+  if to_rank = root_rank then () (* stop *)
   else
-    Log.warn "relay_chunk_or_stop: invalid to_rank: %d root_rank: %d"
-      to_rank root_rank
+    let chunk_data = retrieve_chunk fn chunk_id in
+    let relay_chunk_msg =
+      DS_to_DS
+        (Relay_chunk (fn, chunk_id, is_last, chunk_data, root_rank))
+    in
+    send_chunk_to local_node int2node to_rank relay_chunk_msg
 
 let store_chunk local_node to_mds to_cli fn chunk_id is_last data =
   let file =
@@ -508,7 +522,9 @@ let main () =
                   end
                 | Chain ->
                   for chunk_id = 0 to last_cid do
-                    relay_chunk_or_stop !local_node int2node my_rank raw_message
+                    let is_last = (chunk_id = last_cid) in
+                    chain_broadcast
+                      !local_node int2node fn chunk_id is_last my_rank
                   done
                 | Binomial ->
                   let plan = Binomial.plan my_rank nb_nodes in
@@ -579,7 +595,7 @@ let main () =
           begin
             Log.debug "got Relay_chunk";
             store_chunk !local_node to_mds None fn chunk_id is_last chunk_data;
-            relay_chunk_or_stop !local_node int2node root_rank raw_message
+            relay_chunk_or_stop my_rank int2node root_rank raw_message
           end
     done;
     raise Types.Loop_end;
