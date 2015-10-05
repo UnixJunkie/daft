@@ -8,14 +8,10 @@
 
 host=`hostname -f`
 
-\rm -f machines
-touch machines
-chmod 600 machines
-echo "skey:abcdefghijklmnopqrst" >> machines
-echo "ckey:poiuytrewqlkjhgf"     >> machines
-echo $host:8083:8080             >> machines
+echo $host:8083:8080              > machines
 echo $host:8084                  >> machines
 echo $host:8085                  >> machines
+chmod 600 machines
 
 # # interactive use
 # ./daft_mds -m machines &
@@ -26,6 +22,8 @@ echo $host:8085                  >> machines
 
 
 ./daft_mds -v -m machines &
+
+sleep 1s # reading /dev/random takes time
 
 ./daft_ds -v -m machines -p 8083 &
 ./daft_ds -v -m machines -p 8084 &
