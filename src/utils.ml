@@ -90,6 +90,12 @@ let with_out_file fn f =
   close_out output;
   res
 
+let append_to_file fn f =
+  let output = open_out_gen [Open_append; Open_wronly; Open_binary] 0 fn in
+  let res = f output in
+  close_out output;
+  res
+
 (* same as with_out_file but using a unix file descriptor *)
 let with_out_file_descr fn f =
   let output = Unix.(openfile fn [O_WRONLY; O_CREAT] 0o600) in
@@ -148,15 +154,22 @@ let string_list_of_file f =
   List.of_enum (File.lines_of f)
 
 (* generate secret keys to encrypt and sign messages by reading /dev/random *)
-let create_keys (): (string * string) =
+let append_keys (fn: string): unit =
   with_in_file_descr "/dev/random" (fun input ->
-      let ckey = Bytes.create 16 in
-      let skey = Bytes.create 20 in
-      really_read input ckey 16;
-      really_read input skey 20;
+      let ckey = Bytes.make 16 '\n' in
+      let skey = Bytes.make 20 '\n' in
+      while (String.contains ckey '\n') do
+        really_read input ckey 16
+      done;
+      while (String.contains skey '\n') do
+        really_read input skey 20
+      done;
       assert(String.length ckey = 16);
       assert(String.length skey = 20);
-      ("skey:" ^ skey, "ckey:" ^ ckey)
+      append_to_file fn (fun output ->
+          Legacy.output_string output (sprintf "skey:%s\n" skey);
+          Legacy.output_string output (sprintf "ckey:%s\n" ckey)
+        );
     )
 
 (* returns (ds_nodes, local_node, mds_node) *)
