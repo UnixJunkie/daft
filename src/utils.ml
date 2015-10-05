@@ -147,6 +147,18 @@ let string_to_host_port (s: string): string * int * int option =
 let string_list_of_file f =
   List.of_enum (File.lines_of f)
 
+(* generate secret keys to encrypt and sign messages by reading /dev/random *)
+let create_keys (): (string * string) =
+  with_in_file_descr "/dev/random" (fun input ->
+      let ckey = Bytes.create 16 in
+      let skey = Bytes.create 20 in
+      really_read input ckey 16;
+      really_read input skey 20;
+      assert(String.length ckey = 16);
+      assert(String.length skey = 20);
+      ("skey:" ^ skey, "ckey:" ^ ckey)
+    )
+
 (* returns (ds_nodes, local_node, mds_node) *)
 let parse_machine_file
     (hostname: string) (ds_port: int option) (fn: string)
