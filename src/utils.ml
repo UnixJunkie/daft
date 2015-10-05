@@ -156,8 +156,10 @@ let string_list_of_file f =
 (* generate secret keys to encrypt and sign messages by reading /dev/random *)
 let append_keys (fn: string): unit =
   with_in_file_descr "/dev/random" (fun input ->
-      let ckey = Bytes.make 16 '\n' in
-      let skey = Bytes.make 20 '\n' in
+      let ckey = Bytes.make 16 ' ' in
+      let skey = Bytes.make 20 ' ' in
+      really_read input ckey 16;
+      really_read input skey 20;
       while (String.contains ckey '\n') do
         really_read input ckey 16
       done;
