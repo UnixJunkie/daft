@@ -96,6 +96,12 @@ let append_to_file fn f =
   close_out output;
   res
 
+let nuke_file fn =
+  let o = open_out fn in (* zero its zise *)
+  close_out o;
+  let res = Unix.system ("rm -f " ^ fn) in
+  assert(res = Unix.WEXITED 0)
+
 (* same as with_out_file but using a unix file descriptor *)
 let with_out_file_descr fn f =
   let output = Unix.(openfile fn [O_WRONLY; O_CREAT] 0o600) in

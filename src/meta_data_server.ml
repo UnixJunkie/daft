@@ -247,10 +247,13 @@ let main () =
           Log.debug "got Quit_cmd";
           let _ = Log.info "got Quit" in
           (* send Quit to all DSs *)
-          A.iteri (fun i (_ds, maybe_sock, _maybe_cli_sock) -> match maybe_sock with
+          A.iteri (fun i (_ds, maybe_sock, _maybe_cli_sock) ->
+              match maybe_sock with
               | None -> Log.warn "DS %d missing" i
-              | Some to_DS_i -> send msg_counter local_node to_DS_i (MDS_to_DS Quit_cmd)
+              | Some to_DS_i ->
+                send msg_counter local_node to_DS_i (MDS_to_DS Quit_cmd)
             ) int2node;
+          Utils.nuke_file !machine_file;
           not_finished := false
     done;
     raise Types.Loop_end;

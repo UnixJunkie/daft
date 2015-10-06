@@ -25,6 +25,8 @@ chmod 600 machines
 
 sleep 1s # reading /dev/random takes time
 
+cat machines
+
 ./daft_ds -v -m machines -p 8083 &
 ./daft_ds -v -m machines -p 8084 &
 ./daft_ds -v -m machines -p 8085 &

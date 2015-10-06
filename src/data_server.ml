@@ -457,6 +457,7 @@ let main () =
           end
         | MDS_to_DS Quit_cmd ->
           Log.info "got Quit_cmd";
+          Utils.nuke_file !machine_file;
           not_finished := false
         | MDS_to_DS (Add_file_ack fn) ->
           Log.debug "got Add_file_ack";
