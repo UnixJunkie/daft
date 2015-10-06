@@ -4,7 +4,6 @@
 open Types.Protocol
 
 module Nonce_store = Types.Nonce_store
-module RNG = Types.RNG
 module Node = Types.Node
 
 let encryption_flag, signature_flag = true, true
@@ -96,9 +95,6 @@ let get_key = function
     end
 
 let create_signer () =
-  (* FBR: DO THIS AT KEY SETUP TIME *)
-  (* assert(String.length signing_key >= 20); *)
-  (* assert(encryption_key <> signing_key); *)
   Cryptokit.MAC.hmac_ripemd160 (get_key `Sign)
 
 (* prefix the message with its signature
@@ -154,7 +150,12 @@ let decrypt (s: string option): string option =
     Some turing#get_string
 
 (* full pipeline: compress --> salt --> nonce --> encrypt --> sign *)
-let encode (compression_flag: bool) (counter: int ref) (sender: Node.t) (m: 'a): string =
+let encode
+    (rng: Cryptokit.Random.rng)
+    (compression_flag: bool)
+    (counter: int ref)
+    (sender: Node.t)
+    (m: 'a): string =
   let no_sharing = [Marshal.No_sharing] in
   let plain_text = Marshal.to_string m no_sharing in
   let maybe_compressed =
@@ -166,8 +167,12 @@ let encode (compression_flag: bool) (counter: int ref) (sender: Node.t) (m: 'a):
   let maybe_encrypted =
     may_do encryption_flag
       (fun msg ->
-         let salt = RNG.int64 Int64.max_int in
-         (* Log.debug "enc. salt = %s" (Int64.to_string salt); *)
+         let salt = String.make 8 '0' in (* 64 bits salt *)
+         rng#random_bytes salt 0 8;
+         (*
+           let salt_hex = Utils.convert `To_hexa salt in
+           Log.debug "enc. salt = %s" salt_hex;
+         *)
          let nonce = Nonce_store.fresh counter sender in
          (* Log.debug "enc. nonce = %s" nonce; *)
          let s_n_mc = (salt, nonce, msg) in
@@ -197,9 +202,12 @@ let decode (s: string): 'a option =
         Some str
       else
         let (_salt, nonce, mc) =
-          (Marshal.from_string str 0: Int64.t * string * string)
+          (Marshal.from_string str 0: string * string * string)
         in
-        (* Log.debug "dec. salt = %s" (Int64.to_string salt); *)
+        (*
+          let salt_hex = Utils.convert `To_hexa salt in
+          Log.debug "dec. salt = %s" salt_hex;
+        *)
         (* Log.debug "dec. nonce = %s" nonce; *)
         if Nonce_store.is_fresh nonce then
           Some mc
@@ -217,6 +225,7 @@ module CLI_socket = struct
 
   let send
       ?compress:(compression_flag = false)
+      (rng: Cryptokit.Random.rng)
       (counter: int ref)
       (sender: Node.t)
       (sock: [> `Push] ZMQ.Socket.t)
@@ -227,10 +236,10 @@ module CLI_socket = struct
     let translate_type: from_cli -> string = function
       | CLI_to_MDS x ->
         let to_send: to_mds = CLI_to_MDS x in
-        encode compression_flag counter sender to_send
+        encode rng compression_flag counter sender to_send
       | CLI_to_DS x ->
         let to_send: to_ds = CLI_to_DS x in
-        encode compression_flag counter sender to_send
+        encode rng compression_flag counter sender to_send
     in
     try_send sock (translate_type m)
 
@@ -243,6 +252,7 @@ module MDS_socket = struct
 
   let send
       ?compress:(compression_flag = false)
+      (rng: Cryptokit.Random.rng)
       (counter: int ref)
       (sender: Node.t)
       (sock: [> `Push] ZMQ.Socket.t)
@@ -251,10 +261,10 @@ module MDS_socket = struct
     let translate_type: from_mds -> string = function
       | MDS_to_DS x ->
         let to_send: to_ds = MDS_to_DS x in
-        encode compression_flag counter sender to_send
+        encode rng compression_flag counter sender to_send
       | MDS_to_CLI x ->
         let to_send: to_cli = MDS_to_CLI x in
-        encode compression_flag counter sender to_send
+        encode rng compression_flag counter sender to_send
     in
     try_send sock (translate_type m)
 
@@ -267,6 +277,7 @@ module DS_socket = struct
 
   let send
       ?compress:(compression_flag = false)
+      (rng: Cryptokit.Random.rng)
       (counter: int ref)
       (sender: Node.t)
       (sock: [> `Push] ZMQ.Socket.t)
@@ -275,13 +286,13 @@ module DS_socket = struct
     let translate_type: from_ds -> string = function
       | DS_to_MDS x ->
         let to_send: to_mds = DS_to_MDS x in
-        encode compression_flag counter sender to_send
+        encode rng compression_flag counter sender to_send
       | DS_to_DS x ->
         let to_send: to_ds = DS_to_DS x in
-        encode compression_flag counter sender to_send
+        encode rng compression_flag counter sender to_send
       | DS_to_CLI x ->
         let to_send: to_cli = DS_to_CLI x in
-        encode compression_flag counter sender to_send
+        encode rng compression_flag counter sender to_send
     in
     try_send sock (translate_type m)
 

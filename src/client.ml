@@ -21,6 +21,7 @@ let machine_file = ref ""
 let verbose = ref false
 let msg_counter = ref 0
 let msg_counter_fn = "CLI.msg_counter"
+let rng = Utils.create_CSPRNG ()
 
 let backup_counter () =
   Utils.with_out_file msg_counter_fn (fun out ->
@@ -161,7 +162,7 @@ module Command = struct
 end
 
 let extract_cmd local_node src_fn dst_fn for_DS incoming =
-  send msg_counter local_node for_DS
+  send rng msg_counter local_node for_DS
     (CLI_to_DS (Extract_file_cmd_req (src_fn, dst_fn)));
   process_answer incoming do_nothing
 
@@ -244,9 +245,9 @@ let main () =
   if !msg_counter = 0 then (* start a new session *)
     begin
       (* register yourself to the local DS by telling it the port you listen to *)
-      send msg_counter local_node for_DS (CLI_to_DS (Connect_cmd_push !cli_port_in));
+      send rng msg_counter local_node for_DS (CLI_to_DS (Connect_cmd_push !cli_port_in));
       (* register yourself to the MDS *)
-      send msg_counter local_node for_MDS
+      send rng msg_counter local_node for_MDS
         (CLI_to_MDS (Connect_push (my_rank, !cli_port_in)))
     end;
   let incoming = Utils.(zmq_socket Pull ctx "*" !cli_port_in) in
@@ -262,12 +263,12 @@ let main () =
       match cmd with
       | Skip -> ()
       | Put src_fn ->
-        send msg_counter local_node for_DS
+        send rng msg_counter local_node for_DS
           (CLI_to_DS (Fetch_file_cmd_req (src_fn, Local)));
         process_answer incoming do_nothing
       | Get (src_fn, dst_fn) ->
         (* get = extract . fetch *)
-        send msg_counter local_node for_DS
+        send rng msg_counter local_node for_DS
           (CLI_to_DS (Fetch_file_cmd_req (src_fn, Remote)));
         let fetch_cont =
           (fun () -> extract_cmd local_node src_fn dst_fn for_DS incoming)
@@ -276,24 +277,24 @@ let main () =
         (* let after = Unix.gettimeofday () in *)
         (* Log.info "%.3f" (after -. before) *)
       | Fetch src_fn ->
-        send msg_counter local_node for_DS
+        send rng msg_counter local_node for_DS
           (CLI_to_DS (Fetch_file_cmd_req (src_fn, Remote)));
         process_answer incoming do_nothing
       | Extract (src_fn, dst_fn) ->
         extract_cmd local_node src_fn dst_fn for_DS incoming
       | Quit ->
-        send msg_counter local_node for_MDS (CLI_to_MDS Quit_cmd);
+        send rng msg_counter local_node for_MDS (CLI_to_MDS Quit_cmd);
         forget_counter ();
         not_finished := false
       | Exit ->
         backup_counter ();
         not_finished := false
       | Ls (detailed, maybe_fn) ->
-        send msg_counter local_node for_MDS
+        send rng msg_counter local_node for_MDS
           (CLI_to_MDS (Ls_cmd_req (my_rank, detailed, maybe_fn)));
         process_answer incoming do_nothing
       | Bcast (src_fn, bcast_method) ->
-        send msg_counter local_node for_DS
+        send rng msg_counter local_node for_DS
           (CLI_to_DS (Bcast_file_cmd_req (src_fn, bcast_method)));
         process_answer incoming do_nothing;
     done;

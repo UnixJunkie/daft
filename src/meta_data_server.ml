@@ -18,6 +18,7 @@ let bcast_start = ref (Unix.gettimeofday ())
 let bcast_end = ref !bcast_start
 let bcast_root_rank = ref (-1)
 let bcast_algo = ref Binomial
+let rng = Utils.create_CSPRNG ()
 
 let send, receive = Socket_wrapper.MDS_socket.(send, receive)
 
@@ -64,7 +65,7 @@ let fetch_mds local_node fn ds_rank int2node feedback_to_cli =
                 MDS_to_DS
                   (Send_to_req (ds_rank, fn, chunk_id, is_last))
               in
-              send msg_counter local_node to_ds_i send_order
+              send rng msg_counter local_node to_ds_i send_order
             | (_, None, _) -> assert(false)
           end
       ) chunks
@@ -77,7 +78,7 @@ let fetch_mds local_node fn ds_rank int2node feedback_to_cli =
         | None ->
           Log.warn "fetch_mds: no CLI feedback sock for node %d" ds_rank
         | Some to_cli_sock ->
-          send msg_counter local_node to_cli_sock (MDS_to_CLI (Fetch_cmd_nack fn))
+          send rng msg_counter local_node to_cli_sock (MDS_to_CLI (Fetch_cmd_nack fn))
 
 let main () =
   (* setup logger *)
@@ -159,7 +160,7 @@ let main () =
                   Add_file_ack f.name
                 end
               in
-              send msg_counter local_node receiver (MDS_to_DS ack_or_nack)
+              send rng msg_counter local_node receiver (MDS_to_DS ack_or_nack)
           end
         | DS_to_MDS (Chunk_ack (fn, chunk_id, ds_rank)) ->
           begin
@@ -173,7 +174,7 @@ let main () =
                   fn  delta;
                 (* hack for timing experiments: unlock CLI *)
                 let to_cli_sock = Option.get (Utils.trd3 int2node.(!bcast_root_rank)) in
-                send msg_counter local_node to_cli_sock (MDS_to_CLI Unlock);
+                send rng msg_counter local_node to_cli_sock (MDS_to_CLI Unlock);
               end;
             Log.debug "got Chunk_ack";
             try
@@ -240,7 +241,7 @@ let main () =
                 let files_list = exec_ls_command detailed maybe_fn in
                 let feedback = "" in
                 (* ls output can be pretty big hence it is compressed *)
-                send ~compress:true msg_counter local_node to_cli_sock
+                send ~compress:true rng msg_counter local_node to_cli_sock
                   (MDS_to_CLI (Ls_cmd_ack (files_list, feedback)))
             end
         | CLI_to_MDS Quit_cmd ->
@@ -251,7 +252,7 @@ let main () =
               match maybe_sock with
               | None -> Log.warn "DS %d missing" i
               | Some to_DS_i ->
-                send msg_counter local_node to_DS_i (MDS_to_DS Quit_cmd)
+                send rng msg_counter local_node to_DS_i (MDS_to_DS Quit_cmd)
             ) int2node;
           Utils.nuke_file !machine_file;
           not_finished := false

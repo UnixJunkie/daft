@@ -320,3 +320,6 @@ exception Fatal (* throw this when we are doomed *)
 
 let abort _log =
   raise Fatal
+
+let create_CSPRNG (): Cryptokit.Random.rng =
+  Cryptokit.(Random.pseudo_rng (Random.string Random.secure_rng 16))

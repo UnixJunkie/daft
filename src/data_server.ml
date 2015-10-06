@@ -18,6 +18,7 @@ let send, receive = Socket_wrapper.DS_socket.(send, receive)
 let send_as_is = Socket_wrapper.DS_socket.send_as_is
 
 let msg_counter = ref 0
+let rng = Utils.create_CSPRNG ()
 
 module Binary = struct
   (* broadcasting technique:
@@ -236,7 +237,7 @@ let send_chunk_to local_node int2node ds_rank something =
     | (_node, Some to_ds_i, _maybe_cli_sock) ->
       (* we only try to compress file data:
          the gain is too small for commands *)
-      send ~compress:true msg_counter local_node to_ds_i something
+      send ~compress:true rng msg_counter local_node to_ds_i something
     | (_, None, _maybe_cli_sock) ->
       Utils.abort
         (Log.fatal "send_chunk_to: no socket for DS %d" ds_rank)
@@ -355,7 +356,7 @@ let store_chunk local_node to_mds to_cli fn chunk_id is_last data =
       local_state := FileSet.update new_file !local_state;
       (* 3) notify MDS *)
       let my_rank = Node.get_rank local_node in
-      send msg_counter local_node to_mds
+      send rng msg_counter local_node to_mds
         (DS_to_MDS (Chunk_ack (fn, chunk_id, my_rank)));
       (* 4) notify CLI if all file chunks have been received
             and fix file perms in the local datastore *)
@@ -368,7 +369,7 @@ let store_chunk local_node to_mds to_cli fn chunk_id is_last data =
             match to_cli with
             | None -> () (* in case of broadcast: no feedback to CLI *)
             | Some cli_sock ->
-              send msg_counter local_node cli_sock (DS_to_CLI (Fetch_file_cmd_ack fn))
+              send rng msg_counter local_node cli_sock (DS_to_CLI (Fetch_file_cmd_ack fn))
           end
     end
 
@@ -439,7 +440,7 @@ let main () =
   (* register at the MDS *)
   Log.info "connecting to MDS %s:%d" mds_host mds_port;
   let to_mds = Utils.(zmq_socket Push ctx mds_host mds_port) in
-  send msg_counter !local_node to_mds (DS_to_MDS (Join_push !local_node));
+  send rng msg_counter !local_node to_mds (DS_to_MDS (Join_push !local_node));
   try (* loop on messages until quit command *)
     let not_finished = ref true in
     while !not_finished do
@@ -462,7 +463,7 @@ let main () =
         | MDS_to_DS (Add_file_ack fn) ->
           Log.debug "got Add_file_ack";
           (* forward the good news to the CLI *)
-          send msg_counter !local_node (deref to_cli)
+          send rng msg_counter !local_node (deref to_cli)
             (DS_to_CLI (Fetch_file_cmd_ack fn))
         | MDS_to_DS (Add_file_nack fn) ->
           Log.debug "got Add_file_nack";
@@ -470,7 +471,7 @@ let main () =
           (* quick and dirty but maybe OK: only rollback local state's view *)
           local_state := FileSet.remove_fn fn !local_state;
           (* forward nack to CLI *)
-          send msg_counter !local_node (deref to_cli)
+          send rng msg_counter !local_node (deref to_cli)
             (DS_to_CLI (Fetch_file_cmd_nack (fn, Already_here)))
         | DS_to_DS (Chunk (fn, chunk_id, is_last, data)) ->
           Log.debug "got Chunk";
@@ -483,9 +484,9 @@ let main () =
               (* notify MDS about this new file *)
               let file = FileSet.find_fn fn !local_state in
               let add_file_req = Add_file_req (my_rank, file) in
-              send msg_counter !local_node to_mds (DS_to_MDS add_file_req)
+              send rng msg_counter !local_node to_mds (DS_to_MDS add_file_req)
             | Fetch_file_cmd_nack (fn, err) ->
-              send msg_counter !local_node (deref to_cli)
+              send rng msg_counter !local_node (deref to_cli)
                 (DS_to_CLI (Fetch_file_cmd_nack (fn, err)))
             | Bcast_file_ack -> assert(false)
           end
@@ -500,9 +501,9 @@ let main () =
               let last_cid = (File.get_nb_chunks file) - 1 in
               let bcast_file_req = Bcast_file_req (my_rank, file, bcast_method) in
               (* notify MDS to allow this potentially new file *)
-	      send msg_counter !local_node to_mds (DS_to_MDS bcast_file_req);
+	      send rng msg_counter !local_node to_mds (DS_to_MDS bcast_file_req);
               (* unlock CLI !!! TURNED OFF FOR TIMING EXPERIMENTS !!! *)
-              (* send msg_counter !local_node (deref to_cli) *)
+              (* send rng msg_counter !local_node (deref to_cli) *)
               (*   (DS_to_CLI Bcast_file_ack); *)
               begin match bcast_method with
                 | Binary ->
@@ -538,7 +539,7 @@ let main () =
                   done
               end
             | Fetch_file_cmd_nack (fn, err) ->
-              send msg_counter !local_node (deref to_cli)
+              send rng msg_counter !local_node (deref to_cli)
                 (DS_to_CLI (Fetch_file_cmd_nack (fn, err)))
             | Bcast_file_ack -> assert(false)
 	  end
@@ -576,14 +577,14 @@ let main () =
           (* finish quickly in case file is already present locally *)
           if FileSet.contains_fn fn !local_state then
             let _ = Log.info "%s already here" fn in
-            send msg_counter !local_node (deref to_cli)
+            send rng msg_counter !local_node (deref to_cli)
               (DS_to_CLI (Fetch_file_cmd_ack fn))
           else (* forward request to MDS *)
-            send msg_counter !local_node to_mds
+            send rng msg_counter !local_node to_mds
               (DS_to_MDS (Fetch_file_req (Node.get_rank !local_node, fn)))
         | CLI_to_DS (Extract_file_cmd_req (src_fn, dst_fn)) ->
           let res = extract_file src_fn dst_fn in
-          send msg_counter !local_node (deref to_cli) (DS_to_CLI res)
+          send rng msg_counter !local_node (deref to_cli) (DS_to_CLI res)
         | CLI_to_DS (Connect_cmd_push cli_port) ->
           Log.debug "got Connect_cmd_push";
           (* setup socket to CLI *)
