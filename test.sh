@@ -20,7 +20,6 @@ chmod 600 machines
 # ./daft_ds  -m machines -p 8085 &
 # ./daft     -m machines -i
 
-
 ./daft_mds -v -m machines &
 
 sleep 1s # reading /dev/random takes time
