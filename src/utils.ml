@@ -153,24 +153,29 @@ let string_to_host_port (s: string): string * int * int option =
 let string_list_of_file f =
   List.of_enum (File.lines_of f)
 
+let convert (direction: [< `From_hexa | `To_hexa ]) (message: string): string =
+  let hex = match direction with
+    | `To_hexa -> Cryptokit.Hexa.encode ()
+    | `From_hexa -> Cryptokit.Hexa.decode ()
+  in
+  hex#put_string message;
+  hex#finish;
+  hex#get_string
+
 (* generate secret keys to encrypt and sign messages by reading /dev/random *)
 let append_keys (fn: string): unit =
   with_in_file_descr "/dev/random" (fun input ->
-      let ckey = Bytes.make 16 ' ' in
-      let skey = Bytes.make 20 ' ' in
+      let ckey = Bytes.make 16 '0' in
+      let skey = Bytes.make 20 '0' in
       really_read input ckey 16;
       really_read input skey 20;
-      while (String.contains ckey '\n') do
-        really_read input ckey 16
-      done;
-      while (String.contains skey '\n') do
-        really_read input skey 20
-      done;
       assert(String.length ckey = 16);
       assert(String.length skey = 20);
+      let skey_hex = convert `To_hexa skey in
+      let ckey_hex = convert `To_hexa ckey in
       append_to_file fn (fun output ->
-          Legacy.output_string output (sprintf "skey:%s\n" skey);
-          Legacy.output_string output (sprintf "ckey:%s\n" ckey)
+          Legacy.output_string output (sprintf "skey:%s\n" skey_hex);
+          Legacy.output_string output (sprintf "ckey:%s\n" ckey_hex)
         );
     )
 
@@ -219,8 +224,10 @@ let parse_machine_file
   if nb_ckey_lines = 0 then failwith ("not ckey: line in " ^ fn);
   if nb_skey_lines > 1 then failwith ("too many skey: lines in " ^ fn);
   if nb_ckey_lines > 1 then failwith ("too many ckey: lines in " ^ fn);
-  let skey = String.lchop ~n:(String.length "skey:") (List.hd skey_lines) in
-  let ckey = String.lchop ~n:(String.length "ckey:") (List.hd ckey_lines) in
+  let skey_hex = String.lchop ~n:(String.length "skey:") (List.hd skey_lines) in
+  let ckey_hex = String.lchop ~n:(String.length "ckey:") (List.hd ckey_lines) in
+  let skey = convert `From_hexa skey_hex in
+  let ckey = convert `From_hexa ckey_hex in
   let res = List.mapi parse_machine_line machine_lines in
   if !mds_node = dummy_node then
     failwith ("missing 'host:ds_port:mds_port' line in " ^ fn)
