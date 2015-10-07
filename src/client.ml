@@ -215,6 +215,11 @@ let ls dir_name =
   in
   List.sort compare (loop [] [dir_name])
 
+let put_one_file rng msg_counter local_node for_DS incoming fn =
+  send rng msg_counter local_node for_DS
+    (CLI_to_DS (Fetch_file_cmd_req (fn, Local)));
+  process_answer incoming do_nothing
+
 let main () =
   (* setup logger *)
   let log_fn = ref "" in
@@ -279,9 +284,12 @@ let main () =
       match cmd with
       | Skip -> ()
       | Put src_fn ->
-        send rng msg_counter local_node for_DS
-          (CLI_to_DS (Fetch_file_cmd_req (src_fn, Local)));
-        process_answer incoming do_nothing
+        if Utils.is_directory src_fn then
+          List.iter
+            (put_one_file rng msg_counter local_node for_DS incoming) 
+            (ls src_fn)
+        else
+          put_one_file rng msg_counter local_node for_DS incoming src_fn
       | Get (src_fn, dst_fn) ->
         (* get = extract . fetch *)
         send rng msg_counter local_node for_DS
