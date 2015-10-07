@@ -199,6 +199,22 @@ let read_one_command is_interactive =
   in
   (before, Command.of_list command_line)
 
+(* recursive ls *)
+let ls dir_name =
+  let rec loop acc = function
+    | [] -> acc
+    | fn :: fns ->
+      if Utils.is_directory fn then
+        let more_files =
+          try FU.ls fn
+          with _ -> [] (* permission denied *)
+        in
+        loop acc (List.rev_append more_files fns)
+      else
+        loop (fn :: acc) fns
+  in
+  List.sort compare (loop [] [dir_name])
+
 let main () =
   (* setup logger *)
   let log_fn = ref "" in
