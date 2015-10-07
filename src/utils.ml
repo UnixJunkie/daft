@@ -2,6 +2,7 @@
 open Printf
 
 module A = Array
+module FU = FileUtil
 module L = List
 module Node = Types.Node
 
@@ -70,6 +71,9 @@ let is_executable fn =
     try access fn [X_OK]; true
     with Unix_error (_, _, _) -> false
   )
+
+let is_directory fn =
+  FU.test FU.Is_dir fn
 
 let with_in_file fn f =
   let input = open_in fn in
