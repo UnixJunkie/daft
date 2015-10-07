@@ -1,6 +1,8 @@
 DAFT
 ====
 
+![Logo](doc/daft_logo.png?raw=true)
+
 DAFT Allows File Transfers
 
 ### Summary
