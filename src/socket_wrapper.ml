@@ -72,8 +72,6 @@ let uncompress (s: string option): string option =
       else
         raise Invalid_first_char
     with
-    | LZ4.Corrupted ->
-      Utils.ignore_first (Log.error "uncompress: corrupted") None
     | Too_short ->
       Utils.ignore_first (Log.error "uncompress: too short") None
     | Invalid_first_char ->
