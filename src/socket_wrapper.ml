@@ -6,8 +6,6 @@ open Types.Protocol
 module Nonce_store = Types.Nonce_store
 module Node = Types.Node
 
-let signature_flag = true
-
 let may_do cond f x =
   if cond then f x else x
 
@@ -176,20 +174,17 @@ let encode
     let s_n_mc = (salt, nonce, maybe_compressed) in
     let to_encrypt = Marshal.to_string s_n_mc no_sharing in
     let res = encrypt to_encrypt in
-    (* Log.debug "c: %d -> %d" (String.length msg) (String.length res); *)
+    (* Log.debug "c: %d -> %d" (String.length to_encrypt) (String.length res); *)
     res
   in
-  may_do signature_flag
-    (fun x ->
-       let res = sign x in
-       (* Log.debug "s: %d -> %d" (String.length x) (String.length res); *)
-       res
-    ) encrypted
+  let res = sign encrypted in
+  (* Log.debug "s: %d -> %d" (String.length encrypted) (String.length res); *)
+  res
 
 (* full pipeline:
    check sign --> decrypt --> check nonce --> rm salt --> uncompress *)
 let decode (s: string): 'a option =
-  let sign_OK = may_do signature_flag check_sign (Some s) in
+  let sign_OK = check_sign (Some s) in
   let cipher_OK' = decrypt sign_OK in
   match cipher_OK' with
   | None -> None
