@@ -6,7 +6,7 @@ open Types.Protocol
 module Nonce_store = Types.Nonce_store
 module Node = Types.Node
 
-let encryption_flag, signature_flag = true, true
+let signature_flag = true
 
 let may_do cond f x =
   if cond then f x else x
@@ -164,55 +164,49 @@ let encode
     else
       flag_as_not_compressed plain_text
   in
-  let maybe_encrypted =
-    may_do encryption_flag
-      (fun msg ->
-         let salt = String.make 8 '0' in (* 64 bits salt *)
-         rng#random_bytes salt 0 8;
-         (*
-           let salt_hex = Utils.convert `To_hexa salt in
-           Log.debug "enc. salt = %s" salt_hex;
-         *)
-         let nonce = Nonce_store.fresh counter sender in
-         (* Log.debug "enc. nonce = %s" nonce; *)
-         let s_n_mc = (salt, nonce, msg) in
-         let to_encrypt = Marshal.to_string s_n_mc no_sharing in
-         let res = encrypt to_encrypt in
-         (* Log.debug "c: %d -> %d" (String.length msg) (String.length res); *)
-         res
-      ) maybe_compressed
+  let encrypted =
+    let salt = String.make 8 '0' in (* 64 bits salt *)
+    rng#random_bytes salt 0 8;
+    (*
+      let salt_hex = Utils.convert `To_hexa salt in
+      Log.debug "enc. salt = %s" salt_hex;
+    *)
+    let nonce = Nonce_store.fresh counter sender in
+    (* Log.debug "enc. nonce = %s" nonce; *)
+    let s_n_mc = (salt, nonce, maybe_compressed) in
+    let to_encrypt = Marshal.to_string s_n_mc no_sharing in
+    let res = encrypt to_encrypt in
+    (* Log.debug "c: %d -> %d" (String.length msg) (String.length res); *)
+    res
   in
   may_do signature_flag
     (fun x ->
        let res = sign x in
        (* Log.debug "s: %d -> %d" (String.length x) (String.length res); *)
        res
-    ) maybe_encrypted
+    ) encrypted
 
 (* full pipeline:
    check sign --> decrypt --> check nonce --> rm salt --> uncompress *)
 let decode (s: string): 'a option =
   let sign_OK = may_do signature_flag check_sign (Some s) in
-  let cipher_OK' = may_do encryption_flag decrypt sign_OK in
+  let cipher_OK' = decrypt sign_OK in
   match cipher_OK' with
   | None -> None
   | Some str ->
     let maybe_compressed =
-      if not encryption_flag then
-        Some str
+      let (_salt, nonce, mc) =
+        (Marshal.from_string str 0: string * string * string)
+      in
+      (*
+        let salt_hex = Utils.convert `To_hexa salt in
+        Log.debug "dec. salt = %s" salt_hex;
+      *)
+      (* Log.debug "dec. nonce = %s" nonce; *)
+      if Nonce_store.is_fresh nonce then
+        Some mc
       else
-        let (_salt, nonce, mc) =
-          (Marshal.from_string str 0: string * string * string)
-        in
-        (*
-          let salt_hex = Utils.convert `To_hexa salt in
-          Log.debug "dec. salt = %s" salt_hex;
-        *)
-        (* Log.debug "dec. nonce = %s" nonce; *)
-        if Nonce_store.is_fresh nonce then
-          Some mc
-        else
-          Utils.ignore_first (Log.warn "nonce already seen: %s" nonce) None
+        Utils.ignore_first (Log.warn "nonce already seen: %s" nonce) None
     in
     let compression_OK = uncompress maybe_compressed in
     chain (fun x -> Some (Marshal.from_string x 0: 'a)) compression_OK
