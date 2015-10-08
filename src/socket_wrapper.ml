@@ -17,22 +17,40 @@ let chain f = function
 let buff_size = 1_572_864
 let buffer = Bytes.create buff_size
 
+let zlib_compress (s: string): string =
+  (* initially, we were using LZ4. We switched to gzip -1
+     to remove one library dependency *)
+  let compressor = Cryptokit.Zlib.compress ~level:1 () in
+  compressor#put_string s;
+  compressor#finish;
+  compressor#get_string
+
+let zlib_uncompress (s: string): string =
+  let decompressor = Cryptokit.Zlib.uncompress () in
+  decompressor#put_string s;
+  decompressor#finish;
+  decompressor#get_string
+
 let flag_as_compressed (s: string): string =
   "1" ^ s
 
 let flag_as_not_compressed (s: string): string =
   "0" ^ s
 
-(* hot toggable compression: never inflate messages *)
+(* hot toggable compression: never inflate messages
+   or inflate all messages with a one byte header
+   depending on how you look at it ... *)
 let compress (s: string): string =
-  let before = String.length s in
-  let after = LZ4.Bytes.compress_into (Bytes.of_string s) buffer in
-  if after >= before then
+  let original_length = String.length s in
+  let compressed = zlib_compress s in
+  let compressed_length = String.length compressed in
+  if compressed_length >= original_length then
     flag_as_not_compressed s
   else
-    let res = Bytes.sub_string buffer 0 after in
-    (* Log.debug "z: %d -> %d" before after; *)
-    flag_as_compressed res
+    begin
+      (* Log.debug "z: %d -> %d" original_length compressed_length; *)
+      flag_as_compressed compressed
+    end
 
 exception Too_short
 exception Invalid_first_char
@@ -50,10 +68,7 @@ let uncompress (s: string option): string option =
         if String.get maybe_compressed 0 = '0' then (* not compressed *)
           Some body
         else if String.get maybe_compressed 0 = '1' then (* compressed *)
-          let after =
-            LZ4.Bytes.decompress_into (Bytes.of_string body) buffer
-          in
-          Some (Bytes.sub_string buffer 0 after)
+          Some (zlib_uncompress body)
       else
         raise Invalid_first_char
     with
@@ -150,18 +165,12 @@ let decrypt (s: string option): string option =
 (* full pipeline: compress --> salt --> nonce --> encrypt --> sign *)
 let encode
     (rng: Cryptokit.Random.rng)
-    (compression_flag: bool)
     (counter: int ref)
     (sender: Node.t)
     (m: 'a): string =
   let no_sharing = [Marshal.No_sharing] in
   let plain_text = Marshal.to_string m no_sharing in
-  let maybe_compressed =
-    if compression_flag then
-      compress plain_text
-    else
-      flag_as_not_compressed plain_text
-  in
+  let maybe_compressed = compress plain_text in
   let encrypted =
     let salt = String.make 8 '0' in (* 64 bits salt *)
     rng#random_bytes salt 0 8;
@@ -213,7 +222,6 @@ let try_send (sock: [> `Push] ZMQ.Socket.t) (m: string): unit =
 module CLI_socket = struct
 
   let send
-      ?compress:(compression_flag = false)
       (rng: Cryptokit.Random.rng)
       (counter: int ref)
       (sender: Node.t)
@@ -225,10 +233,10 @@ module CLI_socket = struct
     let translate_type: from_cli -> string = function
       | CLI_to_MDS x ->
         let to_send: to_mds = CLI_to_MDS x in
-        encode rng compression_flag counter sender to_send
+        encode rng counter sender to_send
       | CLI_to_DS x ->
         let to_send: to_ds = CLI_to_DS x in
-        encode rng compression_flag counter sender to_send
+        encode rng counter sender to_send
     in
     try_send sock (translate_type m)
 
@@ -240,7 +248,6 @@ end
 module MDS_socket = struct
 
   let send
-      ?compress:(compression_flag = false)
       (rng: Cryptokit.Random.rng)
       (counter: int ref)
       (sender: Node.t)
@@ -250,10 +257,10 @@ module MDS_socket = struct
     let translate_type: from_mds -> string = function
       | MDS_to_DS x ->
         let to_send: to_ds = MDS_to_DS x in
-        encode rng compression_flag counter sender to_send
+        encode rng counter sender to_send
       | MDS_to_CLI x ->
         let to_send: to_cli = MDS_to_CLI x in
-        encode rng compression_flag counter sender to_send
+        encode rng counter sender to_send
     in
     try_send sock (translate_type m)
 
@@ -265,7 +272,6 @@ end
 module DS_socket = struct
 
   let send
-      ?compress:(compression_flag = false)
       (rng: Cryptokit.Random.rng)
       (counter: int ref)
       (sender: Node.t)
@@ -275,13 +281,13 @@ module DS_socket = struct
     let translate_type: from_ds -> string = function
       | DS_to_MDS x ->
         let to_send: to_mds = DS_to_MDS x in
-        encode rng compression_flag counter sender to_send
+        encode rng counter sender to_send
       | DS_to_DS x ->
         let to_send: to_ds = DS_to_DS x in
-        encode rng compression_flag counter sender to_send
+        encode rng counter sender to_send
       | DS_to_CLI x ->
         let to_send: to_cli = DS_to_CLI x in
-        encode rng compression_flag counter sender to_send
+        encode rng counter sender to_send
     in
     try_send sock (translate_type m)
 

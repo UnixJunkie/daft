@@ -237,7 +237,7 @@ let send_chunk_to local_node int2node ds_rank something =
     | (_node, Some to_ds_i, _maybe_cli_sock) ->
       (* we only try to compress file data:
          the gain is too small for commands *)
-      send ~compress:true rng msg_counter local_node to_ds_i something
+      send rng msg_counter local_node to_ds_i something
     | (_, None, _maybe_cli_sock) ->
       Utils.abort
         (Log.fatal "send_chunk_to: no socket for DS %d" ds_rank)

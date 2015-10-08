@@ -241,7 +241,7 @@ let main () =
                 let files_list = exec_ls_command detailed maybe_fn in
                 let feedback = "" in
                 (* ls output can be pretty big hence it is compressed *)
-                send ~compress:true rng msg_counter local_node to_cli_sock
+                send rng msg_counter local_node to_cli_sock
                   (MDS_to_CLI (Ls_cmd_ack (files_list, feedback)))
             end
         | CLI_to_MDS Quit_cmd ->
