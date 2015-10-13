@@ -33,4 +33,5 @@ cat machines
 sleep 1s
 ./daft -v -m machines -c quit
 
+sleep 1s
 ps
