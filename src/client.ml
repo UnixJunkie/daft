@@ -151,7 +151,7 @@ module Command = struct
           end
         | "p" | "put" ->
           begin match get_one args with
-            | Some fn -> Put fn
+            | Some fn -> Put (Utils.expand_filename fn)
             | None -> Log.error "\nusage: put fn" ; Skip
           end
         | "q" | "quit" -> Quit
