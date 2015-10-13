@@ -6,54 +6,39 @@ open Types.Protocol
 module Nonce_store = Types.Nonce_store
 module Node = Types.Node
 
-let may_do cond f x =
-  if cond then f x else x
+(* initially, we were using LZ4 OCaml wrappers.
+   We switched to gzip -1 to remove one library dependency *)
+let zlib direction (s: string): string =
+  let codec = match direction with
+    | `Compress -> Cryptokit.Zlib.compress ~level:1 ()
+    | `Uncompress -> Cryptokit.Zlib.uncompress ()
+  in
+  codec#put_string s;
+  codec#finish;
+  codec#get_string
 
-let chain f = function
-  | None -> None
-  | Some x -> f x
-
-(* FBR: use a BigArray as a buffer; since LZ4 can nowadays *)
-let buff_size = 1_572_864
-let buffer = Bytes.create buff_size
-
-let zlib_compress (s: string): string =
-  (* initially, we were using LZ4. We switched to gzip -1
-     to remove one library dependency *)
-  let compressor = Cryptokit.Zlib.compress ~level:1 () in
-  compressor#put_string s;
-  compressor#finish;
-  compressor#get_string
-
-let zlib_uncompress (s: string): string =
-  let decompressor = Cryptokit.Zlib.uncompress () in
-  decompressor#put_string s;
-  decompressor#finish;
-  decompressor#get_string
-
-let flag_as_compressed (s: string): string =
-  "1" ^ s
-
-let flag_as_not_compressed (s: string): string =
-  "0" ^ s
+let flag_as direction (s: string): string =
+  let flag = match direction with
+    | `Compressed -> "1"
+    | `Plain -> "0"
+  in
+  flag ^ s
 
 (* hot toggable compression: never inflate messages
-   or inflate all messages with a one byte header
+   or inflate all messages with a one byte header;
    depending on how you look at it ... *)
 let compress (s: string): string =
   let original_length = String.length s in
-  let compressed = zlib_compress s in
+  let compressed = zlib `Compress s in
   let compressed_length = String.length compressed in
   if compressed_length >= original_length then
-    flag_as_not_compressed s
+    flag_as `Plain s
   else
-    begin
-      (* Log.debug "z: %d -> %d" original_length compressed_length; *)
-      flag_as_compressed compressed
-    end
+    (* let _ = Log.debug "z: %d -> %d" original_length compressed_length in *)
+    flag_as `Compressed compressed
 
 exception Too_short
-exception Invalid_first_char
+exception Invalid_first_char of char
 
 let uncompress (s: string option): string option =
   match s with
@@ -65,22 +50,22 @@ let uncompress (s: string option): string option =
         raise Too_short
       else
         let body = String.sub maybe_compressed 1 (n - 1) in
-        if String.get maybe_compressed 0 = '0' then (* not compressed *)
-          Some body
-        else if String.get maybe_compressed 0 = '1' then (* compressed *)
-          Some (zlib_uncompress body)
-      else
-        raise Invalid_first_char
+        let flag = String.get maybe_compressed 0 in
+        match flag with
+        | '0' -> Some body (* plain *)
+        | '1' -> Some (zlib `Uncompress body) (* compressed *)
+        | c -> raise (Invalid_first_char c)
     with
     | Too_short ->
       Utils.ignore_first (Log.error "uncompress: too short") None
-    | Invalid_first_char ->
-      Utils.ignore_first (Log.error "uncompress: invalid first char") None
+    | Invalid_first_char c ->
+      Utils.ignore_first (Log.error "uncompress: invalid first char: %c" c) None
 
 (* options are used to crash at runtime if keys are not setup *)
 let (sign_key: string option ref) = ref None
 let (cipher_key: string option ref) = ref None
 
+(* NEEDS_SECURITY_REVIEW *)
 (* check keys then store them *)
 let setup_keys skey ckey =
   if String.length skey < 20 then failwith "length(sign_key) < 20 chars";
@@ -89,6 +74,7 @@ let setup_keys skey ckey =
   sign_key := Some skey;
   cipher_key := Some ckey
 
+(* NEEDS_SECURITY_REVIEW *)
 let get_key = function
   | `Sign ->
     begin match !sign_key with
@@ -105,11 +91,13 @@ let get_key = function
         exit 1
     end
 
+(* NEEDS_SECURITY_REVIEW *)
 let create_signer () =
   Cryptokit.MAC.hmac_ripemd160 (get_key `Sign)
 
 (* prefix the message with its signature
    msg --> signature|msg ; length(signature) = 20B = 160bits *)
+(* NEEDS_SECURITY_REVIEW *)
 let sign (msg: string): string =
   let signer = create_signer () in
   signer#add_string msg;
@@ -119,6 +107,7 @@ let sign (msg: string): string =
 
 (* optionally return the message without its prefix signature or None
    if the signature is incorrect or anything strange was found *)
+(* NEEDS_SECURITY_REVIEW *)
 let check_sign (s: string option): string option =
   match s with
   | None -> None
@@ -137,6 +126,7 @@ let check_sign (s: string option): string option =
       else
         Some (String.sub msg 20 m)
 
+(* NEEDS_SECURITY_REVIEW *)
 let encrypt (msg: string): string =
   let enigma =
     new Cryptokit.Block.cipher_padded_encrypt Cryptokit.Padding.length
@@ -147,6 +137,7 @@ let encrypt (msg: string): string =
   enigma#finish;
   enigma#get_string
 
+(* NEEDS_SECURITY_REVIEW *)
 let decrypt (s: string option): string option =
   match s with
   | None -> None
@@ -161,6 +152,7 @@ let decrypt (s: string option): string option =
     Some turing#get_string
 
 (* full pipeline: compress --> salt --> nonce --> encrypt --> sign *)
+(* NEEDS_SECURITY_REVIEW *)
 let encode
     (rng: Cryptokit.Random.rng)
     (counter: int ref)
@@ -190,6 +182,7 @@ let encode
 
 (* full pipeline:
    check sign --> decrypt --> check nonce --> rm salt --> uncompress *)
+(* NEEDS_SECURITY_REVIEW *)
 let decode (s: string): 'a option =
   let sign_OK = check_sign (Some s) in
   let cipher_OK' = decrypt sign_OK in
@@ -210,8 +203,9 @@ let decode (s: string): 'a option =
       else
         Utils.ignore_first (Log.warn "nonce already seen: %s" nonce) None
     in
-    let compression_OK = uncompress maybe_compressed in
-    chain (fun x -> Some (Marshal.from_string x 0: 'a)) compression_OK
+    match uncompress maybe_compressed with
+    | None -> None
+    | Some x -> Some (Marshal.from_string x 0: 'a)
 
 let try_send (sock: [> `Push] ZMQ.Socket.t) (m: string): unit =
   try       ZMQ.Socket.send ~block:false sock m
