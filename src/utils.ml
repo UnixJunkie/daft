@@ -173,6 +173,7 @@ let convert (direction: [< `From_hexa | `To_hexa ]) (message: string): string =
   hex#get_string
 
 (* generate secret keys to encrypt and sign messages by reading /dev/random *)
+(* NEEDS_SECURITY_REVIEW *)
 let append_keys (fn: string): unit =
   with_in_file_descr "/dev/random" (fun input ->
       let ckey = Bytes.make 16 '0' in
