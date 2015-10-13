@@ -328,3 +328,21 @@ let abort _log =
 
 let create_CSPRNG (): Cryptokit.Random.rng =
   Cryptokit.(Random.pseudo_rng (Random.string Random.secure_rng 16))
+
+(* convert a relative path to an absolute path, also handles filenames
+   starting with ~/ and ./ *)
+let expand_filename (fn: string): string =
+  if String.starts_with fn "/" then
+    fn (* already absolute *)
+  else if String.starts_with fn "~/" then
+    (* relative to $HOME to absolute conversion *)
+    let path = String.lchop ~n:2 fn in
+    let home = getenv_or_fail "HOME" in
+    home ^ "/" ^ path
+  else
+    (* relative to absolute conversion *)
+    let cwd = Unix.getcwd () in
+    if String.starts_with fn "./" then
+      cwd ^ "/" ^ (String.lchop ~n:2 fn)
+    else
+      cwd ^ "/" ^ fn
