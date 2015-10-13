@@ -188,7 +188,8 @@ let append_keys (fn: string): unit =
           Legacy.output_string output (sprintf "skey:%s\n" skey_hex);
           Legacy.output_string output (sprintf "ckey:%s\n" ckey_hex)
         );
-    )
+    );
+  Log.info "keys are ready"
 
 (* returns (ds_nodes, local_node, mds_node) *)
 let parse_machine_file
