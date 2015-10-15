@@ -99,7 +99,7 @@ module Command = struct
          | Exit (* to leave the CLI just temporarily *)
          | Extract of filename * filename
          | Fetch of filename
-         | Get of filename * filename (* src_fn dst_fn *) (* FBR: dst_fn should be optional *)
+         | Get of filename * filename (* src_fn [dst_fn] *)
          | Ls of bool * filename option (* ls [-a] [filename] *)
          | Put of filename (* FBR: put needs an optional dst_fn *)
          | Quit (* turn off whole system *)
@@ -120,22 +120,26 @@ module Command = struct
           begin match get_two args with
             | Some (fn, bcast_method) ->
               Bcast (fn, Utils.bcast_of_string bcast_method)
-            | None -> Log.error "\nusage: bcast fn {r|a|w}" ; Skip
+            | None -> Log.error "\nusage: bcast fn {r|a|w}"; Skip
           end
         | "e" | "extract" ->
           begin match get_two args with
             | Some (src_fn, dst_fn) -> Extract (src_fn, dst_fn)
-            | None -> Log.error "\nusage: extract src_fn dst_fn" ; Skip
+            | None -> Log.error "\nusage: extract src_fn dst_fn"; Skip
           end
         | "f" | "fetch" ->
           begin match get_one args with
             | Some fn -> Fetch fn
-            | None -> Log.error "\nusage: fetch fn" ; Skip
+            | None -> Log.error "\nusage: fetch fn"; Skip
           end
         | "g" | "get" ->
           begin match get_two args with
             | Some (src_fn, dst_fn) -> Get (src_fn, dst_fn)
-            | None -> Log.error "\nusage: get src_fn dst_fn" ; Skip
+            | None ->
+              begin match get_one args with
+                | Some src_fn -> Get (src_fn, src_fn)
+                | None -> Log.error "\nusage: get src_fn [dst_fn]"; Skip
+              end
           end
         | "h" | "help" -> usage(); Skip
         | "l" | "ls" ->
@@ -152,7 +156,7 @@ module Command = struct
         | "p" | "put" ->
           begin match get_one args with
             | Some fn -> Put (Utils.expand_filename fn)
-            | None -> Log.error "\nusage: put fn" ; Skip
+            | None -> Log.error "\nusage: put fn"; Skip
           end
         | "q" | "quit" -> Quit
         | "x" | "exit" -> Exit
