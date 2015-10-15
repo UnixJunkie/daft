@@ -289,6 +289,17 @@ module FileSet = struct
             chunks = ChunkSet.empty })
   let contains_fn fn s =
     mem (dummy_file fn) s
+  (* return the set of files of the given directory;
+     it is empty in case the directory does not exist *)
+  let find_dir dirname s =
+    let dn =
+      if String.ends_with dirname "/" then dirname
+      else dirname ^ "/"
+    in
+    let dir_files, _others =
+      partition (fun f -> String.starts_with File.(f.name) dn) s
+    in
+    dir_files
   let find_fn fn s =
     find (dummy_file fn) s
   let remove_fn fn s =
