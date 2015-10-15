@@ -273,7 +273,15 @@ module File = struct
         | Some _s -> true
         | None -> (c.id = f.nb_chunks - 1)
       )
+  (* check if 'f' is in the given 'dir' *)
+  let is_in_dir (f: t) (dir: string): bool =
+    String.starts_with f.name dir
 end
+
+(* to be unambiguous, a directory name must end with a '/' *)
+let prepare_dirname dir = 
+  if String.ends_with dir "/" then dir
+  else dir ^ "/"
 
 (* the status of the "filesystem" is just a set of files *)
 module FileSet = struct
@@ -289,16 +297,14 @@ module FileSet = struct
             chunks = ChunkSet.empty })
   let contains_fn fn s =
     mem (dummy_file fn) s
+  let contains_dir dir s =
+    let dn = prepare_dirname dir in
+    exists (fun f -> File.is_in_dir f dn) s
   (* return the set of files of the given directory;
      it is empty in case the directory does not exist *)
   let find_dir dirname s =
-    let dn =
-      if String.ends_with dirname "/" then dirname
-      else dirname ^ "/"
-    in
-    let dir_files, _others =
-      partition (fun f -> String.starts_with File.(f.name) dn) s
-    in
+    let dn = prepare_dirname dirname in
+    let dir_files, _others = partition (fun f -> File.is_in_dir f dn) s in
     dir_files
   let find_fn fn s =
     find (dummy_file fn) s
