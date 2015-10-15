@@ -192,8 +192,8 @@ let extract_file (src_fn: Types.filename) (dst_fn: Types.filename): ds_to_cli =
       let in_data_store = fn_to_path src_fn in
       (* create all necessary parent dirs *)
       FU.mkdir ~parent:true ~mode:0o700 dest_dir;
-      (* copy out of the datastore and working for directories *)
-      FU.cp ~recurse:true [in_data_store] dst_fn;
+      (* copy out of the datastore, even directories *)
+      let _ = Unix.system (sprintf "cp -a %s %s" in_data_store dst_fn) in
       Fetch_file_cmd_ack dst_fn
   else
     Fetch_file_cmd_nack (src_fn, No_such_file)
