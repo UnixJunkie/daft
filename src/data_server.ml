@@ -183,7 +183,8 @@ let add_file (local_node: Node.t) (fn: string): ds_to_cli =
 
 (* same return type than add_file, to keep the protocol small *)
 let extract_file (src_fn: Types.filename) (dst_fn: Types.filename): ds_to_cli =
-  if FileSet.contains_fn src_fn !local_state then
+  if FileSet.contains_fn src_fn !local_state ||
+     FileSet.contains_dir src_fn !local_state then
     if Sys.file_exists dst_fn then
       Fetch_file_cmd_nack (dst_fn, Already_here)
     else
@@ -191,8 +192,8 @@ let extract_file (src_fn: Types.filename) (dst_fn: Types.filename): ds_to_cli =
       let in_data_store = fn_to_path src_fn in
       (* create all necessary parent dirs *)
       FU.mkdir ~parent:true ~mode:0o700 dest_dir;
-      (* only soft link for the moment since it's fast *)
-      Unix.symlink in_data_store dst_fn;
+      (* copy out of the datastore and working for directories *)
+      FU.cp ~recurse:true [in_data_store] dst_fn;
       Fetch_file_cmd_ack dst_fn
   else
     Fetch_file_cmd_nack (src_fn, No_such_file)
@@ -575,12 +576,14 @@ let main () =
         | CLI_to_DS (Fetch_file_cmd_req (fn, Remote)) ->
           Log.debug "got Fetch_file_cmd_req:Remote";
           (* finish quickly in case file is already present locally *)
-          if FileSet.contains_fn fn !local_state then
+          if FileSet.contains_fn fn !local_state ||
+             FileSet.contains_dir fn !local_state then
             let _ = Log.info "%s already here" fn in
             send rng msg_counter !local_node (deref to_cli)
               (DS_to_CLI (Fetch_file_cmd_ack fn))
           else (* forward request to MDS *)
             send rng msg_counter !local_node to_mds
+              (* FBR: make this work for a dir *)
               (DS_to_MDS (Fetch_file_req (Node.get_rank !local_node, fn)))
         | CLI_to_DS (Extract_file_cmd_req (src_fn, dst_fn)) ->
           let res = extract_file src_fn dst_fn in
