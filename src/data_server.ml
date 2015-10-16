@@ -576,14 +576,14 @@ let main () =
         | CLI_to_DS (Fetch_file_cmd_req (fn, Remote)) ->
           Log.debug "got Fetch_file_cmd_req:Remote";
           (* finish quickly in case file is already present locally *)
-          if FileSet.contains_fn fn !local_state ||
+          if FileSet.contains_fn  fn !local_state ||
              FileSet.contains_dir fn !local_state then
             let _ = Log.info "%s already here" fn in
             send rng msg_counter !local_node (deref to_cli)
               (DS_to_CLI (Fetch_file_cmd_ack fn))
           else (* forward request to MDS *)
+            (* FBR: maybe there is a bug: fetch of a remote file never terminate in the CLI ? *)
             send rng msg_counter !local_node to_mds
-              (* FBR: make this work for a dir *)
               (DS_to_MDS (Fetch_file_req (Node.get_rank !local_node, fn)))
         | CLI_to_DS (Extract_file_cmd_req (src_fn, dst_fn)) ->
           let res = extract_file src_fn dst_fn in
@@ -605,6 +605,8 @@ let main () =
     done;
     raise Types.Loop_end;
   with exn -> begin
+      Socket_wrapper.nuke_keys ();
+      Utils.nuke_CSPRNG rng;
       if !delete_datastore then delete_data_store !data_store_root;
       ZMQ.Socket.close incoming;
       ZMQ.Socket.close to_mds;

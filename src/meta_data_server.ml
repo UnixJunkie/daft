@@ -42,6 +42,7 @@ let start_data_nodes _machine_fn =
 
 let fetch_mds local_node fn ds_rank int2node feedback_to_cli =
   try
+    (* FBR: make this work for a directory *)
     let file = FileSet.find_fn fn !global_state in
     let chunks = Types.File.get_chunks file in
     (* FBR: code logic needs to move into the File module
@@ -78,6 +79,7 @@ let fetch_mds local_node fn ds_rank int2node feedback_to_cli =
         | None ->
           Log.warn "fetch_mds: no CLI feedback sock for node %d" ds_rank
         | Some to_cli_sock ->
+          (* unlock CLI *)
           send rng msg_counter local_node to_cli_sock (MDS_to_CLI (Fetch_cmd_nack fn))
 
 let main () =
@@ -259,6 +261,8 @@ let main () =
     done;
     raise Types.Loop_end;
   with exn -> begin
+      Socket_wrapper.nuke_keys ();
+      Utils.nuke_CSPRNG rng;
       ZMQ.Socket.close incoming;
       let warn = true in
       Utils.cleanup_data_nodes_array warn int2node;

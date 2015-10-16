@@ -290,7 +290,7 @@ let main () =
       | Put src_fn ->
         if Utils.is_directory src_fn then
           List.iter
-            (put_one_file rng msg_counter local_node for_DS incoming) 
+            (put_one_file rng msg_counter local_node for_DS incoming)
             (ls src_fn)
         else
           put_one_file rng msg_counter local_node for_DS incoming src_fn
@@ -328,6 +328,8 @@ let main () =
     done;
     raise Types.Loop_end;
   with exn -> begin
+      Socket_wrapper.nuke_keys ();
+      Utils.nuke_CSPRNG rng;
       ZMQ.Socket.close for_MDS;
       ZMQ.Socket.close for_DS;
       ZMQ.Socket.close incoming;
