@@ -74,6 +74,19 @@ let setup_keys skey ckey =
   sign_key := Some skey;
   cipher_key := Some ckey
 
+let nuke_keys () =
+  let skey = BatOption.get !sign_key in
+  let ckey = BatOption.get !cipher_key in
+  Cryptokit.wipe_string skey;
+  Cryptokit.wipe_string ckey;
+  let skey_len = String.length skey in
+  let ckey_len = String.length ckey in
+  assert(ckey_len >= 16);
+  assert(skey_len >= 20)
+
+let nuke_rng (_csprng: Cryptokit.Random.rng) =
+  failwith "not implemented yet"
+
 (* NEEDS_SECURITY_REVIEW *)
 let get_key = function
   | `Sign ->
