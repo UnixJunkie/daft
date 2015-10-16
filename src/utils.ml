@@ -100,23 +100,22 @@ let append_to_file fn f =
   close_out output;
   res
 
-let run_command (cmd: string): Unix.process_status =
-  Log.info "running: %s\n" cmd;
+let run_command ?silent:(silent = false) (cmd: string): Unix.process_status =
+  if not silent then Log.info "running: %s" cmd;
   Unix.system cmd
 
 (* test if the given command is in $PATH *)
 let command_exists (cmd: string): bool =
-  Unix.system ("which " ^ cmd) = Unix.WEXITED 0
+  Unix.system ("which " ^ cmd ^ " 2>&1 > /dev/null") = Unix.WEXITED 0
 
 let nuke_file fn =
   (if command_exists "shred" then
-     ignore(run_command ("shred " ^ fn))
+     ignore(run_command ~silent:true ("shred " ^ fn))
    else
      let o = open_out fn in (* zero its zise *)
      close_out o
   );
-  let res = run_command ("rm -f " ^ fn) in
-  assert(res = Unix.WEXITED 0)
+  ignore(run_command ~silent:true ("rm -f " ^ fn))
 
 (* same as with_out_file but using a unix file descriptor *)
 let with_out_file_descr fn f =
