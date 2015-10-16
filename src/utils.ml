@@ -342,6 +342,9 @@ let abort _log =
 let create_CSPRNG (): Cryptokit.Random.rng =
   Cryptokit.(Random.pseudo_rng (Random.string Random.secure_rng 16))
 
+let nuke_CSPRNG (rng: Cryptokit.Random.rng): unit =
+  rng#wipe
+
 (* convert a relative path to an absolute path, also handles filenames
    starting with ~/ and ./ *)
 let expand_filename (fn: string): string =
