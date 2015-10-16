@@ -34,8 +34,7 @@ c.f. [opam] http://opam.ocaml.org/doc/Install.html.
 opam install depext
 opam depext ZMQ
 opam depext cryptokit
-opam depext lz4
-opam install dolog batteries fileutils ZMQ cryptokit lz4
+opam install dolog batteries fileutils ZMQ cryptokit
 make config
 make build
 make install
@@ -64,5 +63,3 @@ system, or remote).
 [fileutils] http://ocaml-fileutils.forge.ocamlcore.org/
 
 [cryptokit] https://forge.ocamlcore.org/projects/cryptokit/
-
-[lz4] https://github.com/whitequark/ocaml-lz4
