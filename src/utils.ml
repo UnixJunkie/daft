@@ -338,9 +338,11 @@ exception Fatal (* throw this when we are doomed *)
 let abort _log =
   raise Fatal
 
+(* NEEDS_SECURITY_REVIEW *)
 let create_CSPRNG (): Cryptokit.Random.rng =
   Cryptokit.(Random.pseudo_rng (Random.string Random.secure_rng 16))
 
+(* NEEDS_SECURITY_REVIEW *)
 let nuke_CSPRNG (rng: Cryptokit.Random.rng): unit =
   rng#wipe
 
