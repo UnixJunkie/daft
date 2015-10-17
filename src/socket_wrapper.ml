@@ -142,7 +142,9 @@ let encrypt (msg: string): string =
   in
   enigma#put_string msg;
   enigma#finish;
-  enigma#get_string
+  let res = enigma#get_string in
+  enigma#wipe;
+  res
 
 (* NEEDS_SECURITY_REVIEW *)
 let decrypt (s: string option): string option =
