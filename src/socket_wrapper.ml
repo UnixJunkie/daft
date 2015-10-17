@@ -109,6 +109,7 @@ let sign (msg: string): string =
   let signer = create_signer () in
   signer#add_string msg;
   let signature = signer#result in
+  signer#wipe;
   assert(String.length signature = 20);
   signature ^ msg
 
