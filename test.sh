@@ -22,7 +22,7 @@ chmod 600 machines
 
 ./daft_mds -v -m machines &
 
-sleep 1s # reading /dev/random takes time
+sleep 5s # reading /dev/random takes time
 
 cat machines
 
