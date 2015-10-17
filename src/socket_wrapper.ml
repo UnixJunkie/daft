@@ -98,20 +98,15 @@ let get_key = function
         exit 1
     end
 
+(* signature of the message (length 20B = 160bits) *)
 (* NEEDS_SECURITY_REVIEW *)
-let create_signer () =
-  Cryptokit.MAC.hmac_ripemd160 (get_key `Sign)
-
-(* prefix the message with its signature
-   msg --> signature|msg ; length(signature) = 20B = 160bits *)
-(* NEEDS_SECURITY_REVIEW *)
-let sign_substring ~pos ~len (msg: string): string =
-  let signer = create_signer () in
-  signer#add_substring msg pos len;
+let sign (msg: string): string =
+  let signer = Cryptokit.MAC.hmac_ripemd160 (get_key `Sign) in
+  signer#add_string msg;
   let signature = signer#result in
   signer#wipe;
   assert(String.length signature = 20);
-  signature ^ msg
+  signature
 
 (* optionally return the message without its prefix signature or None
    if the signature is incorrect or anything strange was found *)
@@ -121,18 +116,16 @@ let check_sign (s: string option): string option =
   | None -> None
   | Some msg ->
     let n = String.length msg in
-    if n <= 20 then
+    if n <= 21 then (* 20B signature plus at least 1B message *)
       Utils.ignore_first (Log.error "check_sign: message too short: %d" n) None
     else
       let prev_sign = String.sub msg 0 20 in
-      let signer = create_signer () in
-      let m = n - 20 in
-      signer#add_substring msg 20 m;
-      let curr_sign = signer#result in
+      let signless = String.sub msg 20 (n - 20) in
+      let curr_sign = sign signless in
       if curr_sign <> prev_sign then
         Utils.ignore_first (Log.error "check_sign: bad signature") None
       else
-        Some (String.sub msg 20 m)
+        Some signless
 
 (* NEEDS_SECURITY_REVIEW *)
 let encrypt (msg: string): string =
@@ -186,7 +179,7 @@ let encode
     (* Log.debug "c: %d -> %d" (String.length to_encrypt) (String.length res); *)
     res
   in
-  let res = sign_substring 0 (String.length encrypted) encrypted in
+  let res = (sign encrypted) ^ encrypted in
   (* Log.debug "s: %d -> %d" (String.length encrypted) (String.length res); *)
   res
 
