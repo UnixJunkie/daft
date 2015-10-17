@@ -81,9 +81,6 @@ let nuke_keys () =
   Cryptokit.wipe_string skey;
   Cryptokit.wipe_string ckey
 
-let nuke_rng (_csprng: Cryptokit.Random.rng) =
-  failwith "not implemented yet"
-
 (* NEEDS_SECURITY_REVIEW *)
 let get_key = function
   | `Sign ->
