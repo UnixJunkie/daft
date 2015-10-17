@@ -105,9 +105,9 @@ let create_signer () =
 (* prefix the message with its signature
    msg --> signature|msg ; length(signature) = 20B = 160bits *)
 (* NEEDS_SECURITY_REVIEW *)
-let sign (msg: string): string =
+let sign_substring ~pos ~len (msg: string): string =
   let signer = create_signer () in
-  signer#add_string msg;
+  signer#add_substring msg pos len;
   let signature = signer#result in
   signer#wipe;
   assert(String.length signature = 20);
@@ -186,7 +186,7 @@ let encode
     (* Log.debug "c: %d -> %d" (String.length to_encrypt) (String.length res); *)
     res
   in
-  let res = sign encrypted in
+  let res = sign_substring 0 (String.length encrypted) encrypted in
   (* Log.debug "s: %d -> %d" (String.length encrypted) (String.length res); *)
   res
 
