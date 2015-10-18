@@ -40,26 +40,23 @@ let compress (s: string): string =
 exception Too_short
 exception Invalid_first_char of char
 
-let uncompress (s: string option): string option =
-  match s with
-  | None -> None
-  | Some maybe_compressed ->
-    try
-      let n = String.length maybe_compressed in
-      if n < 2 then
-        raise Too_short
-      else
-        let body = String.sub maybe_compressed 1 (n - 1) in
-        let flag = String.get maybe_compressed 0 in
-        match flag with
-        | '0' -> Some body (* plain *)
-        | '1' -> Some (zlib `Uncompress body) (* compressed *)
-        | c -> raise (Invalid_first_char c)
-    with
-    | Too_short ->
-      Utils.ignore_first (Log.error "uncompress: too short") None
-    | Invalid_first_char c ->
-      Utils.ignore_first (Log.error "uncompress: invalid first char: %c" c) None
+let uncompress (maybe_compressed: string): string option =
+  try
+    let n = String.length maybe_compressed in
+    if n < 2 then
+      raise Too_short
+    else
+      let body = String.sub maybe_compressed 1 (n - 1) in
+      let flag = String.get maybe_compressed 0 in
+      match flag with
+      | '0' -> Some body (* plain *)
+      | '1' -> Some (zlib `Uncompress body) (* compressed *)
+      | c -> raise (Invalid_first_char c)
+  with
+  | Too_short ->
+    Utils.ignore_first (Log.error "uncompress: too short") None
+  | Invalid_first_char c ->
+    Utils.ignore_first (Log.error "uncompress: invalid first char: %c" c) None
 
 (* options are used to crash at runtime if keys are not setup *)
 let (sign_key: string option ref) = ref None
@@ -161,26 +158,24 @@ let encode
     (counter: int ref)
     (sender: Node.t)
     (m: 'a): string =
-  let no_sharing = [Marshal.No_sharing] in
-  let plain_text = Marshal.to_string m no_sharing in
+  let plain_text = Marshal.to_string m [Marshal.No_sharing] in
   let maybe_compressed = compress plain_text in
   let encrypted =
     let salt = String.make 8 '0' in (* 64 bits salt *)
     rng#random_bytes salt 0 8;
-    (*
-      let salt_hex = Utils.convert `To_hexa salt in
-      Log.debug "enc. salt = %s" salt_hex;
-    *)
+    (* let salt_hex = Utils.convert `To_hexa salt in *)
+    (* Log.debug "enc. salt = %s" salt_hex; *)
     let nonce = Nonce_store.fresh counter sender in
     (* Log.debug "enc. nonce = %s" nonce; *)
-    let s_n_mc = (salt, nonce, maybe_compressed) in
-    let to_encrypt = Marshal.to_string s_n_mc no_sharing in
+    let to_encrypt = salt ^ nonce ^ "|" ^ maybe_compressed in
     let res = encrypt to_encrypt in
-    (* Log.debug "c: %d -> %d" (String.length to_encrypt) (String.length res); *)
+    (* Log.debug "c: %d -> %d"
+         (String.length to_encrypt) (String.length res); *)
     res
   in
   let res = (sign encrypted) ^ encrypted in
-  (* Log.debug "s: %d -> %d" (String.length encrypted) (String.length res); *)
+  (* Log.debug "s: %d -> %d"
+       (String.length encrypted) (String.length res); *)
   res
 
 (* full pipeline:
@@ -192,23 +187,25 @@ let decode (s: string): 'a option =
   match cipher_OK' with
   | None -> None
   | Some str ->
-    let maybe_compressed =
-      let (_salt, nonce, mc) =
-        (Marshal.from_string str 0: string * string * string)
-      in
+    (* ignore salt: 8 first bytes *)
       (*
+        let salt = String.sub str 0 8 in
         let salt_hex = Utils.convert `To_hexa salt in
         Log.debug "dec. salt = %s" salt_hex;
       *)
-      (* Log.debug "dec. nonce = %s" nonce; *)
-      if Nonce_store.is_fresh nonce then
-        Some mc
-      else
-        Utils.ignore_first (Log.warn "nonce already seen: %s" nonce) None
-    in
-    match uncompress maybe_compressed with
-    | None -> None
-    | Some x -> Some (Marshal.from_string x 0: 'a)
+    let n = String.length str in
+    let nonce_end = String.index_from str 8 '|' in
+    assert(nonce_end > 8 && nonce_end < n);
+    let nonce = String.sub str 8 (nonce_end - 8) in
+    (* Log.debug "dec. nonce = %s" nonce; *)
+    if Nonce_store.is_fresh nonce then
+      let maybe_compressed = BatString.lchop ~n:(nonce_end + 1) str in
+      let uncompressed = uncompress maybe_compressed in
+      match uncompressed with
+      | None -> None
+      | Some u -> Some (Marshal.from_string u 0: 'a)
+    else
+      Utils.ignore_first (Log.warn "nonce already seen: %s" nonce) None
 
 let try_send (sock: [> `Push] ZMQ.Socket.t) (m: string): unit =
   try       ZMQ.Socket.send ~block:false sock m
