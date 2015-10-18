@@ -138,18 +138,17 @@ let encrypt (msg: string): string =
   res
 
 (* NEEDS_SECURITY_REVIEW *)
-let decrypt (s: string option): string option =
-  match s with
-  | None -> None
-  | Some msg ->
-    let turing =
-      new Cryptokit.Block.cipher_padded_decrypt Cryptokit.Padding.length
-        (new Cryptokit.Block.cbc_decrypt
-          (new Cryptokit.Block.blowfish_decrypt (get_key `Cipher)))
-    in
-    turing#put_string msg;
-    turing#finish;
-    Some turing#get_string
+let decrypt (msg: string): string option =
+  let turing =
+    new Cryptokit.Block.cipher_padded_decrypt Cryptokit.Padding.length
+      (new Cryptokit.Block.cbc_decrypt
+        (new Cryptokit.Block.blowfish_decrypt (get_key `Cipher)))
+  in
+  turing#put_string msg;
+  turing#finish;
+  let res = turing#get_string in
+  turing#wipe;
+  Some res
 
 (* full pipeline: compress --> salt --> nonce --> encrypt --> sign *)
 (* NEEDS_SECURITY_REVIEW *)
@@ -160,31 +159,22 @@ let encode
     (m: 'a): string =
   let plain_text = Marshal.to_string m [Marshal.No_sharing] in
   let maybe_compressed = compress plain_text in
-  let encrypted =
-    let salt = String.make 8 '0' in (* 64 bits salt *)
-    rng#random_bytes salt 0 8;
-    (* let salt_hex = Utils.convert `To_hexa salt in *)
-    (* Log.debug "enc. salt = %s" salt_hex; *)
-    let nonce = Nonce_store.fresh counter sender in
-    (* Log.debug "enc. nonce = %s" nonce; *)
-    let to_encrypt = salt ^ nonce ^ "|" ^ maybe_compressed in
-    let res = encrypt to_encrypt in
-    (* Log.debug "c: %d -> %d"
-         (String.length to_encrypt) (String.length res); *)
-    res
-  in
-  let res = (sign encrypted) ^ encrypted in
-  (* Log.debug "s: %d -> %d"
-       (String.length encrypted) (String.length res); *)
-  res
+  let salt = String.make 8 '0' in (* 64 bits salt *)
+  rng#random_bytes salt 0 8;
+  (* let salt_hex = Utils.convert `To_hexa salt in *)
+  (* Log.debug "enc. salt = %s" salt_hex; *)
+  let nonce = Nonce_store.fresh counter sender in
+  (* Log.debug "enc. nonce = %s" nonce; *)
+  let s_n_m = salt ^ nonce ^ "|" ^ maybe_compressed in
+  let signed = (sign s_n_m) ^ s_n_m in
+  encrypt signed
 
 (* full pipeline:
    check sign --> decrypt --> check nonce --> rm salt --> uncompress *)
 (* NEEDS_SECURITY_REVIEW *)
 let decode (s: string): 'a option =
-  let sign_OK = check_sign (Some s) in
-  let cipher_OK' = decrypt sign_OK in
-  match cipher_OK' with
+  let cipher_OK = decrypt s in
+  match check_sign cipher_OK with
   | None -> None
   | Some str ->
     (* ignore salt: 8 first bytes *)
