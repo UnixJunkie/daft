@@ -150,7 +150,7 @@ let decrypt (msg: string): string option =
   turing#wipe;
   Some res
 
-(* full pipeline: compress --> salt --> nonce --> encrypt --> sign *)
+(* m --> encrypt (signature ^ salt ^ nonce ^ compress(marshall m)) *)
 (* NEEDS_SECURITY_REVIEW *)
 let encode
     (rng: Cryptokit.Random.rng)
@@ -169,15 +169,12 @@ let encode
   let signed = (sign s_n_m) ^ s_n_m in
   encrypt signed
 
-(* full pipeline:
-   check sign --> decrypt --> check nonce --> rm salt --> uncompress *)
 (* NEEDS_SECURITY_REVIEW *)
 let decode (s: string): 'a option =
-  let cipher_OK = decrypt s in
-  match check_sign cipher_OK with
+  match check_sign (decrypt s) with
   | None -> None
   | Some str ->
-    (* ignore salt: 8 first bytes *)
+    (* ignore salt (8 first bytes) *)
       (*
         let salt = String.sub str 0 8 in
         let salt_hex = Utils.convert `To_hexa salt in
@@ -190,8 +187,7 @@ let decode (s: string): 'a option =
     (* Log.debug "dec. nonce = %s" nonce; *)
     if Nonce_store.is_fresh nonce then
       let maybe_compressed = BatString.lchop ~n:(nonce_end + 1) str in
-      let uncompressed = uncompress maybe_compressed in
-      match uncompressed with
+      match uncompress maybe_compressed with
       | None -> None
       | Some u -> Some (Marshal.from_string u 0: 'a)
     else
