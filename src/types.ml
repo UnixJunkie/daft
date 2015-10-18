@@ -88,9 +88,8 @@ end
 
 (* create fresh nonces and check their freshness *)
 module Nonce_store = struct
-  type t = string
   let nonces = ref StringSet.empty
-  let fresh (counter: int ref) (n: Node.t): t =
+  let fresh (counter: int ref) (n: Node.t): string =
     let nonce =
       sprintf "%s:%d:%d" (Node.get_host n) (Node.get_port n) !counter
     in
@@ -98,7 +97,7 @@ module Nonce_store = struct
     incr counter;
     nonces := StringSet.add nonce !nonces;
     nonce
-  let is_fresh (nonce: t): bool =
+  let is_fresh (nonce: string): bool =
     if StringSet.mem nonce !nonces then
       false
     else begin
