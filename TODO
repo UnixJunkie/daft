@@ -12,12 +12,6 @@ TODO
 PERFORMANCE
 ===========
 
-- we can cache chunks coming in when not in raw mode
-  - so that we don't need to compress|sign|encrypt them once
-    more in the future
-  - or use a special send function to get a copy of what is sent
-    on the wire: all broadcasting functions should use that
-
 - interesting worst case to test:
   many hosts ask for the same small file at the same time
   (if there is no load balancing, then the system behaves badly)
