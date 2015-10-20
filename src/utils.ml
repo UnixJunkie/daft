@@ -1,25 +1,25 @@
 
 open Printf
 
-module A = Array
 module FU = FileUtil
 module L = List
 module Node = Types.Node
+module IntMap = Types.IntMap
 
 let default = -1
 let default_chunk_size = 1_000_000 (* bytes *)
 
 (* ANSI terminal colors for UNIX: *)
-let fg_black = "\027[30m"
-let fg_red = "\027[31m"
-let fg_green = "\027[32m"
-let fg_yellow = "\027[33m"
-let fg_blue = "\027[34m"
+let fg_black   = "\027[30m"
+let fg_red     = "\027[31m"
+let fg_green   = "\027[32m"
+let fg_yellow  = "\027[33m"
+let fg_blue    = "\027[34m"
 let fg_magenta = "\027[35m"
-let fg_cyan = "\027[36m"
-let fg_white = "\027[37m"
+let fg_cyan    = "\027[36m"
+let fg_white   = "\027[37m"
 let fg_default = "\027[39m"
-let fg_reset = "\027[0m"
+let fg_reset   = "\027[0m"
 
 let fst3 (a, _, _) = a
 let snd3 (_, b, _) = b
@@ -37,9 +37,6 @@ let getenv_or_fail variable_name =
 let sleep_ms ms =
   let (_, _, _) = Unix.select [] [] [] (float_of_int ms /. 1000.) in
   ()
-
-let out_of_bounds i a =
-  i < 0 || i > ((A.length a) - 1)
 
 (* like `cmd` in shell
    TODO: use the one in batteries upon next release *)
@@ -267,18 +264,19 @@ let get_ds_rank (host: string) (port: int) (nodes: Node.t list): int =
     failwith (sprintf "get_ds_rank: no such ds: %s:%d" host port)
   with Found i -> i
 
-let data_nodes_array (hostname: string) (ds_port: int option) (fn: string) =
+let data_nodes (hostname: string) (ds_port: int option) (fn: string) =
   let skey, ckey, machines, local_ds_node, mds_node =
     parse_machine_file hostname ds_port fn
   in
-  let len = L.length machines in
-  let res = A.make len (Node.dummy (), None, None) in
-  L.iter (fun node -> A.set res (Node.get_rank node) (node, None, None)
-         ) machines;
-  (skey, ckey, res, local_ds_node, mds_node)
+  let res =
+    L.fold_left (fun acc node ->
+        IntMap.add (Node.get_rank node) (node, None, None) acc
+      ) IntMap.empty machines
+  in
+  (skey, ckey, ref res, local_ds_node, mds_node)
 
-let cleanup_data_nodes_array warn a =
-  A.iteri (fun i (_ds, maybe_ds_sock, maybe_cli_sock) ->
+let cleanup_data_nodes warn a =
+  IntMap.iter (fun i (_ds, maybe_ds_sock, maybe_cli_sock) ->
       match maybe_ds_sock, maybe_cli_sock with
       | Some ds_sock, Some cli_sock ->
         ZMQ.Socket.close ds_sock;
@@ -302,7 +300,7 @@ let hostname (): string =
   let n1 = host_entry.h_name in
   let l1 = String.length n1 in
   let res =
-    if A.length host_entry.h_aliases = 0 then
+    if Array.length host_entry.h_aliases = 0 then
       n1
     else
       let n2 = host_entry.h_aliases.(0) in

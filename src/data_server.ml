@@ -2,11 +2,10 @@ open Batteries
 open Legacy.Printf
 open Types.Protocol
 
-module A  = Array
 module Fn = Filename
 module FU = FileUtil
-module IntMap = Map.Make(Int)
-module IntSet = Set.Make(Int)
+module IntMap = Types.IntMap
+module IntSet = Types.IntSet
 module S = String
 module Node = Types.Node
 module File = Types.File
@@ -231,10 +230,7 @@ let retrieve_chunk (fn: string) (chunk_id: int): string =
 
 let send_chunk_to local_node int2node ds_rank something =
   (* enforce ds_rank bounds because array access soon *)
-  if Utils.out_of_bounds ds_rank int2node then
-    Utils.abort
-      (Log.fatal "send_chunk_to: out of bounds rank: %d" ds_rank)
-  else match int2node.(ds_rank) with
+  match IntMap.find ds_rank int2node with
     | (_node, Some to_ds_i, _maybe_cli_sock) ->
       (* we only try to compress file data:
          the gain is too small for commands *)
@@ -281,12 +277,12 @@ let bcast_chunk_binomial
 
 (* broadcast by only sending to next node (mod nb_nodes) in rank order *)
 let relay_chunk_or_stop my_rank int2node root_rank raw_message =
-  let nb_nodes = A.length int2node in
+  let nb_nodes = IntMap.cardinal int2node in
   let to_rank = (my_rank + 1) mod nb_nodes in
   if to_rank = root_rank then () (* stop *)
   else
     if to_rank >= 0 && to_rank < nb_nodes then
-      match int2node.(to_rank) with
+      match IntMap.find to_rank int2node with
       | (_node, Some to_ds_i, _maybe_cli_sock) -> send_as_is to_ds_i raw_message
       | (_, None, _maybe_cli_sock) ->
         Utils.abort
@@ -296,7 +292,7 @@ let relay_chunk_or_stop my_rank int2node root_rank raw_message =
         to_rank root_rank
 
 let chain_broadcast local_node int2node fn chunk_id is_last root_rank =
-  let nb_nodes = A.length int2node in
+  let nb_nodes = IntMap.cardinal int2node in
   let my_rank = Node.get_rank local_node in
   let to_rank = (my_rank + 1) mod nb_nodes in
   if to_rank = root_rank then () (* stop *)
@@ -409,7 +405,7 @@ let main () =
   let ctx = ZMQ.Context.create () in
   let hostname = Utils.hostname () in
   let skey, ckey, int2node, local_node', mds_node =
-    Utils.data_nodes_array hostname (Some !ds_port) !machine_file
+    Utils.data_nodes hostname (Some !ds_port) !machine_file
   in
   Socket_wrapper.setup_keys skey ckey;
   let local_node = ref (Option.get local_node') in
@@ -422,14 +418,17 @@ let main () =
   assert(!ds_port = Node.get_port !local_node);
   (* create a push socket for each DS, except the current one because we
      will never send to self *)
-  A.iteri (fun i (node, _ds_sock, cli_sock) ->
-      if i <> my_rank then
+  int2node :=
+    IntMap.map (fun (node, ds_sock, cli_sock) ->
+      if Node.get_rank node <> my_rank then
         let sock =
           Utils.(zmq_socket Push ctx (Node.get_host node) (Node.get_port node))
         in
-        A.set int2node i (node, Some sock, cli_sock)
-    ) int2node;
-  let nb_nodes = A.length int2node in
+        (node, Some sock, cli_sock)
+      else
+        (node, ds_sock, cli_sock)
+    ) !int2node;
+  let nb_nodes = Utils.IntMap.cardinal !int2node in
   Log.info "read %d host(s)" nb_nodes;
   Log.info "Client of MDS %s:%d" mds_host mds_port;
   data_store_root := create_data_store !local_node;
@@ -455,7 +454,7 @@ let main () =
           begin
             Log.debug "got Send_to_req";
             let chunk_data = retrieve_chunk fn chunk_id in
-            send_chunk !local_node to_rank int2node fn chunk_id is_last chunk_data
+            send_chunk !local_node to_rank !int2node fn chunk_id is_last chunk_data
           end
         | MDS_to_DS Quit_cmd ->
           Log.info "got Quit_cmd";
@@ -518,7 +517,7 @@ let main () =
                           let chunk_data = retrieve_chunk fn chunk_id in
                           let is_last = (chunk_id = last_cid) in
                           bcast_chunk_binary
-                            !local_node to_ranks int2node fn chunk_id is_last
+                            !local_node to_ranks !int2node fn chunk_id is_last
                             my_rank step_num chunk_data
                         done
                       | _ -> assert(false)
@@ -527,7 +526,7 @@ let main () =
                   for chunk_id = 0 to last_cid do
                     let is_last = (chunk_id = last_cid) in
                     chain_broadcast
-                      !local_node int2node fn chunk_id is_last my_rank
+                      !local_node !int2node fn chunk_id is_last my_rank
                   done
                 | Binomial ->
                   let plan = Binomial.plan my_rank nb_nodes in
@@ -536,7 +535,7 @@ let main () =
                     let chunk_data = retrieve_chunk fn chunk_id in
                     let is_last = (chunk_id = last_cid) in
                     bcast_chunk_binomial
-                      !local_node to_ranks int2node fn chunk_id is_last plan chunk_data
+                      !local_node to_ranks !int2node fn chunk_id is_last plan chunk_data
                   done
               end
             | Fetch_file_cmd_nack (fn, err) ->
@@ -556,7 +555,7 @@ let main () =
               match to_ranks with
               | [_] | [_; _] -> (* one or two successors *)
                 bcast_chunk_binary
-                  !local_node to_ranks int2node fn chunk_id is_last
+                  !local_node to_ranks !int2node fn chunk_id is_last
                   root_rank step_num chunk_data
               | _ -> assert(false)
           end
@@ -570,7 +569,7 @@ let main () =
               (* I have to continue this broadcast *)
               let to_ranks = IntMap.find my_rank plan in
               bcast_chunk_binomial
-                !local_node to_ranks int2node fn chunk_id is_last plan chunk_data
+                !local_node to_ranks !int2node fn chunk_id is_last plan chunk_data
             with Not_found -> ()
           end
         | CLI_to_DS (Fetch_file_cmd_req (fn, Remote)) ->
@@ -600,7 +599,7 @@ let main () =
           begin
             Log.debug "got Relay_chunk";
             store_chunk !local_node to_mds None fn chunk_id is_last chunk_data;
-            relay_chunk_or_stop my_rank int2node root_rank raw_message
+            relay_chunk_or_stop my_rank !int2node root_rank raw_message
           end
     done;
     raise Types.Loop_end;
@@ -615,7 +614,7 @@ let main () =
        | None -> () (* no CLI ever registered with us *)
       );
       let dont_warn = false in
-      Utils.cleanup_data_nodes_array dont_warn int2node;
+      Utils.cleanup_data_nodes dont_warn !int2node;
       ZMQ.Context.terminate ctx;
       begin match exn with
         | Types.Loop_end -> ()

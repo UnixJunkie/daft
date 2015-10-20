@@ -2,11 +2,11 @@ open Batteries
 open Legacy.Printf
 open Types.Protocol
 
-module A = Array
 module Ht = Hashtbl
 module FileSet = Types.FileSet
 module File = Types.File
 module Chunk = Types.File.Chunk
+module IntMap = Types.IntMap
 module L = List
 module Node = Types.Node
 
@@ -59,7 +59,7 @@ let fetch_mds local_node fn ds_rank int2node feedback_to_cli =
         else
           let selected_src_node = Chunk.select_source_rand chunk in
           let chosen = Node.get_rank selected_src_node in
-          begin match int2node.(chosen) with
+          match IntMap.find chosen int2node with
             | (_node, Some to_ds_i, _maybe_cli_sock) ->
               let is_last = File.is_last_chunk chunk file in
               let send_order =
@@ -68,19 +68,15 @@ let fetch_mds local_node fn ds_rank int2node feedback_to_cli =
               in
               send rng msg_counter local_node to_ds_i send_order
             | (_, None, _) -> assert(false)
-          end
       ) chunks
   with Not_found ->
     if feedback_to_cli then
-      if Utils.out_of_bounds ds_rank int2node then
-        Log.error "fetch_mds: fn: %s invalid ds_rank: %d"
-          fn ds_rank
-      else match Utils.trd3 int2node.(ds_rank) with
-        | None ->
-          Log.warn "fetch_mds: no CLI feedback sock for node %d" ds_rank
-        | Some to_cli_sock ->
-          (* unlock CLI *)
-          send rng msg_counter local_node to_cli_sock (MDS_to_CLI (Fetch_cmd_nack fn))
+      match Utils.trd3 (IntMap.find ds_rank int2node) with
+        | None -> Log.warn "fetch_mds: no CLI feedback sock for node %d"
+                    ds_rank
+        | Some to_cli_sock -> (* unlock CLI *)
+          send rng msg_counter local_node to_cli_sock
+            (MDS_to_CLI (Fetch_cmd_nack fn))
 
 let main () =
   (* setup logger *)
@@ -106,10 +102,10 @@ let main () =
   let hostname = Utils.hostname () in
   Utils.append_keys !machine_file;
   let skey, ckey, int2node, _local_ds_node, local_node =
-    Utils.data_nodes_array hostname None !machine_file
+    Utils.data_nodes hostname None !machine_file
   in
   Socket_wrapper.setup_keys skey ckey;
-  Log.info "read %d host(s)" (A.length int2node);
+  Log.info "read %d host(s)" (IntMap.cardinal !int2node);
   start_data_nodes !machine_file;
   let mds_port = Node.get_port local_node in
   (* start server *)
@@ -132,25 +128,23 @@ let main () =
           Log.info "DS %s Join req" ds_as_string;
           let ds_rank, ds_host, ds_port_in, _ds_cli_port = Node.to_quad ds in
           (* check it is the one we expect at that rank *)
-          if Utils.out_of_bounds ds_rank int2node then
-            Log.warn "suspicious rank %d in Join_push" ds_rank
-          else
-            let expected_ds, prev_ds_sock, prev_cli_sock = int2node.(ds_rank) in
-            begin match prev_ds_sock with
-              | Some _ -> Log.warn "%s already joined" ds_as_string
-              | None -> (* remember him for the future *)
-                if ds = expected_ds then
-                  let sock = Utils.(zmq_socket Push ctx ds_host ds_port_in) in
-                  A.set int2node ds_rank (ds, Some sock, prev_cli_sock)
-                else
-                  Log.warn "suspicious Join req from %s" ds_as_string;
-            end
+          let expected_ds, prev_ds_sock, prev_cli_sock =
+            IntMap.find ds_rank !int2node
+          in
+          begin match prev_ds_sock with
+            | Some _ -> Log.warn "%s already joined" ds_as_string
+            | None -> (* remember him for the future *)
+              if ds = expected_ds then
+                let sock = Utils.(zmq_socket Push ctx ds_host ds_port_in) in
+                  int2node :=
+                    IntMap.add ds_rank (ds, Some sock, prev_cli_sock) !int2node
+              else
+                Log.warn "suspicious Join req from %s" ds_as_string;
+          end
         | DS_to_MDS (Add_file_req (ds_rank, f)) ->
           Log.debug "got Add_file_req";
           let open Types.File in
-          if Utils.out_of_bounds ds_rank int2node then
-            Log.warn "suspicious rank %d in Add_file_req" ds_rank
-          else begin match Utils.snd3 int2node.(ds_rank) with
+          begin match Utils.snd3 (IntMap.find ds_rank !int2node) with
             | None -> Log.warn "cannot send nack of %s to %d" f.name ds_rank
             | Some receiver ->
               let ack_or_nack =
@@ -172,10 +166,10 @@ let main () =
                 bcast_end := Unix.gettimeofday();
                 let delta = !bcast_end -. !bcast_start in
                 Log.info "bcast-chrono: %d %s %s %.3f"
-                  (A.length int2node) (Utils.string_of_bcast !bcast_algo)
+                  (IntMap.cardinal !int2node) (Utils.string_of_bcast !bcast_algo)
                   fn  delta;
                 (* hack for timing experiments: unlock CLI *)
-                let to_cli_sock = Option.get (Utils.trd3 int2node.(!bcast_root_rank)) in
+                let to_cli_sock = Option.get (Utils.trd3 (IntMap.find !bcast_root_rank !int2node)) in
                 send rng msg_counter local_node to_cli_sock (MDS_to_CLI Unlock);
               end;
             Log.debug "got Chunk_ack";
@@ -186,15 +180,10 @@ let main () =
                 (* 2) does it have this chunk ? *)
                 let prev_chunk = File.find_chunk_id chunk_id file in
                 (* 3) update global state: this chunk is owned by one more DS *)
-                if Utils.out_of_bounds ds_rank int2node then
-                  Log.warn
-                    "invalid ds_rank in Chunk_ack: fn: %s chunk_id: %d \
-                     ds_rank: %d" fn chunk_id ds_rank
-                else
-                  let new_source = Utils.fst3 int2node.(ds_rank) in
-                  let new_chunk = Chunk.add_source prev_chunk new_source in
-                  let new_file = File.update_chunk file new_chunk in
-                  global_state := FileSet.update new_file !global_state
+                let new_source = Utils.fst3 (IntMap.find ds_rank !int2node) in
+                let new_chunk = Chunk.add_source prev_chunk new_source in
+                let new_file = File.update_chunk file new_chunk in
+                global_state := FileSet.update new_file !global_state
               with Not_found ->
                 Log.error "Chunk_ack: unknown chunk: %s chunk_id: %d"
                   fn chunk_id
@@ -204,7 +193,7 @@ let main () =
           end
         | DS_to_MDS (Fetch_file_req (ds_rank, fn)) ->
 	  Log.debug "got Fetch_file_req";
-	  fetch_mds local_node fn ds_rank int2node true
+	  fetch_mds local_node fn ds_rank !int2node true
         | DS_to_MDS (Bcast_file_req (ds_rank, f, bcast_method)) ->
           begin
             bcast_start := Unix.gettimeofday();
@@ -216,25 +205,19 @@ let main () =
             else
               global_state := FileSet.add f !global_state;
             (* for bcast_chrono *)
-            bcast_counter := (File.get_nb_chunks f) * (A.length int2node - 1);
+            bcast_counter := (File.get_nb_chunks f) * (IntMap.cardinal !int2node - 1);
             Log.info "bcast_counter: %d" !bcast_counter;
           end
         | CLI_to_MDS (Connect_push (ds_rank, cli_port)) ->
           Log.debug "got Connect_push rank: %d port: %d" ds_rank cli_port;
-          if Utils.out_of_bounds ds_rank int2node then
-            Log.error "Connect_push: invalid ds_rank: %d" ds_rank
-          else
-            let node, ds_sock, maybe_cli_sock = int2node.(ds_rank) in
+            let node, ds_sock, maybe_cli_sock = IntMap.find ds_rank !int2node in
             assert(Option.is_some ds_sock); (* already a DS sock *)
             assert(Option.is_none maybe_cli_sock); (* not yet a CLI sock *)
             let cli_sock = Utils.(zmq_socket Push ctx (Node.get_host node) cli_port) in
-            A.set int2node ds_rank (node, ds_sock, Some cli_sock)
+            int2node := IntMap.add ds_rank (node, ds_sock, Some cli_sock) !int2node
         | CLI_to_MDS (Ls_cmd_req (ds_rank, detailed, maybe_fn)) ->
           Log.debug "got Ls_cmd_req";
-          if Utils.out_of_bounds ds_rank int2node then
-            Log.error "Ls_cmd_req: invalid ds_rank: %d" ds_rank
-          else
-            begin match Utils.trd3 int2node.(ds_rank) with
+            begin match Utils.trd3 (IntMap.find ds_rank !int2node) with
               | None ->
                 Utils.abort
                   (Log.fatal "Ls_cmd_req: no CLI feedback sock for node %d"
@@ -250,12 +233,12 @@ let main () =
           Log.debug "got Quit_cmd";
           let _ = Log.info "got Quit" in
           (* send Quit to all DSs *)
-          A.iteri (fun i (_ds, maybe_sock, _maybe_cli_sock) ->
+          IntMap.iter (fun i (_ds, maybe_sock, _maybe_cli_sock) ->
               match maybe_sock with
               | None -> Log.warn "DS %d missing" i
               | Some to_DS_i ->
                 send rng msg_counter local_node to_DS_i (MDS_to_DS Quit_cmd)
-            ) int2node;
+            ) !int2node;
           Utils.nuke_file !machine_file;
           not_finished := false
     done;
@@ -265,7 +248,7 @@ let main () =
       Utils.nuke_CSPRNG rng;
       ZMQ.Socket.close incoming;
       let warn = true in
-      Utils.cleanup_data_nodes_array warn int2node;
+      Utils.cleanup_data_nodes warn !int2node;
       ZMQ.Context.terminate ctx;
       begin match exn with
         | Types.Loop_end -> ()

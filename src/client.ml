@@ -249,7 +249,7 @@ let main () =
   if !machine_file = "" then Utils.abort (Log.fatal "-m is mandatory");
   let hostname = Utils.hostname () in
   let skey, ckey, _int2node, maybe_ds_node, mds_node =
-    Utils.data_nodes_array hostname None !machine_file
+    Utils.data_nodes hostname None !machine_file
   in
   Socket_wrapper.setup_keys skey ckey;
   let ds_node = Option.get maybe_ds_node in

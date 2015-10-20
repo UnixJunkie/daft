@@ -4,7 +4,8 @@ open Legacy.Printf
 exception Loop_end
 
 module FU = FileUtil
-module IntMap = Map.Make(Int)
+module IntMap = Map.Make(BatInt)
+module IntSet = Set.Make(BatInt)
 
 (* some type aliases to make signatures more readable *)
 type chunk_data = string
