@@ -8,9 +8,9 @@
 
 host=`hostname -f`
 
-echo $host:8083:8080              > machines
-echo $host:8084                  >> machines
-echo $host:8085                  >> machines
+echo $host:8083:8080  > machines
+echo $host:8084      >> machines
+echo $host:8085      >> machines
 chmod 600 machines
 
 # # interactive use
