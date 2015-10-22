@@ -38,6 +38,29 @@ let sleep_ms ms =
   let (_, _, _) = Unix.select [] [] [] (float_of_int ms /. 1000.) in
   ()
 
+exception Lock_acquired
+
+(* busy wait at 10Hz for ability to create 'dir';
+   not very efficient strategy but portable and not introducing a new
+   library dependency or reliance on some not always present system
+   command. *)
+let acquire_lock dir =
+  Log.info "acquiring lock";
+  try
+    while true do
+      (* mkdir is atomic on POSIX filesystems *)
+      let res = Unix.system ("mkdir " ^ dir ^ " 2>/dev/null") in
+      if res = Unix.WEXITED 0 then
+        raise Lock_acquired
+      else
+        sleep_ms 100
+    done
+  with Lock_acquired -> ()
+
+let release_lock dir =
+  Log.info "releasing lock";
+  ignore(Unix.system ("rmdir " ^ dir))
+
 (* like `cmd` in shell
    TODO: use the one in batteries upon next release *)
 let run_and_read cmd =
