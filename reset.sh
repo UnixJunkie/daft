@@ -6,6 +6,7 @@ function reset () {
     pkill daft        # kill CLI
     \rm -rf /tmp/*.ds # clean previous local datastore
     \rm -f CLI.msg_counter # force to start a new session
+    \rmdir /tmp/*.lock
 }
 
 reset
