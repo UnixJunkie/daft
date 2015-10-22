@@ -248,6 +248,8 @@ let main () =
   if !log_fn <> "" then Log.set_output (Legacy.open_out !log_fn);
   if !machine_file = "" then Utils.abort (Log.fatal "-m is mandatory");
   let hostname = Utils.hostname () in
+  let lock = sprintf "/tmp/%s:%d.cli.lock" hostname !cli_port_in in
+  Utils.acquire_lock lock;
   let skey, ckey, _int2node, maybe_ds_node, mds_node =
     Utils.data_nodes hostname None !machine_file
   in
@@ -330,6 +332,7 @@ let main () =
   with exn -> begin
       Socket_wrapper.nuke_keys ();
       Utils.nuke_CSPRNG rng;
+      Utils.release_lock lock;
       ZMQ.Socket.close for_MDS;
       ZMQ.Socket.close for_DS;
       ZMQ.Socket.close incoming;
