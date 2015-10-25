@@ -112,7 +112,8 @@ module Command = struct
        "ls [-a] [filename]")
       (* FBR: give a whole listing of commands with parameters *)
   (* quick and dirty way to understand a command ASAP *)
-  let of_list: string list -> t = function
+  let of_list (do_log: bool) (args: string list): t =
+    match args with
     | [] | ["skip"] -> Skip
     | cmd :: args ->
       begin match cmd with
@@ -120,17 +121,18 @@ module Command = struct
           begin match get_two args with
             | Some (fn, bcast_method) ->
               Bcast (fn, Utils.bcast_of_string bcast_method)
-            | None -> Log.error "\nusage: bcast fn {r|a|w}"; Skip
+            | None ->
+              if do_log then Log.error "\nusage: bcast fn {r|a|w}"; Skip
           end
         | "e" | "extract" ->
           begin match get_two args with
             | Some (src_fn, dst_fn) -> Extract (src_fn, dst_fn)
-            | None -> Log.error "\nusage: extract src_fn dst_fn"; Skip
+            | None -> if do_log then Log.error "\nusage: extract src_fn dst_fn"; Skip
           end
         | "f" | "fetch" ->
           begin match get_one args with
             | Some fn -> Fetch fn
-            | None -> Log.error "\nusage: fetch fn"; Skip
+            | None -> if do_log then Log.error "\nusage: fetch fn"; Skip
           end
         | "g" | "get" ->
           begin match get_two args with
@@ -138,10 +140,10 @@ module Command = struct
             | None ->
               begin match get_one args with
                 | Some src_fn -> Get (src_fn, src_fn)
-                | None -> Log.error "\nusage: get src_fn [dst_fn]"; Skip
+                | None -> if do_log then Log.error "\nusage: get src_fn [dst_fn]"; Skip
               end
           end
-        | "h" | "help" -> usage(); Skip
+        | "h" | "help" -> if do_log then usage(); Skip
         | "l" | "ls" ->
           begin match get_two args with
             | Some (_, fn) -> Ls (true, Some fn)
@@ -156,13 +158,28 @@ module Command = struct
         | "p" | "put" ->
           begin match get_one args with
             | Some fn -> Put (Utils.expand_filename fn)
-            | None -> Log.error "\nusage: put fn"; Skip
+            | None -> if do_log then Log.error "\nusage: put fn"; Skip
           end
         | "q" | "quit" -> Quit
         | "x" | "exit" -> Exit
-        | "" ->  Log.error "empty command";           usage(); Skip
-        | cmd -> Log.error "unknown command: %s" cmd; usage(); Skip
+        | "" ->
+          if do_log then begin Log.error "empty command"; usage() end;
+          Skip
+        | cmd ->
+          if do_log then begin Log.error "unknown command: %s" cmd; usage() end;
+          Skip
       end
+  let is_valid = function
+        | "b" | "bcast"
+        | "e" | "extract"
+        | "f" | "fetch"
+        | "g" | "get"
+        | "h" | "help"
+        | "l" | "ls"
+        | "p" | "put"
+        | "q" | "quit"
+        | "x" | "exit" -> true
+        | _ -> false
 end
 
 let extract_cmd local_node src_fn dst_fn for_DS incoming =
@@ -201,7 +218,7 @@ let read_one_command is_interactive =
     in
     (before, to_parse)
   in
-  (before, Command.of_list command_line)
+  (before, Command.of_list true command_line)
 
 (* recursive ls *)
 let ls dir_name =
@@ -224,6 +241,13 @@ let put_one_file rng msg_counter local_node for_DS incoming fn =
     (CLI_to_DS (Fetch_file_cmd_req (fn, Local)));
   process_answer incoming do_nothing
 
+let extract_daft_command args =
+  let l = Array.to_list args in
+  let (new_argv: string list), (daft_command: string list) =
+    Utils.fold_while Utils.id (fun x -> not (Command.is_valid x)) [] l
+  in
+  (Array.of_list new_argv, String.concat " " daft_command)
+
 let main () =
   (* setup logger *)
   let log_fn = ref "" in
@@ -232,10 +256,12 @@ let main () =
   Log.color_on ();
   Log.set_prefix (Utils.fg_yellow ^ " CLI" ^ Utils.fg_reset);
   (* options parsing *)
-  Arg.parse
+  let new_args, daft_command = extract_daft_command Sys.argv in
+  single_command := daft_command;
+  Arg.parse_argv
+    ~current:(ref 0)
+    new_args
     [ "-i", Arg.Set interactive, " interactive mode of the CLI";
-      "-c", Arg.Set_string single_command,
-      "'command' execute a single command; use quotes if several words";
       "-m", Arg.Set_string machine_file,
       "machine_file list of host:port[:mds_port] (one per line)";
       "-o", Arg.Set_string log_fn, "<filename> where to log";
@@ -333,6 +359,7 @@ let main () =
       Socket_wrapper.nuke_keys ();
       Utils.nuke_CSPRNG rng;
       Utils.release_lock lock;
+      if not !interactive then backup_counter ();
       ZMQ.Socket.close for_MDS;
       ZMQ.Socket.close for_DS;
       ZMQ.Socket.close incoming;
