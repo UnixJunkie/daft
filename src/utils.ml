@@ -59,7 +59,7 @@ let acquire_lock dir =
 
 let release_lock dir =
   Log.info "releasing lock";
-  ignore(Unix.system ("rmdir " ^ dir))
+  ignore(Unix.system ("rmdir " ^ dir ^ " 2>/dev/null"))
 
 (* like `cmd` in shell
    TODO: use the one in batteries upon next release *)
