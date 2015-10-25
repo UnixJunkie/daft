@@ -31,7 +31,7 @@ cat machines
 ./daft_ds -v -m machines -p 8085 &
 
 sleep 1s
-./daft -v -m machines -c quit
+./daft -v -m machines quit
 
 sleep 1s
 ps
