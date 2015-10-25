@@ -383,3 +383,15 @@ let expand_filename (fn: string): string =
       cwd ^ "/" ^ (String.lchop ~n:2 fn)
     else
       cwd ^ "/" ^ fn
+
+(* fold_left f on l while p is true *)
+let rec fold_while f p acc = function
+  | [] -> (List.rev acc, [])
+  | x :: xs ->
+    if p x then
+      fold_while f p (f x :: acc) xs
+    else
+      (List.rev acc, x :: xs)
+
+let id x =
+  x
