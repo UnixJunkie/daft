@@ -128,12 +128,13 @@ let nuke_file fn =
   begin
     try
       if command_exists "shred" then
-        ignore(run_command ~silent:true ("shred " ^ fn))
+        ignore(run_command ~silent:true ("shred " ^ fn ^ " 2>/dev/null"))
       ;
     with _ -> ();
     try
       Sys.remove fn
-    with Sys_error _ -> ()
+    with Sys_error _ -> ();
+    Log.info "nuked file %s" fn
   end
 
 (* same as with_out_file but using a unix file descriptor *)
