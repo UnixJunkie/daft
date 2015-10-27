@@ -133,7 +133,7 @@ let nuke_file fn =
     with _ -> ();
     try
       Sys.remove fn
-    with Sys_error _ -> ();
+    with _ -> ();
     Log.info "nuked file %s" fn
   end
 
@@ -206,7 +206,7 @@ let convert (direction: [< `From_hexa | `To_hexa ]) (message: string): string =
 (* generate secret keys to encrypt and sign messages by reading /dev/random *)
 (* NEEDS_SECURITY_REVIEW *)
 let append_keys (fn: string): unit =
-  with_in_file_descr "/dev/random" (fun input ->
+  with_in_file_descr "/dev/urandom" (fun input ->
       let ckey = Bytes.make 16 '0' in
       let skey = Bytes.make 20 '0' in
       really_read input ckey 16;
