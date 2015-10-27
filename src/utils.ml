@@ -125,10 +125,16 @@ let command_exists (cmd: string): bool =
   Unix.system ("which " ^ cmd ^ " 2>&1 > /dev/null") = Unix.WEXITED 0
 
 let nuke_file fn =
-  if command_exists "shred" then
-    ignore(run_command ~silent:true ("shred " ^ fn))
-  ;
-  Sys.remove fn
+  begin
+    try
+      if command_exists "shred" then
+        ignore(run_command ~silent:true ("shred " ^ fn))
+      ;
+    with _ -> ();
+    try
+      Sys.remove fn
+    with Sys_error _ -> ()
+  end
 
 (* same as with_out_file but using a unix file descriptor *)
 let with_out_file_descr fn f =
