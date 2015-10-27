@@ -27,7 +27,6 @@ let backup_counter () =
   Utils.with_out_file msg_counter_fn (fun out ->
       fprintf out "%d\n" !msg_counter
     );
-  Unix.chmod msg_counter_fn 0o600; (* strict perms *)
   Log.info "wrote out %s" msg_counter_fn
 
 let restore_counter () =

@@ -109,7 +109,9 @@ let with_in_file_descr fn f =
   res
 
 let with_out_file fn f =
-  let output = open_out fn in
+  let ugo = 0o600 in
+  let output = open_out_gen [Open_wronly; Open_creat; Open_trunc] 0o600 fn in
+  assert(ugo = 0o600); (* !!! SECURITY: DONT CHANGE UGO RIGHTS  !!! *)
   let res = f output in
   close_out output;
   res
