@@ -20,36 +20,28 @@ let interactive = ref false
 let machine_file = ref ""
 let verbose = ref false
 let msg_counter = ref 0
-let msg_counter_fn = "CLI.msg_counter"
 let rng = Utils.create_CSPRNG ()
 
 (* NEEDS_SECURITY_REVIEW *)
-let backup_counter () =
-  Utils.with_out_file msg_counter_fn (fun out ->
+let backup_counter fn =
+  Utils.with_out_file fn (fun out ->
       (* use a long fixed format to hide the counter range
          from being guessed using the counter file size *)
       fprintf out "%09d\n" !msg_counter
     );
-  Log.info "wrote out %s" msg_counter_fn
+  Log.info "wrote out %s" fn
 
 (* NEEDS_SECURITY_REVIEW *)
-let restore_counter () =
-  if Sys.file_exists msg_counter_fn then
+let restore_counter fn =
+  if Sys.file_exists fn then
     begin
-      Log.info "read in %s" msg_counter_fn;
-      Utils.with_in_file msg_counter_fn (fun input ->
+      Log.info "read in %s" fn;
+      Utils.with_in_file fn (fun input ->
           int_of_string (Legacy.input_line input)
         )
     end
   else
     0 (* start from fresh *)
-
-let forget_counter () =
-  if Sys.file_exists msg_counter_fn then
-    begin
-      FU.(rm ~force:Force [msg_counter_fn]);
-      Log.info "removed %s" msg_counter_fn
-    end
 
 let do_nothing () =
   ()
@@ -252,6 +244,7 @@ let extract_daft_command args =
   (Array.of_list new_argv, String.concat " " daft_command)
 
 let main () =
+  let msg_count_fn = "CLI.msg_counter" in
   (* setup logger *)
   let log_fn = ref "" in
   Log.set_log_level Log.INFO;
@@ -297,7 +290,7 @@ let main () =
   Log.info "Client of MDS %s:%d" mds_host mds_port_in;
   let for_DS = Utils.(zmq_socket Push ctx ds_host ds_port_in) in
   (* continue from a previous session if counter file is found *)
-  msg_counter := restore_counter ();
+  msg_counter := restore_counter msg_count_fn;
   if !msg_counter = 0 then (* start a new session *)
     begin
       (* register yourself to the local DS by telling it the port you listen to *)
@@ -343,10 +336,10 @@ let main () =
         extract_cmd local_node src_fn dst_fn for_DS incoming
       | Quit ->
         send rng msg_counter local_node for_MDS (CLI_to_MDS Quit_cmd);
-        forget_counter ();
+        Utils.nuke_file msg_count_fn;
         not_finished := false
       | Exit ->
-        backup_counter ();
+        backup_counter msg_count_fn;
         not_finished := false
       | Ls (detailed, maybe_fn) ->
         send rng msg_counter local_node for_MDS
@@ -362,7 +355,7 @@ let main () =
       Socket_wrapper.nuke_keys ();
       Utils.nuke_CSPRNG rng;
       Utils.release_lock lock;
-      if not !interactive then backup_counter ();
+      if not !interactive then backup_counter msg_count_fn;
       ZMQ.Socket.close for_MDS;
       ZMQ.Socket.close for_DS;
       ZMQ.Socket.close incoming;
