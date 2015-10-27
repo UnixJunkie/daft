@@ -126,14 +126,11 @@ let command_exists (cmd: string): bool =
 
 let nuke_file fn =
   begin
-    try
-      if command_exists "shred" then
-        ignore(run_command ~silent:true ("shred " ^ fn ^ " 2>/dev/null"))
-      ;
-    with _ -> ();
-    try
-      Sys.remove fn
-    with _ -> ();
+    (try
+       if command_exists "shred" then
+         ignore(run_command ~silent:true ("shred " ^ fn ^ " 2>/dev/null"));
+     with _ -> ());
+    (try Sys.remove fn with _ -> ());
     Log.info "nuked file %s" fn
   end
 
