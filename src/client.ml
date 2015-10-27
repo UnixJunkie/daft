@@ -304,6 +304,7 @@ let main () =
   (* the CLI execute just one command then exit *)
   (* we could have a batch mode, executing several commands from a file *)
   let not_finished = ref true in
+  let has_quit = ref false in
   try
     while !not_finished do
       not_finished := !interactive;
@@ -337,7 +338,8 @@ let main () =
       | Quit ->
         send rng msg_counter local_node for_MDS (CLI_to_MDS Quit_cmd);
         Utils.nuke_file msg_count_fn;
-        not_finished := false
+        not_finished := false;
+        has_quit := true
       | Exit ->
         backup_counter msg_count_fn;
         not_finished := false
@@ -355,7 +357,7 @@ let main () =
       Socket_wrapper.nuke_keys ();
       Utils.nuke_CSPRNG rng;
       Utils.release_lock lock;
-      if not !interactive then backup_counter msg_count_fn;
+      if not !interactive && not !has_quit then backup_counter msg_count_fn;
       ZMQ.Socket.close for_MDS;
       ZMQ.Socket.close for_DS;
       ZMQ.Socket.close incoming;
