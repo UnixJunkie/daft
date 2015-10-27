@@ -357,7 +357,7 @@ let main () =
       Socket_wrapper.nuke_keys ();
       Utils.nuke_CSPRNG rng;
       Utils.release_lock lock;
-      if not !interactive && not !has_quit then backup_counter msg_count_fn;
+      if not !has_quit then backup_counter msg_count_fn;
       ZMQ.Socket.close for_MDS;
       ZMQ.Socket.close for_DS;
       ZMQ.Socket.close incoming;
