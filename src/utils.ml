@@ -116,12 +116,6 @@ let with_out_file fn f =
   close_out output;
   res
 
-let append_to_file fn f =
-  let output = open_out_gen [Open_append; Open_wronly; Open_binary] 0 fn in
-  let res = f output in
-  close_out output;
-  res
-
 let run_command ?silent:(silent = false) (cmd: string): Unix.process_status =
   if not silent then Log.info "running: %s" cmd;
   Unix.system cmd
@@ -137,7 +131,7 @@ let nuke_file fn =
      let o = open_out fn in (* zero its zise *)
      close_out o
   );
-  ignore(run_command ~silent:true ("rm -f " ^ fn))
+  Sys.remove fn
 
 (* same as with_out_file but using a unix file descriptor *)
 let with_out_file_descr fn f =
@@ -217,9 +211,13 @@ let append_keys (fn: string): unit =
       assert(String.length skey = 20);
       let skey_hex = convert `To_hexa skey in
       let ckey_hex = convert `To_hexa ckey in
-      append_to_file fn (fun output ->
+      let prev_contents = string_list_of_file fn in
+      (* the machines file is created again with strict perms on purpose *)
+      Sys.remove fn;
+      with_out_file fn (fun output ->
           Legacy.output_string output (sprintf "skey:%s\n" skey_hex);
-          Legacy.output_string output (sprintf "ckey:%s\n" ckey_hex)
+          Legacy.output_string output (sprintf "ckey:%s\n" ckey_hex);
+          List.iter (fprintf output "%s\n") prev_contents
         );
     )
 
