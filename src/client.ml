@@ -23,12 +23,16 @@ let msg_counter = ref 0
 let msg_counter_fn = "CLI.msg_counter"
 let rng = Utils.create_CSPRNG ()
 
+(* NEEDS_SECURITY_REVIEW *)
 let backup_counter () =
   Utils.with_out_file msg_counter_fn (fun out ->
-      fprintf out "%d\n" !msg_counter
+      (* use a long fixed format to hide the counter range
+         from being guessed using the counter file size *)
+      fprintf out "%09d\n" !msg_counter
     );
   Log.info "wrote out %s" msg_counter_fn
 
+(* NEEDS_SECURITY_REVIEW *)
 let restore_counter () =
   if Sys.file_exists msg_counter_fn then
     begin
