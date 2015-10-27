@@ -59,7 +59,7 @@ let acquire_lock dir =
 
 let release_lock dir =
   Log.info "releasing lock";
-  ignore(Unix.system ("rmdir " ^ dir ^ " 2>/dev/null"))
+  ignore(Unix.system ("rm -rf " ^ dir))
 
 (* like `cmd` in shell
    TODO: use the one in batteries upon next release *)
@@ -125,12 +125,9 @@ let command_exists (cmd: string): bool =
   Unix.system ("which " ^ cmd ^ " 2>&1 > /dev/null") = Unix.WEXITED 0
 
 let nuke_file fn =
-  (if command_exists "shred" then
-     ignore(run_command ~silent:true ("shred " ^ fn))
-   else
-     let o = open_out fn in (* zero its zise *)
-     close_out o
-  );
+  if command_exists "shred" then
+    ignore(run_command ~silent:true ("shred " ^ fn))
+  ;
   Sys.remove fn
 
 (* same as with_out_file but using a unix file descriptor *)
