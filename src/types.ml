@@ -235,13 +235,18 @@ module File = struct
       (chunks: ChunkSet.t) =
     { name; size; creat_time; final_time; nb_chunks; chunks }
   (* incoming chunk *)
-  let add_chunk (f: t) (c: Chunk.t) =
+  let add_chunk (f: t) (c: Chunk.t) (now: float) =
     let prev_set = f.chunks in
     let new_set = ChunkSet.add c prev_set in
     if prev_set == new_set then
       Log.error "duplicate chunk: f: %s chunk: %d" f.name Chunk.(c.id)
     ;
-    { f with chunks = new_set }
+    { f with chunks = new_set ;
+             final_time = now }
+  let update_chunk (f: t) (c: Chunk.t) (now: float): t =
+    { f with
+      chunks = ChunkSet.update c c f.chunks ;
+      final_time = now }
   (* to list files without chunk details *)
   let forget_chunks (f: t): t =
     { f with chunks = ChunkSet.empty }
@@ -249,10 +254,6 @@ module File = struct
   let has_chunk (f: t) (cid: chunk_id) =
     let chunk = Chunk.dummy cid in
     ChunkSet.mem chunk f.chunks
-  let update_chunk (f: t) (c: Chunk.t) (now: float): t =
-    { f with
-      chunks = ChunkSet.update c c f.chunks ;
-      final_time = now }
   let compare f1 f2 =
     String.compare f1.name f2.name
   let to_string f =

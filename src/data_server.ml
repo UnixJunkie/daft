@@ -173,7 +173,8 @@ let add_file (local_node: Node.t) (fn: string): ds_to_cli =
             let all_chunks =
               File.all_chunks nb_chunks last_chunk_size local_node
             in
-            let new_file = File.create fn size nb_chunks all_chunks in
+            let now = Unix.gettimeofday () in
+            let new_file = File.create fn size now now nb_chunks all_chunks in
             local_state := FileSet.add new_file !local_state;
             Fetch_file_cmd_ack fn
           end)
@@ -310,8 +311,9 @@ let store_chunk local_node to_mds to_cli fn chunk_id is_last data =
     with Not_found -> (* or create it *)
       let unknown_size = Int64.of_int (-1) in
       let unknown_total_chunks = -1 in
+      let now = Unix.gettimeofday () in
       File.create
-        fn unknown_size unknown_total_chunks ChunkSet.empty
+        fn unknown_size now now unknown_total_chunks ChunkSet.empty
   in
   if File.has_chunk file chunk_id then
     Log.warn "chunk already here: fn: %s cid: %d" fn chunk_id
@@ -341,14 +343,15 @@ let store_chunk local_node to_mds to_cli fn chunk_id is_last data =
       in
       (* only once we receive the last chunk can we finalize the file's
          description in local_state *)
+      let now = Unix.gettimeofday () in
       let new_file =
         if is_last then (* finalize file description *)
           let full_size = Int64.(of_int offset + size64) in
           let total_chunks = chunk_id + 1 in
-          let chunks = File.get_chunks (File.add_chunk file curr_chunk) in
-          File.create fn full_size total_chunks chunks
+          let chunks = File.get_chunks (File.add_chunk file curr_chunk now) in
+          File.(create fn full_size file.creat_time now total_chunks chunks)
         else
-          File.add_chunk file curr_chunk
+          File.add_chunk file curr_chunk now
       in
       local_state := FileSet.update file new_file !local_state;
       (* 3) notify MDS *)

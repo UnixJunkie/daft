@@ -13,7 +13,6 @@ module Node = Types.Node
 let global_state = ref FileSet.empty
 let msg_counter = ref 0
 
-let bcast_counter = ref (-1)
 let bcast_start = ref (Unix.gettimeofday ())
 let bcast_end = ref !bcast_start
 let bcast_root_rank = ref (-1)
@@ -160,18 +159,7 @@ let main () =
           end
         | DS_to_MDS (Chunk_ack (fn, chunk_id, ds_rank)) ->
           begin
-            bcast_counter := !bcast_counter - 1;
-            if !bcast_counter = 0 then
-              begin
-                bcast_end := Unix.gettimeofday();
-                let delta = !bcast_end -. !bcast_start in
-                Log.info "bcast-chrono: %d %s %s %.3f"
-                  (IntMap.cardinal !int2node) (Utils.string_of_bcast !bcast_algo)
-                  fn  delta;
-                (* hack for timing experiments: unlock CLI *)
-                let to_cli_sock = Option.get (Utils.trd3 (IntMap.find !bcast_root_rank !int2node)) in
-                send rng msg_counter local_node to_cli_sock (MDS_to_CLI Unlock);
-              end;
+            let now = Unix.gettimeofday () in
             Log.debug "got Chunk_ack";
             try
               (* 1) do we have this file ? *)
@@ -182,7 +170,7 @@ let main () =
                 (* 3) update global state: this chunk is owned by one more DS *)
                 let new_source = Utils.fst3 (IntMap.find ds_rank !int2node) in
                 let new_chunk = Chunk.add_source prev_chunk new_source in
-                let new_file = File.update_chunk old_file new_chunk in
+                let new_file = File.update_chunk old_file new_chunk now in
                 global_state := FileSet.update old_file new_file !global_state
               with Not_found ->
                 Log.error "Chunk_ack: unknown chunk: %s chunk_id: %d"
@@ -204,9 +192,6 @@ let main () =
               Log.warn "file already added: %s" (File.(f.name))
             else
               global_state := FileSet.add f !global_state;
-            (* for bcast_chrono *)
-            bcast_counter := (File.get_nb_chunks f) * (IntMap.cardinal !int2node - 1);
-            Log.info "bcast_counter: %d" !bcast_counter;
           end
         | CLI_to_MDS (Connect_push (ds_rank, cli_port)) ->
           Log.debug "got Connect_push rank: %d port: %d" ds_rank cli_port;
