@@ -212,14 +212,14 @@ module File = struct
       Buffer.contents res
     let find_id (id: chunk_id) (cs: t): Chunk.t =
       find (Chunk.dummy id) cs
-    let update (c: Chunk.t) (cs: t): t =
-      add c (remove c cs)
   end
 
-  type t = { name:      filename   ;
-             size:      int64      ;
-             nb_chunks: int        ; (* when the file is complete *)
-             chunks:    ChunkSet.t } (* chunks currently available *)
+  type t = { name:       filename   ;
+             size:       int64      ;
+             creat_time: float      ; (* when file was added *)
+             final_time: float      ; (* when file was finalized *)
+             nb_chunks:  int        ; (* known when the file is complete *)
+             chunks:     ChunkSet.t } (* chunks currently available *)
   (* complete chunkset of file f *)
   let all_chunks
       (nb_chunks: int)
@@ -229,9 +229,11 @@ module File = struct
   let create
       (name: filename)
       (size: int64)
+      (creat_time: float)
+      (final_time: float)
       (nb_chunks: int)
       (chunks: ChunkSet.t) =
-    { name; size; nb_chunks ; chunks }
+    { name; size; creat_time; final_time; nb_chunks; chunks }
   (* incoming chunk *)
   let add_chunk (f: t) (c: Chunk.t) =
     let prev_set = f.chunks in
@@ -247,8 +249,10 @@ module File = struct
   let has_chunk (f: t) (cid: chunk_id) =
     let chunk = Chunk.dummy cid in
     ChunkSet.mem chunk f.chunks
-  let update_chunk (f: t) (c: Chunk.t): t =
-    { f with chunks = ChunkSet.update c f.chunks }
+  let update_chunk (f: t) (c: Chunk.t) (now: float): t =
+    { f with
+      chunks = ChunkSet.update c c f.chunks ;
+      final_time = now }
   let compare f1 f2 =
     String.compare f1.name f2.name
   let to_string f =
@@ -287,6 +291,8 @@ module FileSet = struct
   let dummy_file fn =
     File.({ name = fn;
             size = Int64.zero;
+            creat_time = 0.0;
+            final_time = 0.0;
             nb_chunks = 0;
             chunks = ChunkSet.empty })
   let contains_fn fn s =
