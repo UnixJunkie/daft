@@ -175,15 +175,15 @@ let main () =
             Log.debug "got Chunk_ack";
             try
               (* 1) do we have this file ? *)
-              let file = FileSet.find_fn fn !global_state in
+              let old_file = FileSet.find_fn fn !global_state in
               try
                 (* 2) does it have this chunk ? *)
-                let prev_chunk = File.find_chunk_id chunk_id file in
+                let prev_chunk = File.find_chunk_id chunk_id old_file in
                 (* 3) update global state: this chunk is owned by one more DS *)
                 let new_source = Utils.fst3 (IntMap.find ds_rank !int2node) in
                 let new_chunk = Chunk.add_source prev_chunk new_source in
-                let new_file = File.update_chunk file new_chunk in
-                global_state := FileSet.update new_file !global_state
+                let new_file = File.update_chunk old_file new_chunk in
+                global_state := FileSet.update old_file new_file !global_state
               with Not_found ->
                 Log.error "Chunk_ack: unknown chunk: %s chunk_id: %d"
                   fn chunk_id

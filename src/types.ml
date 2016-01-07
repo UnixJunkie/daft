@@ -18,9 +18,6 @@ type port = int
 type root_node = int
 type step_number = int
 
-(* FBR: add module interfaces and hide as much operations as possible *)
-(*      make types abstract too *)
-
 (* module useful to transform a set of integers with holes
    into a set of intervals *)
 module Interval = struct
@@ -188,9 +185,6 @@ module File = struct
       NodeSet.mem (Node.dummy_with_rank nid) c.nodes
   end
 
-(* FBR: adhere to the JS Core convention: in module with type t, the first
-        param of each operation must be a t *)
-
   module ChunkSet = struct
     include Set.Make(Chunk)
     let create
@@ -314,9 +308,6 @@ module FileSet = struct
     fold (fun f acc ->
         add (File.forget_chunks f) acc
       ) s empty
-  let update latest s =
-    (* FBR: use faster one from batteries once available *)
-    add latest (remove_fn File.(latest.name) s)
   let to_string fs =
     let res = Buffer.create 1024 in
     let first_time = ref true in
@@ -416,8 +407,6 @@ module Protocol = struct
   type from_mds =
     | MDS_to_DS  of mds_to_ds
     | MDS_to_CLI of mds_to_cli
-
-  (* FBR: add to_string for all messages ??? *)
 
   let string_of_error = function
     | Already_here -> "already here"

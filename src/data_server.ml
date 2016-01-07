@@ -350,7 +350,7 @@ let store_chunk local_node to_mds to_cli fn chunk_id is_last data =
         else
           File.add_chunk file curr_chunk
       in
-      local_state := FileSet.update new_file !local_state;
+      local_state := FileSet.update file new_file !local_state;
       (* 3) notify MDS *)
       let my_rank = Node.get_rank local_node in
       send rng msg_counter local_node to_mds
