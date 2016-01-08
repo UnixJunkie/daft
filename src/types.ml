@@ -392,7 +392,6 @@ module Protocol = struct
   type mds_to_cli =
     | Ls_cmd_ack of FileSet.t * string
     | Fetch_cmd_nack of filename
-    | Unlock (* hack for experiments *)
 
   type file_loc = Local (* local disk *) | Remote (* remote host *)
 

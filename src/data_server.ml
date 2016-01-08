@@ -312,8 +312,11 @@ let store_chunk local_node to_mds to_cli fn chunk_id is_last data =
       let unknown_size = Int64.of_int (-1) in
       let unknown_total_chunks = -1 in
       let now = Unix.gettimeofday () in
-      File.create
-        fn unknown_size now now unknown_total_chunks ChunkSet.empty
+      let res =
+        File.create fn unknown_size now now unknown_total_chunks ChunkSet.empty
+      in
+      local_state := FileSet.add res !local_state;
+      res
   in
   if File.has_chunk file chunk_id then
     Log.warn "chunk already here: fn: %s cid: %d" fn chunk_id

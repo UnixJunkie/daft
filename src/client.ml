@@ -62,8 +62,6 @@ let process_answer incoming continuation: unit =
     | MDS_to_CLI (Fetch_cmd_nack fn) ->
       Log.debug "got Fetch_cmd_nack";
       Log.error "no such file: %s" fn
-    | MDS_to_CLI Unlock ->
-      continuation ()
     | DS_to_CLI (Fetch_file_cmd_ack fn) ->
       begin
         Log.debug "got Fetch_file_cmd_ack";
@@ -117,7 +115,7 @@ module Command = struct
             | Some (fn, bcast_method) ->
               Bcast (fn, Utils.bcast_of_string bcast_method)
             | None ->
-              if do_log then Log.error "\nusage: bcast fn {r|a|w}"; Skip
+              if do_log then Log.error "\nusage: bcast fn {c|bina|bino}"; Skip
           end
         | "e" | "extract" ->
           begin match get_two args with
@@ -349,8 +347,7 @@ let main () =
         process_answer incoming do_nothing
       | Bcast (src_fn, bcast_method) ->
         send rng msg_counter local_node for_DS
-          (CLI_to_DS (Bcast_file_cmd_req (src_fn, bcast_method)));
-        process_answer incoming do_nothing;
+          (CLI_to_DS (Bcast_file_cmd_req (src_fn, bcast_method)))
     done;
     raise Types.Loop_end;
   with exn -> begin
