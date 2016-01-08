@@ -257,8 +257,25 @@ module File = struct
   let compare f1 f2 =
     String.compare f1.name f2.name
   let to_string f =
-    sprintf "fn: %s size: %Ld #chunks: %d%s"
-      f.name f.size f.nb_chunks
+    let unix_time_to_string seconds =
+      let tm = Unix.localtime seconds in
+      Unix.(
+        sprintf "%02d/%02d/%04d-%02d:%02d:%02d"
+          tm.tm_mday
+          (tm.tm_mon + 1)
+          (tm.tm_year + 1900)
+          tm.tm_hour
+          tm.tm_min
+          tm.tm_sec
+      )
+    in
+    sprintf "fn: %s size: %Ld #chunks: %d creat_t: %s final_t: %s delta_t: %.3f %s"
+      f.name
+      f.size
+      f.nb_chunks
+      (unix_time_to_string f.creat_time)
+      (unix_time_to_string f.final_time)
+      (f.final_time -. f.creat_time) (* info to time broadcast *)
       (if f.chunks = ChunkSet.empty then ""
        else ("\n" ^ ChunkSet.to_string f.chunks))
   let get_chunks (f: t): ChunkSet.t =
