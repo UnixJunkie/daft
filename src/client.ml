@@ -92,9 +92,9 @@ module Command = struct
          | Exit (* to leave the CLI just temporarily *)
          | Extract of filename * filename
          | Fetch of filename
-         | Get of filename * filename (* src_fn [dst_fn] *)
+         | Get of filename * filename (* src_fn dst_fn *)
          | Ls of bool * filename option (* ls [-a] [filename] *)
-         | Put of filename (* FBR: put needs an optional dst_fn *)
+         | Put of filename * filename (* src_fn dst_fn *)
          | Quit (* turn off whole system *)
          | Skip
   let usage () =
@@ -149,9 +149,15 @@ module Command = struct
               end
           end
         | "p" | "put" ->
-          begin match get_one args with
-            | Some fn -> Put (Utils.expand_filename fn)
-            | None -> if do_log then Log.error "\nusage: put fn"; Skip
+          begin match get_two args with
+            | Some (src_fn, dst_fn) -> Put (Utils.expand_filename src_fn, dst_fn)
+            | None ->
+              begin match get_one args with
+                | Some fn ->
+                  let src_fn = Utils.expand_filename fn in
+                  Put (src_fn, src_fn)
+                | None -> if do_log then Log.error "\nusage: put src_fn [dst_fn]"; Skip
+              end
           end
         | "q" | "quit" -> Quit
         | "x" | "exit" -> Exit
@@ -229,9 +235,9 @@ let ls dir_name =
   in
   List.sort compare (loop [] [dir_name])
 
-let put_one_file rng msg_counter local_node for_DS incoming fn =
+let put_one_file rng msg_counter local_node for_DS incoming src_fn dst_fn =
   send rng msg_counter local_node for_DS
-    (CLI_to_DS (Fetch_file_cmd_req (fn, Local)));
+    (CLI_to_DS (Fetch_file_cmd_req (src_fn, dst_fn, Local)));
   process_answer incoming do_nothing
 
 let extract_daft_command args =
@@ -310,17 +316,20 @@ let main () =
       let _before, cmd = read_one_command !interactive in
       match cmd with
       | Skip -> ()
-      | Put src_fn ->
+      | Put (src_fn, dst_fn) ->
         if Utils.is_directory src_fn then
-          List.iter
-            (put_one_file rng msg_counter local_node for_DS incoming)
-            (ls src_fn)
+          if src_fn <> dst_fn then
+            Log.error "Put src dst: src is a directory and dst <> src"
+          else
+            List.iter
+              (fun fn -> put_one_file rng msg_counter local_node for_DS incoming fn dst_fn)
+              (ls src_fn)
         else
-          put_one_file rng msg_counter local_node for_DS incoming src_fn
+          put_one_file rng msg_counter local_node for_DS incoming src_fn dst_fn
       | Get (src_fn, dst_fn) ->
         (* get = extract . fetch *)
         send rng msg_counter local_node for_DS
-          (CLI_to_DS (Fetch_file_cmd_req (src_fn, Remote)));
+          (CLI_to_DS (Fetch_file_cmd_req (src_fn, src_fn, Remote)));
         let fetch_cont =
           (fun () -> extract_cmd local_node src_fn dst_fn for_DS incoming)
         in
@@ -329,7 +338,7 @@ let main () =
         (* Log.info "%.3f" (after -. before) *)
       | Fetch src_fn ->
         send rng msg_counter local_node for_DS
-          (CLI_to_DS (Fetch_file_cmd_req (src_fn, Remote)));
+          (CLI_to_DS (Fetch_file_cmd_req (src_fn, src_fn, Remote)));
         process_answer incoming do_nothing
       | Extract (src_fn, dst_fn) ->
         extract_cmd local_node src_fn dst_fn for_DS incoming

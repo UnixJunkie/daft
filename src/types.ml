@@ -396,7 +396,7 @@ module Protocol = struct
   type file_loc = Local (* local disk *) | Remote (* remote host *)
 
   type cli_to_ds =
-    | Fetch_file_cmd_req of filename * file_loc
+    | Fetch_file_cmd_req of filename * filename * file_loc
     | Extract_file_cmd_req of filename * filename
     | Bcast_file_cmd_req of filename * bcast_method
     | Connect_cmd_push of port (* CLI listening port on the same host

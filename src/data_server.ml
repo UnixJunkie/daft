@@ -143,43 +143,46 @@ let fn_to_path (fn: Types.filename): string =
   if S.starts_with fn "/" then fn
   else "/" ^ fn
 
-let add_file (local_node: Node.t) (fn: string): ds_to_cli =
-  if FileSet.contains_fn fn !local_state then
-    Fetch_file_cmd_nack (fn, Already_here)
-  else begin
-    if not (Sys.file_exists fn) then
-      Fetch_file_cmd_nack (fn, No_such_file)
-    else begin
-      if Sys.is_directory fn then
-        Fetch_file_cmd_nack (fn, Is_directory)
-      else FU.(
-          let stat = FU.stat fn in
-          let size = FU.byte_of_size stat.size in
-          let dest_fn = fn_to_path fn in
-          let dest_dir = Fn.dirname dest_fn in
-          (* mkdir creates all necessary parent dirs *)
-          FU.mkdir ~parent:true ~mode:0o700 dest_dir;
-          FU.cp ~follow:FU.Follow ~force:FU.Force ~recurse:false [fn] dest_fn;
-          (* keep only read (and optionally exec) perms for the user *)
-          if Utils.is_executable fn
-          then Unix.chmod dest_fn 0o500
-          else Unix.chmod dest_fn 0o400;
-          (* check cp succeeded based on new file's size *)
-          let stat' = FU.stat dest_fn in
-          if stat'.size <> stat.size then
-            Fetch_file_cmd_nack (fn, Copy_failed)
-          else begin (* update local state *)
-            let nb_chunks, last_chunk_size = compute_chunks size in
-            let all_chunks =
-              File.all_chunks nb_chunks last_chunk_size local_node
-            in
-            let now = Unix.gettimeofday () in
-            let new_file = File.create fn size now now nb_chunks all_chunks in
-            local_state := FileSet.add new_file !local_state;
-            Fetch_file_cmd_ack fn
-          end)
+let add_file (local_node: Node.t) (src_fn: string) (dst_fn: string): ds_to_cli =
+  if FileSet.contains_fn dst_fn !local_state then
+    Fetch_file_cmd_nack (dst_fn, Already_here)
+  else
+    begin
+      if not (Sys.file_exists src_fn) then
+        Fetch_file_cmd_nack (src_fn, No_such_file)
+      else
+        begin
+          if Sys.is_directory src_fn then
+            Fetch_file_cmd_nack (src_fn, Is_directory)
+          else FU.(
+              let fn_stat = stat src_fn in
+              let size = byte_of_size fn_stat.size in
+              let dest_fn = fn_to_path dst_fn in
+              let dest_dir = Fn.dirname dest_fn in
+              (* mkdir creates all necessary parent dirs *)
+              mkdir ~parent:true ~mode:0o700 dest_dir;
+              cp ~follow:Follow ~force:Force ~recurse:false [src_fn] dest_fn;
+              (* keep only read (and optionally exec) perms for the user *)
+              if Utils.is_executable src_fn
+              then Unix.chmod dest_fn 0o500
+              else Unix.chmod dest_fn 0o400;
+              (* check cp succeeded based on new file's size *)
+              let stat' = stat dest_fn in
+              if stat'.size <> fn_stat.size then
+                Fetch_file_cmd_nack (src_fn, Copy_failed)
+              else
+                begin (* update local state *)
+                  let nb_chunks, last_chunk_size = compute_chunks size in
+                  let all_chunks =
+                    File.all_chunks nb_chunks last_chunk_size local_node
+                  in
+                  let now = Unix.gettimeofday () in
+                  let new_file = File.create dst_fn size now now nb_chunks all_chunks in
+                  local_state := FileSet.add new_file !local_state;
+                  Fetch_file_cmd_ack dst_fn
+                end)
+        end
     end
-  end
 
 (* same return type than add_file, to keep the protocol small *)
 let extract_file (src_fn: Types.filename) (dst_fn: Types.filename): ds_to_cli =
@@ -482,9 +485,9 @@ let main () =
         | DS_to_DS (Chunk (fn, chunk_id, is_last, data)) ->
           Log.debug "got Chunk";
           store_chunk !local_node to_mds !to_cli fn chunk_id is_last data
-        | CLI_to_DS (Fetch_file_cmd_req (fn, Local)) ->
+        | CLI_to_DS (Fetch_file_cmd_req (src_fn, dst_fn, Local)) ->
           Log.debug "got Fetch_file_cmd_req:Local";
-          let res = add_file !local_node fn in
+          let res = add_file !local_node src_fn dst_fn in
           begin match res with
             | Fetch_file_cmd_ack fn ->
               (* notify MDS about this new file *)
@@ -498,7 +501,7 @@ let main () =
           end
         | CLI_to_DS (Bcast_file_cmd_req (fn, bcast_method)) ->
           Log.debug "got Bcast_file_cmd_req";
-          let res = add_file !local_node fn in
+          let res = add_file !local_node fn fn in
           begin match res with
             | Fetch_file_cmd_nack (fn, Already_here) (* allow bcast after put *)
             | Fetch_file_cmd_ack fn ->
@@ -578,18 +581,18 @@ let main () =
                 !local_node to_ranks !int2node fn chunk_id is_last plan chunk_data
             with Not_found -> ()
           end
-        | CLI_to_DS (Fetch_file_cmd_req (fn, Remote)) ->
+        | CLI_to_DS (Fetch_file_cmd_req (src_fn, dst_fn, Remote)) ->
           Log.debug "got Fetch_file_cmd_req:Remote";
           (* finish quickly in case file is already present locally *)
-          if FileSet.contains_fn  fn !local_state ||
-             FileSet.contains_dir fn !local_state then
-            let _ = Log.info "%s already here" fn in
+          if FileSet.contains_fn  dst_fn !local_state ||
+             FileSet.contains_dir dst_fn !local_state then
+            let _ = Log.info "%s already here" dst_fn in
             send rng msg_counter !local_node (deref to_cli)
-              (DS_to_CLI (Fetch_file_cmd_ack fn))
+              (DS_to_CLI (Fetch_file_cmd_ack src_fn))
           else (* forward request to MDS *)
             (* FBR: maybe there is a bug: fetch of a remote file never terminate in the CLI ? *)
             send rng msg_counter !local_node to_mds
-              (DS_to_MDS (Fetch_file_req (Node.get_rank !local_node, fn)))
+              (DS_to_MDS (Fetch_file_req (Node.get_rank !local_node, dst_fn)))
         | CLI_to_DS (Extract_file_cmd_req (src_fn, dst_fn)) ->
           let res = extract_file src_fn dst_fn in
           send rng msg_counter !local_node (deref to_cli) (DS_to_CLI res)
