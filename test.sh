@@ -22,7 +22,7 @@ chmod 644 machines # perms are too wide on purpose
 
 ./daft_mds -v -m machines &
 
-sleep 5s # reading /dev/random takes time
+sleep 1s # reading /dev/random takes time
 
 ls -l machines # perms should be strict now
 cat machines
