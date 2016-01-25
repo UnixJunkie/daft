@@ -319,10 +319,10 @@ let main () =
       | Put (src_fn, dst_fn) ->
         if Utils.is_directory src_fn then
           if src_fn <> dst_fn then
-            Log.error "Put src dst: src is a directory and dst <> src"
+            Log.warn "Put src dst: src is a directory so dst is ignored"
           else
             List.iter
-              (fun fn -> put_one_file rng msg_counter local_node for_DS incoming fn dst_fn)
+              (fun fn -> put_one_file rng msg_counter local_node for_DS incoming fn fn)
               (ls src_fn)
         else
           put_one_file rng msg_counter local_node for_DS incoming src_fn dst_fn

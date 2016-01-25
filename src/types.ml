@@ -402,7 +402,7 @@ module Protocol = struct
     | Connect_cmd_push of port (* CLI listening port on the same host
                                   than the DS receiving the command *)
 
-  type error = Already_here | Is_directory | Copy_failed | No_such_file
+  type error = Already_here | Is_directory | Copy_failed | No_such_file | Other of string
 
   type ds_to_cli =
     | Fetch_file_cmd_ack of filename
@@ -436,5 +436,6 @@ module Protocol = struct
     | Is_directory -> "directory"
     | Copy_failed -> "copy failed"
     | No_such_file -> "no such file"
+    | Other msg -> msg
 
 end

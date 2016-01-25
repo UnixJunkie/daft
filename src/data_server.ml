@@ -154,7 +154,8 @@ let add_file (local_node: Node.t) (src_fn: string) (dst_fn: string): ds_to_cli =
         begin
           if Sys.is_directory src_fn then
             Fetch_file_cmd_nack (src_fn, Is_directory)
-          else FU.(
+          else 
+            try FU.(
               let fn_stat = stat src_fn in
               let size = byte_of_size fn_stat.size in
               let dest_fn = fn_to_path dst_fn in
@@ -181,6 +182,7 @@ let add_file (local_node: Node.t) (src_fn: string) (dst_fn: string): ds_to_cli =
                   local_state := FileSet.add new_file !local_state;
                   Fetch_file_cmd_ack dst_fn
                 end)
+            with (Sys_error msg) -> Fetch_file_cmd_nack (src_fn, Other msg)
         end
     end
 
