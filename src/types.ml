@@ -269,8 +269,10 @@ module File = struct
           tm.tm_sec
       )
     in
-    sprintf "fn: %s size: %Ld #chunks: %d creat_t: %s final_t: %s delta_t: %.3f %s"
-      f.name
+    sprintf "fn: %s%s%s size: %Ld #chunks: %d creat_t: %s final_t: %s delta_t: %.3f %s"
+      Colors.fg_green
+      f.name (* highlighted for readability *)
+      Colors.fg_reset
       f.size
       f.nb_chunks
       (unix_time_to_string f.creat_time)

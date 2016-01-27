@@ -265,7 +265,7 @@ let main () =
   Log.set_log_level Log.INFO;
   Log.set_output Legacy.stderr;
   Log.color_on ();
-  Log.set_prefix (Utils.fg_yellow ^ " CLI" ^ Utils.fg_reset);
+  Log.set_prefix (Colors.fg_yellow ^ " CLI" ^ Colors.fg_reset);
   (* options parsing *)
   let new_args, daft_command = extract_daft_command Sys.argv in
   single_command := daft_command;

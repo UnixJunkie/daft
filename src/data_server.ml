@@ -423,7 +423,7 @@ let main () =
   let mds_host = Node.get_host mds_node in
   let mds_port = Node.get_port mds_node in
   let my_rank = Node.get_rank !local_node in
-  Log.set_prefix (Utils.fg_yellow ^ (sprintf " DS-%d" my_rank) ^ Utils.fg_reset);
+  Log.set_prefix (Colors.fg_yellow ^ (sprintf " DS-%d" my_rank) ^ Colors.fg_reset);
   assert(my_rank <> Utils.default);
   let ds_host = Node.get_host !local_node in
   assert(!ds_port = Node.get_port !local_node);

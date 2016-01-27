@@ -82,7 +82,7 @@ let main () =
   Log.set_log_level Log.INFO;
   Log.set_output Legacy.stderr;
   Log.color_on ();
-  Log.set_prefix (Utils.fg_yellow ^ " MDS" ^ Utils.fg_reset);
+  Log.set_prefix (Colors.fg_yellow ^ " MDS" ^ Colors.fg_reset);
   (* setup MDS *)
   let machine_file = ref "" in
   let verbose = ref false in
