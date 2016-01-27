@@ -32,7 +32,12 @@ cat machines
 ./daft_ds -v -m machines -p 8085 &
 
 sleep 1s
-./daft -v -m machines quit
+
+if [[ $* == *-i* ]]; then
+    ./daft -v -m machines -i # interactive test
+else
+    ./daft -v -m machines quit
+fi
 
 sleep 1s
 ps
