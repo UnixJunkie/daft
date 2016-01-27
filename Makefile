@@ -1,4 +1,4 @@
-.PHONY: clean dist
+.PHONY: clean dist edit
 
 all: config build
 
@@ -16,6 +16,9 @@ install:
 	ln -sf ${PWD}/bin/daft_ds  ${HOME}/bin/
 	ln -sf ${PWD}/bin/daft_mds ${HOME}/bin/
 	ln -sf ${PWD}/bin/daft     ${HOME}/bin/
+
+edit:
+	emacs src/*.ml &
 
 dist:
 	cd .. && tar cvzf daft.tgz --exclude=\.git daft
