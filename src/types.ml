@@ -398,7 +398,7 @@ module Protocol = struct
   type cli_to_ds =
     | Fetch_file_cmd_req of filename * filename * file_loc
     | Extract_file_cmd_req of filename * filename
-    | Bcast_file_cmd_req of filename * bcast_method
+    | Bcast_file_cmd_req of filename * filename * bcast_method
     | Connect_cmd_push of port (* CLI listening port on the same host
                                   than the DS receiving the command *)
 

@@ -85,10 +85,14 @@ let get_two: 'a list -> ('a * 'a) option = function
   | [x; y] -> Some (x, y)
   | _ -> None
 
+let get_three: 'a list -> ('a * 'a * 'a) option = function
+  | [x; y; z] -> Some (x, y, z)
+  | _ -> None
+
 module Command = struct
   type filename = string
   type port = int
-  type t = Bcast of filename * bcast_method (* FBR: bcast needs an optional dst_fn *)
+  type t = Bcast of filename * filename * bcast_method
          | Exit (* to leave the CLI just temporarily *)
          | Extract of filename * filename
          | Fetch of filename
@@ -113,9 +117,16 @@ module Command = struct
         | "b" | "bcast" ->
           begin match get_two args with
             | Some (fn, bcast_method) ->
-              Bcast (fn, Utils.bcast_of_string bcast_method)
+              Bcast (fn, fn, Utils.bcast_of_string bcast_method)
             | None ->
-              if do_log then Log.error "\nusage: bcast fn {c|bina|bino}"; Skip
+              begin match get_three args with
+                | Some (src_fn, dst_fn, bcast_method) ->
+                  Bcast (src_fn, dst_fn, Utils.bcast_of_string bcast_method)
+                | None ->
+                  if do_log then
+                    Log.error "\nusage: bcast src_fn [dst_fn] {c|bina|bino}";
+                  Skip
+              end
           end
         | "e" | "extract" ->
           begin match get_two args with
@@ -354,9 +365,9 @@ let main () =
         send rng msg_counter local_node for_MDS
           (CLI_to_MDS (Ls_cmd_req (my_rank, detailed, maybe_fn)));
         process_answer incoming do_nothing
-      | Bcast (src_fn, bcast_method) ->
+      | Bcast (src_fn, dst_fn, bcast_method) ->
         send rng msg_counter local_node for_DS
-          (CLI_to_DS (Bcast_file_cmd_req (src_fn, bcast_method)))
+          (CLI_to_DS (Bcast_file_cmd_req (src_fn, dst_fn, bcast_method)))
     done;
     raise Types.Loop_end;
   with exn -> begin

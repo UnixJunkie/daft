@@ -344,10 +344,10 @@ let bcast_of_string = function
   | "bina" -> Types.Protocol.Binary
   | "bino" -> Types.Protocol.Binomial
   | x ->
-    let err_msg =
-      sprintf "broadcast_method: unsupported: %s (supported: c|bina|bino)" x
-    in
-    failwith err_msg
+    let default = Types.Protocol.Chain in
+    Log.warn "bcast_of_string: unsupported: %s (supported: c|bina|bino)" x;
+    Log.warn "bcast_of_string: falling back to Chain (c)";
+    default
 
 let string_of_bcast = function
   | Types.Protocol.Chain -> "c"

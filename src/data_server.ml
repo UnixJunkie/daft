@@ -501,9 +501,9 @@ let main () =
                 (DS_to_CLI (Fetch_file_cmd_nack (fn, err)))
             | Bcast_file_ack -> assert(false)
           end
-        | CLI_to_DS (Bcast_file_cmd_req (fn, bcast_method)) ->
+        | CLI_to_DS (Bcast_file_cmd_req (src_fn, dst_fn, bcast_method)) ->
           Log.debug "got Bcast_file_cmd_req";
-          let res = add_file !local_node fn fn in
+          let res = add_file !local_node src_fn dst_fn in
           begin match res with
             | Fetch_file_cmd_nack (fn, Already_here) (* allow bcast after put *)
             | Fetch_file_cmd_ack fn ->
