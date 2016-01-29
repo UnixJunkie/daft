@@ -107,10 +107,16 @@ module Command = struct
   let usage () =
     Log.info
       ("\n" ^^
-       "usage: put|get|help|fetch|extract|exit|quit|ls|bcast\n" ^^
-       "hotkey ^   ^   ^    ^     ^        ^   ^    ^  ^\n" ^^
-       "ls [-a] [filename]")
-      (* FBR: give a whole listing of commands with parameters *)
+       "usage: put|get|help|fetch|extract|exit|quit|ls|bcast|scat\n" ^^
+       "hotkey ^   ^   ^    ^     ^        ^   ^    ^  ^     ^\n" ^^
+       "command with [optional] parameters:" ^^
+       "ls [-l] [filename]\n" ^^
+       "bcast src_fn [dst_fn] {c|bina|bino}\n" ^^
+       "extract src_fn dst_fn\n" ^^
+       "fetch fn\n" ^^
+       "get src_fn [dst_fn]\n" ^^
+       "put src_fn [dst_fn]\n" ^^
+       "scat src_fn [dst_fn]\n")
   (* quick and dirty way to understand a command ASAP *)
   let of_list (do_log: bool) (args: string list): t =
     match args with
@@ -174,6 +180,19 @@ module Command = struct
               end
           end
         | "q" | "quit" -> Quit
+        | "s" | "scat" ->
+          begin match get_one args with
+            | Some fn ->
+              let src_fn = Utils.expand_filename fn in
+              Scat (src_fn, src_fn)
+            | None ->
+              begin match get_two args with
+                | Some (src_fn, dst_fn) -> Scat (Utils.expand_filename src_fn, dst_fn)
+                | None ->
+                  let () = Log.error "\nusage: scat src_fn [dst_fn]" in
+                  Skip
+              end
+          end
         | "x" | "exit" -> Exit
         | "" ->
           if do_log then begin Log.error "empty command"; usage() end;
@@ -191,6 +210,7 @@ module Command = struct
         | "l" | "ls"
         | "p" | "put"
         | "q" | "quit"
+        | "s" | "scat"
         | "x" | "exit" -> true
         | _ -> false
 end
