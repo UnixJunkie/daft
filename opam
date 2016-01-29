@@ -1,5 +1,5 @@
 opam-version: "1.2"
-name: "DAFT"
+name: "daft"
 maintainer: "francois.berenger@inria.fr"
 authors: "Francois Berenger"
 homepage: "https://github.com/UnixJunkie/daft"
@@ -20,7 +20,7 @@ depends: [
   "dolog"
   "batteries"
   "fileutils"
-  "ZMQ"
+  "zmq"
   "cryptokit"
   "base-unix"
 ]
