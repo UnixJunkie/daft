@@ -328,17 +328,17 @@ let hostname (): string =
   res
 
 let bcast_of_string = function
-  | "c" -> Types.Protocol.Chain
+  | "chain" -> Types.Protocol.Chain
   | "bina" -> Types.Protocol.Binary
   | "bino" -> Types.Protocol.Binomial
   | x ->
     let default = Types.Protocol.Chain in
-    Log.warn "bcast_of_string: unsupported: %s (supported: c|bina|bino)" x;
-    Log.warn "bcast_of_string: falling back to Chain (c)";
+    Log.warn "bcast_of_string: unsupported: %s (supported: chain|bina|bino)" x;
+    Log.warn "bcast_of_string: falling back to chain";
     default
 
 let string_of_bcast = function
-  | Types.Protocol.Chain -> "c"
+  | Types.Protocol.Chain -> "chain"
   | Types.Protocol.Binary -> "bina"
   | Types.Protocol.Binomial -> "bino"
 
