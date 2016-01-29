@@ -143,6 +143,8 @@ module File = struct
     let create (id: chunk_id) (size: int64 option) (node: Node.t): t =
       let nodes = NodeSet.singleton node in
       { id; size; nodes }
+    let scat_create (id: chunk_id) (size: int64 option): t =
+      { id; size; nodes = NodeSet.empty }
     let dummy (id: chunk_id): t =
       { id; size = None; nodes = NodeSet.empty }
     let get_id (c: t): chunk_id =
@@ -174,11 +176,11 @@ module File = struct
     (* a new node possess this chunk *)
     let add_source (c: t) (n: Node.t): t =
       let prev_set = c.nodes in
-      let new_set = NodeSet.add n c.nodes in
-      if prev_set == new_set then
-        Log.error "add_source: already known chunk_id: %d node: %s"
+      if NodeSet.mem n prev_set then
+        Log.error "add_source: already known chunk source cid: %d node: %s"
           c.id (Node.to_string n)
       ;
+      let new_set = NodeSet.add n c.nodes in
       { c with nodes = new_set }
     (* is this chunk on the node with that nid? *)
     let has_source_nid (c: t) (nid: rank): bool =
@@ -284,6 +286,17 @@ module File = struct
        else ("\n" ^ ChunkSet.to_string f.chunks))
   let get_chunks (f: t): ChunkSet.t =
     f.chunks
+  let create_scat_chunk (f: t) (cid: int) (chunk_size: int): Chunk.t =
+    assert(cid <> 0);
+    let nb_chunks = f.nb_chunks in
+    if cid <> nb_chunks - 1 then
+      Chunk.scat_create cid None
+    else
+      let total_size = f.size in
+      let last_chunk_size =
+        Int64.(total_size - (of_int nb_chunks - one) * of_int chunk_size)
+      in
+      Chunk.scat_create cid (Some last_chunk_size)
   let find_chunk_id (id: chunk_id) (f: t): Chunk.t =
     ChunkSet.find_id id f.chunks
   let get_nb_chunks (f: t): int =
@@ -382,6 +395,8 @@ module Protocol = struct
 
   type ds_to_ds =
     | Chunk of
+        filename * chunk_id * is_last * chunk_data
+    | Scat_chunk of
         filename * chunk_id * is_last * chunk_data
     | Bcast_chunk_binary of
         filename * chunk_id * is_last * chunk_data * root_node * step_number
