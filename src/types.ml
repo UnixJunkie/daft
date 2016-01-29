@@ -212,6 +212,8 @@ module File = struct
       Buffer.contents res
     let find_id (id: chunk_id) (cs: t): Chunk.t =
       find (Chunk.dummy id) cs
+    let only_keep_fst_chunk (cs: t): t =
+      singleton (min_elt cs)
   end
 
   type t = { name:       filename   ;
@@ -294,6 +296,8 @@ module File = struct
   (* check if 'f' is in the given 'dir' *)
   let is_in_dir (f: t) (dir: string): bool =
     String.starts_with f.name dir
+  let only_keep_fst_chunk (f: t): t =
+    { f with chunks = ChunkSet.only_keep_fst_chunk f.chunks }
 end
 
 (* to be unambiguous, a directory name must end with a '/' *)
@@ -366,6 +370,7 @@ module Protocol = struct
     | Join_push of Node.t (* a DS registering itself with the MDS *)
     | Chunk_ack of filename * chunk_id * rank
     | Add_file_req of rank * File.t
+    | Scat_file_req of File.t
     | Bcast_file_req of rank * File.t * bcast_method
     | Fetch_file_req of rank * filename
 
@@ -401,6 +406,7 @@ module Protocol = struct
     | Fetch_file_cmd_req of filename * filename * file_loc
     | Extract_file_cmd_req of filename * filename
     | Bcast_file_cmd_req of filename * filename * bcast_method
+    | Scat_file_cmd_req of filename * filename
     | Connect_cmd_push of port (* CLI listening port on the same host
                                   than the DS receiving the command *)
 
