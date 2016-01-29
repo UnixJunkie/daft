@@ -2,8 +2,11 @@
 
 all: config build
 
-build:
+pbuild:
 	obuild build -j `grep -c processor /proc/cpuinfo`
+
+build:
+	obuild build
 
 config:
 	obuild configure
