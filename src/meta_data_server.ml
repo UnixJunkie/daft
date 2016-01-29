@@ -59,23 +59,23 @@ let fetch_mds local_node fn ds_rank int2node feedback_to_cli =
           let selected_src_node = Chunk.select_source_rand chunk in
           let chosen = Node.get_rank selected_src_node in
           match IntMap.find chosen int2node with
-            | (_node, Some to_ds_i, _maybe_cli_sock) ->
-              let is_last = File.is_last_chunk chunk file in
-              let send_order =
-                MDS_to_DS
-                  (Send_to_req (ds_rank, fn, chunk_id, is_last))
-              in
-              send rng msg_counter local_node to_ds_i send_order
-            | (_, None, _) -> assert(false)
+          | (_node, Some to_ds_i, _maybe_cli_sock) ->
+            let is_last = File.is_last_chunk chunk file in
+            let send_order =
+              MDS_to_DS
+                (Send_to_req (ds_rank, fn, chunk_id, is_last))
+            in
+            send rng msg_counter local_node to_ds_i send_order
+          | (_, None, _) -> assert(false)
       ) chunks
   with Not_found ->
     if feedback_to_cli then
       match Utils.trd3 (IntMap.find ds_rank int2node) with
-        | None -> Log.warn "fetch_mds: no CLI feedback sock for node %d"
-                    ds_rank
-        | Some to_cli_sock -> (* unlock CLI *)
-          send rng msg_counter local_node to_cli_sock
-            (MDS_to_CLI (Fetch_cmd_nack fn))
+      | None -> Log.warn "fetch_mds: no CLI feedback sock for node %d"
+                  ds_rank
+      | Some to_cli_sock -> (* unlock CLI *)
+        send rng msg_counter local_node to_cli_sock
+          (MDS_to_CLI (Fetch_cmd_nack fn))
 
 let main () =
   (* setup logger *)
@@ -135,8 +135,8 @@ let main () =
             | None -> (* remember him for the future *)
               if ds = expected_ds then
                 let sock = Utils.(zmq_socket Push ctx ds_host ds_port_in) in
-                  int2node :=
-                    IntMap.add ds_rank (ds, Some sock, prev_cli_sock) !int2node
+                int2node :=
+                  IntMap.add ds_rank (ds, Some sock, prev_cli_sock) !int2node
               else
                 Log.warn "suspicious Join req from %s" ds_as_string;
           end
@@ -173,8 +173,18 @@ let main () =
                 let new_file = File.update_chunk old_file new_chunk now in
                 global_state := FileSet.update old_file new_file !global_state
               with Not_found ->
-                Log.error "Chunk_ack: unknown chunk: %s chunk_id: %d"
-                  fn chunk_id
+                begin
+                  Log.warn "Chunk_ack: unknown (scat?) chunk: %s chunk_id: %d"
+                    fn chunk_id;
+                  let new_chunk =
+                    File.create_scat_chunk old_file chunk_id Utils.default_chunk_size
+                  in
+                  (* update global state: this chunk is owned by one DS *)
+                  let new_source = Utils.fst3 (IntMap.find ds_rank !int2node) in
+                  let new_chunk = Chunk.add_source new_chunk new_source in
+                  let new_file = File.add_chunk old_file new_chunk now in
+                  global_state := FileSet.update old_file new_file !global_state
+                end
             with Not_found ->
               Log.error "Chunk_ack: unknown file: %s chunk_id: %d"
                 fn chunk_id
@@ -201,25 +211,25 @@ let main () =
             global_state := FileSet.add f !global_state;
         | CLI_to_MDS (Connect_push (ds_rank, cli_port)) ->
           Log.debug "got Connect_push rank: %d port: %d" ds_rank cli_port;
-            let node, ds_sock, maybe_cli_sock = IntMap.find ds_rank !int2node in
-            assert(Option.is_some ds_sock); (* already a DS sock *)
-            assert(Option.is_none maybe_cli_sock); (* not yet a CLI sock *)
-            let cli_sock = Utils.(zmq_socket Push ctx (Node.get_host node) cli_port) in
-            int2node := IntMap.add ds_rank (node, ds_sock, Some cli_sock) !int2node
+          let node, ds_sock, maybe_cli_sock = IntMap.find ds_rank !int2node in
+          assert(Option.is_some ds_sock); (* already a DS sock *)
+          assert(Option.is_none maybe_cli_sock); (* not yet a CLI sock *)
+          let cli_sock = Utils.(zmq_socket Push ctx (Node.get_host node) cli_port) in
+          int2node := IntMap.add ds_rank (node, ds_sock, Some cli_sock) !int2node
         | CLI_to_MDS (Ls_cmd_req (ds_rank, detailed, maybe_fn)) ->
           Log.debug "got Ls_cmd_req";
-            begin match Utils.trd3 (IntMap.find ds_rank !int2node) with
-              | None ->
-                Utils.abort
-                  (Log.fatal "Ls_cmd_req: no CLI feedback sock for node %d"
-                     ds_rank)
-              | Some to_cli_sock ->
-                let files_list = exec_ls_command detailed maybe_fn in
-                let feedback = "" in
-                (* ls output can be pretty big hence it is compressed *)
-                send rng msg_counter local_node to_cli_sock
-                  (MDS_to_CLI (Ls_cmd_ack (files_list, feedback)))
-            end
+          begin match Utils.trd3 (IntMap.find ds_rank !int2node) with
+            | None ->
+              Utils.abort
+                (Log.fatal "Ls_cmd_req: no CLI feedback sock for node %d"
+                   ds_rank)
+            | Some to_cli_sock ->
+              let files_list = exec_ls_command detailed maybe_fn in
+              let feedback = "" in
+              (* ls output can be pretty big hence it is compressed *)
+              send rng msg_counter local_node to_cli_sock
+                (MDS_to_CLI (Ls_cmd_ack (files_list, feedback)))
+          end
         | CLI_to_MDS Quit_cmd ->
           Log.debug "got Quit_cmd";
           let _ = Log.info "got Quit" in
