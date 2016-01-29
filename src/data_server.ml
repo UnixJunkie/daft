@@ -431,14 +431,14 @@ let main () =
      will never send to self *)
   int2node :=
     IntMap.map (fun (node, ds_sock, cli_sock) ->
-      if Node.get_rank node <> my_rank then
-        let sock =
-          Utils.(zmq_socket Push ctx (Node.get_host node) (Node.get_port node))
-        in
-        (node, Some sock, cli_sock)
-      else
-        (node, ds_sock, cli_sock)
-    ) !int2node;
+        if Node.get_rank node <> my_rank then
+          let sock =
+            Utils.(zmq_socket Push ctx (Node.get_host node) (Node.get_port node))
+          in
+          (node, Some sock, cli_sock)
+        else
+          (node, ds_sock, cli_sock)
+      ) !int2node;
   let nb_nodes = Utils.IntMap.cardinal !int2node in
   Log.info "read %d host(s)" nb_nodes;
   Log.info "Client of MDS %s:%d" mds_host mds_port;
@@ -612,59 +612,62 @@ let main () =
             store_chunk !local_node to_mds None fn chunk_id is_last chunk_data;
             relay_chunk_or_stop my_rank !int2node root_rank raw_message
           end
- | CLI_to_DS (Scat_file_cmd_req (src_fn, dst_fn)) ->
-   begin
-     Log.debug "got Scat_file_cmd_req";
-     match add_file !local_node src_fn dst_fn with
-     | Bcast_file_ack -> assert(false)
-     | Fetch_file_cmd_nack (fn, err) ->
-       let _ = Log.error "file already here: %s" fn in
-       (* notify CLI *)
-       send rng msg_counter !local_node (deref to_cli)
-         (DS_to_CLI (Fetch_file_cmd_nack (fn, err)))
-     | Fetch_file_cmd_ack fn ->
-       begin
-         (* here starts the true business of the scatter: a put *)
-         (* command that hides the fact that the file is entirely *)
-         (* on the source node. It will only appear in the MDS *)
-         (* as load-balanced accross (as many DSs as the file has chunks) *)
-         let file = FileSet.find_fn fn !local_state in
-         let nb_nodes = IntMap.cardinal !int2node in
-         assert(nb_nodes > 1);
-         let nb_chunks = File.get_nb_chunks file in
-         if nb_chunks > nb_nodes then
-           (* revert local state *)
-           let () = local_state := FileSet.remove file !local_state in
-           (* notify CLI *)
-           send rng msg_counter !local_node (deref to_cli)
-             (DS_to_CLI (Fetch_file_cmd_nack (fn, Other "not enough nodes to scatter")))
-         else
-           begin
-             let last_cid = nb_chunks - 1 in
-             let scat_file = File.only_keep_fst_chunk file in
-             let scat_file_req = Scat_file_req scat_file in
-             (* notify MDS to allow this potentially new file *)
-	     send rng msg_counter !local_node to_mds (DS_to_MDS scat_file_req);
-             let my_rank = Node.get_rank !local_node in
-             (* only chunk with chunk_id = 0 will officialy stay here *)
-             for chunk_id = 1 to last_cid do
-               let to_rank = (my_rank + chunk_id) mod nb_nodes in
-               assert(to_rank <> my_rank);
-               let chunk_data = retrieve_chunk fn chunk_id in
-               let is_last = (chunk_id = last_cid) in
-               let scat_chunk_msg =
-                 DS_to_DS (Chunk (fn, chunk_id, is_last, chunk_data))
-               in
-               send_chunk_to !local_node !int2node to_rank scat_chunk_msg
-             done;
-             (* delete all chunks in local_state except first one *)
-             local_state := FileSet.update file scat_file !local_state;
-             (* notify CLI *)
-             send rng msg_counter !local_node (deref to_cli)
-               (DS_to_CLI (Fetch_file_cmd_ack fn))
-           end
-       end
-   end
+        | CLI_to_DS (Scat_file_cmd_req (src_fn, dst_fn)) ->
+          begin
+            Log.debug "got Scat_file_cmd_req";
+            match add_file !local_node src_fn dst_fn with
+            | Bcast_file_ack -> assert(false)
+            | Fetch_file_cmd_nack (fn, err) ->
+              let _ = Log.error "file already here: %s" fn in
+              (* notify CLI *)
+              send rng msg_counter !local_node (deref to_cli)
+                (DS_to_CLI (Fetch_file_cmd_nack (fn, err)))
+            | Fetch_file_cmd_ack fn ->
+              begin
+                (* here starts the true business of the scatter: a put *)
+                (* command that hides the fact that the file is entirely *)
+                (* on the source node. It will only appear in the MDS *)
+                (* as load-balanced accross as many DSs as the file has chunks *)
+                let file = FileSet.find_fn fn !local_state in
+                let nb_nodes = IntMap.cardinal !int2node in
+                assert(nb_nodes > 1);
+                let nb_chunks = File.get_nb_chunks file in
+                if nb_chunks > nb_nodes then
+                  (* revert local state *)
+                  let () = local_state := FileSet.remove file !local_state in
+                  (* notify CLI *)
+                  send rng msg_counter !local_node (deref to_cli)
+                    (DS_to_CLI (Fetch_file_cmd_nack (fn, Other "not enough nodes to scatter")))
+                else
+                  begin
+                    let last_cid = nb_chunks - 1 in
+                    let scat_file = File.only_keep_fst_chunk file in
+                    let scat_file_req = Scat_file_req scat_file in
+                    (* notify MDS to allow this potentially new file *)
+	            send rng msg_counter !local_node to_mds (DS_to_MDS scat_file_req);
+                    let my_rank = Node.get_rank !local_node in
+                    (* only chunk with chunk_id = 0 will officialy stay here *)
+                    for chunk_id = 1 to last_cid do
+                      let to_rank = (my_rank + chunk_id) mod nb_nodes in
+                      assert(to_rank <> my_rank);
+                      let chunk_data = retrieve_chunk fn chunk_id in
+                      let is_last = (chunk_id = last_cid) in
+                      let scat_chunk_msg =
+                        DS_to_DS (Scat_chunk (fn, chunk_id, is_last, chunk_data))
+                      in
+                      send_chunk_to !local_node !int2node to_rank scat_chunk_msg
+                    done;
+                    (* delete all chunks in local_state except first one *)
+                    local_state := FileSet.update file scat_file !local_state;
+                    (* notify CLI *)
+                    send rng msg_counter !local_node (deref to_cli)
+                      (DS_to_CLI (Fetch_file_cmd_ack fn))
+                  end
+              end
+          end
+        | DS_to_DS (Scat_chunk (fn, chunk_id, is_last, data)) ->
+          let () = Log.debug "got Scat_chunk" in
+          store_chunk !local_node to_mds None fn chunk_id is_last data
     done;
     raise Types.Loop_end;
   with exn -> begin
