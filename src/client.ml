@@ -281,13 +281,19 @@ let extract_daft_command args =
   in
   (Array.of_list new_argv, String.concat " " daft_command)
 
-let banner () =
-  printf "DAFT\nAFTD\nFTDA\nTDAF\n"
+let banner quiet =
+  if not quiet then
+    printf ("\nWelcome to DAFT! *(^o^)*\n\n" ^^
+            " DAFT Allows File Transfers\n" ^^
+            " AFTF\n" ^^
+            " FTFA\n" ^^
+            " TFAD\n\n%!")
 
 let main () =
   let msg_count_fn = "CLI.msg_counter" in
   (* setup logger *)
   let log_fn = ref "" in
+  let no_banner = ref false in
   Log.set_log_level Log.INFO;
   Log.set_output Legacy.stderr;
   Log.color_on ();
@@ -303,6 +309,7 @@ let main () =
       "machine_file list of host:port[:mds_port] (one per line)";
       "-o", Arg.Set_string log_fn, "<filename> where to log";
       "-p", Arg.Set_int cli_port_in, "<port> where the CLI is listening";
+      "-q", Arg.Set no_banner, " quiet (no welcome banner)";
       "-v", Arg.Set verbose, " verbose mode"]
     (fun arg -> raise (Arg.Bad ("Bad argument: " ^ arg)))
     (sprintf "usage: %s <options>" Sys.argv.(0));
@@ -310,6 +317,7 @@ let main () =
   if !verbose then Log.set_log_level Log.DEBUG;
   if !log_fn <> "" then Log.set_output (Legacy.open_out !log_fn);
   if !machine_file = "" then Utils.abort (Log.fatal "-m is mandatory");
+  banner !no_banner;
   let hostname = Utils.hostname () in
   let lock = sprintf "/tmp/%s:%d.cli.lock" hostname !cli_port_in in
   Utils.acquire_lock lock;
@@ -328,7 +336,6 @@ let main () =
   let local_node = Node.create (-1) hostname !cli_port_in None in
   let ctx = ZMQ.Context.create () in
   let for_MDS = Utils.(zmq_socket Push ctx mds_host mds_port_in) in
-  banner();
   Log.info "Client of MDS %s:%d" mds_host mds_port_in;
   let for_DS = Utils.(zmq_socket Push ctx ds_host ds_port_in) in
   (* continue from a previous session if counter file is found *)
