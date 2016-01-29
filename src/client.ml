@@ -91,14 +91,17 @@ let get_three: 'a list -> ('a * 'a * 'a) option = function
 
 module Command = struct
   type filename = string
+  type src_fn = filename
+  type dst_fn = filename
   type port = int
-  type t = Bcast of filename * filename * bcast_method
-         | Exit (* to leave the CLI just temporarily *)
-         | Extract of filename * filename
+  type t = Bcast of src_fn * dst_fn * bcast_method
+         | Scat of src_fn * dst_fn
+         | Exit (* leave the CLI temporarily *)
+         | Extract of src_fn * dst_fn
          | Fetch of filename
-         | Get of filename * filename (* src_fn dst_fn *)
-         | Ls of bool * filename option (* ls [-a] [filename] *)
-         | Put of filename * filename (* src_fn dst_fn *)
+         | Get of src_fn * dst_fn
+         | Ls of bool * filename option (* ls [-l] [filename] *)
+         | Put of src_fn * dst_fn
          | Quit (* turn off whole system *)
          | Skip
   let usage () =
@@ -258,6 +261,9 @@ let extract_daft_command args =
   in
   (Array.of_list new_argv, String.concat " " daft_command)
 
+let banner () =
+  printf "DAFT\nAFTD\nFTDA\nTDAF\n"
+
 let main () =
   let msg_count_fn = "CLI.msg_counter" in
   (* setup logger *)
@@ -302,6 +308,7 @@ let main () =
   let local_node = Node.create (-1) hostname !cli_port_in None in
   let ctx = ZMQ.Context.create () in
   let for_MDS = Utils.(zmq_socket Push ctx mds_host mds_port_in) in
+  banner();
   Log.info "Client of MDS %s:%d" mds_host mds_port_in;
   let for_DS = Utils.(zmq_socket Push ctx ds_host ds_port_in) in
   (* continue from a previous session if counter file is found *)
@@ -368,6 +375,10 @@ let main () =
       | Bcast (src_fn, dst_fn, bcast_method) ->
         send rng msg_counter local_node for_DS
           (CLI_to_DS (Bcast_file_cmd_req (src_fn, dst_fn, bcast_method)))
+      | Scat (src_fn, dst_fn) ->
+        let () = send rng msg_counter local_node for_DS
+            (CLI_to_DS (Scat_file_cmd_req (src_fn, dst_fn))) in
+        process_answer incoming do_nothing
     done;
     raise Types.Loop_end;
   with exn -> begin
