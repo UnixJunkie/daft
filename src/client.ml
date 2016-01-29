@@ -109,14 +109,16 @@ module Command = struct
       ("\n" ^^
        "usage: put|get|help|fetch|extract|exit|quit|ls|bcast|scat\n" ^^
        "hotkey ^   ^   ^    ^     ^        ^   ^    ^  ^     ^\n" ^^
-       "command with [optional] parameters:" ^^
-       "ls [-l] [filename]\n" ^^
-       "bcast src_fn [dst_fn] {c|bina|bino}\n" ^^
-       "extract src_fn dst_fn\n" ^^
-       "fetch fn\n" ^^
-       "get src_fn [dst_fn]\n" ^^
-       "put src_fn [dst_fn]\n" ^^
-       "scat src_fn [dst_fn]\n")
+       "commands with [optional] parameters:\n" ^^
+       "------------------------------------\n" ^^
+       "ls [-l] [filename] (list files)\n" ^^
+       "bcast src_fn [dst_fn] {chain|bina|bino} \
+        ([publish then] broadcast a file using {algorithm})\n" ^^
+       "extract src_fn dst_fn (extract file from local datastore to local disk)\n" ^^
+       "fetch fn (get a copy in the local datastore of a remote file)\n" ^^
+       "get src_fn [dst_fn] (get a local copy of a remote file then extract it)\n" ^^
+       "put src_fn [dst_fn] (publish a local file)\n" ^^
+       "scat src_fn [dst_fn] (publish a file using scattering strategy)\n")
   (* quick and dirty way to understand a command ASAP *)
   let of_list (do_log: bool) (args: string list): t =
     match args with
@@ -133,7 +135,7 @@ module Command = struct
                   Bcast (src_fn, dst_fn, Utils.bcast_of_string bcast_method)
                 | None ->
                   if do_log then
-                    Log.error "\nusage: bcast src_fn [dst_fn] {c|bina|bino}";
+                    Log.error "\nusage: bcast src_fn [dst_fn] {chain|bina|bino}";
                   Skip
               end
           end
