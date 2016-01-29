@@ -193,6 +193,12 @@ let main () =
             else
               global_state := FileSet.add f !global_state;
           end
+        | DS_to_MDS (Scat_file_req f) ->
+          let () = Log.debug "got Scat_file_req" in
+          if FileSet.mem f !global_state then
+            Log.error "file already here: %s" (File.(f.name))
+          else
+            global_state := FileSet.add f !global_state;
         | CLI_to_MDS (Connect_push (ds_rank, cli_port)) ->
           Log.debug "got Connect_push rank: %d port: %d" ds_rank cli_port;
             let node, ds_sock, maybe_cli_sock = IntMap.find ds_rank !int2node in
