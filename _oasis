@@ -6,22 +6,22 @@ Authors:     Francois Berenger
 License:     CeCILL-C
 
 Executable daft
-  Path:       src
+  Path: src
   BuildDepends: dolog, batteries, fileutils, ZMQ, cryptokit
   BuildTools: ocamlbuild
   CompiledObject: native
-  MainIs:     client.ml
-  
+  MainIs: client.ml
+
 Executable daft_mds
-  Path:       src
+  Path: src
   BuildDepends: dolog, batteries, fileutils, ZMQ, cryptokit
   BuildTools: ocamlbuild
   CompiledObject: native
-  MainIs:     meta_data_server.ml
-  
+  MainIs: meta_data_server.ml
+
 Executable daft_ds
-  Path:       src
+  Path: src
   BuildDepends: dolog, batteries, fileutils, ZMQ, cryptokit
   BuildTools: ocamlbuild
   CompiledObject: native
-  MainIs:     data_server.ml
+  MainIs: data_server.ml
