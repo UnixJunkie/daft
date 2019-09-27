@@ -8,6 +8,7 @@ module File = Types.File
 module Chunk = Types.File.Chunk
 module IntMap = Types.IntMap
 module L = List
+module Log = Dolog.Log
 module Node = Types.Node
 
 let global_state = ref FileSet.empty
@@ -109,7 +110,7 @@ let main () =
   let mds_port = Node.get_port local_node in
   (* start server *)
   Log.info "binding server to %s:%d" "*" mds_port;
-  let ctx = ZMQ.Context.create () in
+  let ctx = Zmq.Context.create () in
   let incoming = Utils.(zmq_socket Pull ctx "*" mds_port) in
   try (* loop on messages until quit command *)
     let not_finished = ref true in
@@ -247,10 +248,10 @@ let main () =
   with exn -> begin
       Socket_wrapper.nuke_keys ();
       Utils.nuke_CSPRNG rng;
-      ZMQ.Socket.close incoming;
+      Zmq.Socket.close incoming;
       let warn = true in
       Utils.cleanup_data_nodes warn !int2node;
-      ZMQ.Context.terminate ctx;
+      Zmq.Context.terminate ctx;
       begin match exn with
         | Types.Loop_end -> ()
         | _ -> raise exn

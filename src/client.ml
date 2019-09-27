@@ -7,6 +7,7 @@ open Types.Protocol
 
 module Fn = Filename
 module FU = FileUtil
+module Log = Dolog.Log
 module S = String
 module Node = Types.Node
 module File = Types.File
@@ -336,7 +337,7 @@ let main () =
   assert(my_rank <> Utils.default);
   (* local_node does not correspond to a DS so it is initialized dirtily *)
   let local_node = Node.create (-1) hostname !cli_port_in None in
-  let ctx = ZMQ.Context.create () in
+  let ctx = Zmq.Context.create () in
   let for_MDS = Utils.(zmq_socket Push ctx mds_host mds_port_in) in
   Log.info "Client of MDS %s:%d" mds_host mds_port_in;
   let for_DS = Utils.(zmq_socket Push ctx ds_host ds_port_in) in
@@ -415,10 +416,10 @@ let main () =
       Utils.nuke_CSPRNG rng;
       Utils.release_lock lock;
       if not !has_quit then backup_counter msg_count_fn;
-      ZMQ.Socket.close for_MDS;
-      ZMQ.Socket.close for_DS;
-      ZMQ.Socket.close incoming;
-      ZMQ.Context.terminate ctx;
+      Zmq.Socket.close for_MDS;
+      Zmq.Socket.close for_DS;
+      Zmq.Socket.close incoming;
+      Zmq.Context.terminate ctx;
       begin match exn with
         | Types.Loop_end -> ()
         | _ -> raise exn

@@ -7,21 +7,21 @@ License:     CeCILL-C
 
 Executable daft
   Path: src
-  BuildDepends: dolog, batteries, fileutils, ZMQ, cryptokit
+  BuildDepends: dolog, batteries, fileutils, zmq, cryptokit
   BuildTools: ocamlbuild
   CompiledObject: native
   MainIs: client.ml
 
 Executable daft_mds
   Path: src
-  BuildDepends: dolog, batteries, fileutils, ZMQ, cryptokit
+  BuildDepends: dolog, batteries, fileutils, zmq, cryptokit
   BuildTools: ocamlbuild
   CompiledObject: native
   MainIs: meta_data_server.ml
 
 Executable daft_ds
   Path: src
-  BuildDepends: dolog, batteries, fileutils, ZMQ, cryptokit
+  BuildDepends: dolog, batteries, fileutils, zmq, cryptokit
   BuildTools: ocamlbuild
   CompiledObject: native
   MainIs: data_server.ml

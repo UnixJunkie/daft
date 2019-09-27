@@ -3,6 +3,7 @@ open Printf
 
 module FU = FileUtil
 module L = List
+module Log = Dolog.Log
 module Node = Types.Node
 module IntMap = Types.IntMap
 
@@ -60,7 +61,7 @@ let run_and_read cmd =
     begin
       let was_read = ref (input ic line_buff 0 buff_size) in
       while !was_read <> 0 do
-        Buffer.add_substring buff line_buff 0 !was_read;
+        Buffer.add_subbytes buff line_buff 0 !was_read;
         was_read := input ic line_buff 0 buff_size;
       done;
       close_in ic;
@@ -132,9 +133,9 @@ let with_out_file_descr fn f =
 (* call Unix.read until length bytes were read *)
 let really_read
     (input: Unix.file_descr)
-    (buff: string)
+    (buff: bytes)
     (length: int): unit =
-  assert(length <= String.length buff);
+  assert(length <= Bytes.length buff);
   let was_read = ref 0 in
   while !was_read <> length do
     let to_read = length - !was_read in
@@ -144,20 +145,21 @@ let really_read
 
 type socket_type = Push | Pull
 
-let zmq_socket (t: socket_type) (context: ZMQ.Context.t) (host: string) (port: int) =
+let zmq_socket
+    (t: socket_type) (context: Zmq.Context.t) (host: string) (port: int) =
   let host_and_port = sprintf "tcp://%s:%d" host port in
   match t with
   | Pull ->
-    let sock = ZMQ.Socket.create context ZMQ.Socket.pull in
-    ZMQ.Socket.bind sock host_and_port;
+    let sock = Zmq.Socket.create context Zmq.Socket.pull in
+    Zmq.Socket.bind sock host_and_port;
     sock
   | Push ->
-    let sock = ZMQ.Socket.create context ZMQ.Socket.push in
-    ZMQ.Socket.connect sock host_and_port;
+    let sock = Zmq.Socket.create context Zmq.Socket.push in
+    Zmq.Socket.connect sock host_and_port;
     (* a push socket must wait forever (upon close) that all its messages
        have been sent *)
     let infinity = -1 in
-    ZMQ.Socket.set_linger_period sock infinity;
+    Zmq.Socket.set_linger_period sock infinity;
     sock
 
 let ignore_first x y =
@@ -192,10 +194,12 @@ let convert (direction: [< `From_hexa | `To_hexa ]) (message: string): string =
 (* NEEDS_SECURITY_REVIEW *)
 let append_keys (fn: string): unit =
   with_in_file_descr "/dev/urandom" (fun input ->
-      let ckey = Bytes.make 16 '0' in
-      let skey = Bytes.make 20 '0' in
-      really_read input ckey 16;
-      really_read input skey 20;
+      let ckey' = Bytes.make 16 '0' in
+      let skey' = Bytes.make 20 '0' in
+      really_read input ckey' 16;
+      really_read input skey' 20;
+      let ckey = Bytes.unsafe_to_string ckey' in
+      let skey = Bytes.unsafe_to_string skey' in
       assert(String.length ckey = 16);
       assert(String.length skey = 20);
       let skey_hex = convert `To_hexa skey in
@@ -291,14 +295,14 @@ let cleanup_data_nodes warn a =
   IntMap.iter (fun i (_ds, maybe_ds_sock, maybe_cli_sock) ->
       match maybe_ds_sock, maybe_cli_sock with
       | Some ds_sock, Some cli_sock ->
-        ZMQ.Socket.close ds_sock;
-        ZMQ.Socket.close cli_sock
+        Zmq.Socket.close ds_sock;
+        Zmq.Socket.close cli_sock
       | Some ds_sock, None ->
-        ZMQ.Socket.close ds_sock
+        Zmq.Socket.close ds_sock
       | None, None -> if warn then Log.warn "DS %d missing" i
       | None, Some cli_sock ->
         if warn then Log.warn "DS %d missing" i;
-        ZMQ.Socket.close cli_sock
+        Zmq.Socket.close cli_sock
     ) a
 
 let count_char (c: char) (s: string): int =

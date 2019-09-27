@@ -3,6 +3,7 @@
 
 open Types.Protocol
 
+module Log = Dolog.Log
 module Nonce_store = Types.Nonce_store
 module Node = Types.Node
 
@@ -159,8 +160,9 @@ let encode
     (m: 'a): string =
   let plain_text = Marshal.to_string m [Marshal.No_sharing] in
   let maybe_compressed = compress plain_text in
-  let salt = String.make 8 '0' in (* 64 bits salt *)
-  rng#random_bytes salt 0 8;
+  let salt' = Bytes.make 8 '0' in (* 64 bits salt *)
+  rng#random_bytes salt' 0 8;
+  let salt = Bytes.unsafe_to_string salt' in
   (* let salt_hex = Utils.convert `To_hexa salt in *)
   (* Log.debug "enc. salt = %s" salt_hex; *)
   let nonce = Nonce_store.fresh counter sender in
@@ -193,9 +195,9 @@ let decode (s: string): 'a option =
     else
       Utils.ignore_first (Log.warn "nonce already seen: %s" nonce) None
 
-let try_send (sock: [> `Push] ZMQ.Socket.t) (m: string): unit =
-  try       ZMQ.Socket.send ~block:false sock m
-  with _ -> ZMQ.Socket.send ~block:true  sock m
+let try_send (sock: [> `Push] Zmq.Socket.t) (m: string): unit =
+  try       Zmq.Socket.send ~block:false sock m
+  with _ -> Zmq.Socket.send ~block:true  sock m
 
 module CLI_socket = struct
 
@@ -203,7 +205,7 @@ module CLI_socket = struct
       (rng: Cryptokit.Random.rng)
       (counter: int ref)
       (sender: Node.t)
-      (sock: [> `Push] ZMQ.Socket.t)
+      (sock: [> `Push] Zmq.Socket.t)
       (m: from_cli)
     : unit =
     (* marshalling + type translation so that message is OK to unmarshall
@@ -218,8 +220,8 @@ module CLI_socket = struct
     in
     try_send sock (translate_type m)
 
-  let receive (sock: [> `Pull] ZMQ.Socket.t): to_cli option =
-    decode (ZMQ.Socket.recv sock)
+  let receive (sock: [> `Pull] Zmq.Socket.t): to_cli option =
+    decode (Zmq.Socket.recv sock)
 
 end
 
@@ -229,7 +231,7 @@ module MDS_socket = struct
       (rng: Cryptokit.Random.rng)
       (counter: int ref)
       (sender: Node.t)
-      (sock: [> `Push] ZMQ.Socket.t)
+      (sock: [> `Push] Zmq.Socket.t)
       (m: from_mds)
     : unit =
     let translate_type: from_mds -> string = function
@@ -242,8 +244,8 @@ module MDS_socket = struct
     in
     try_send sock (translate_type m)
 
-  let receive (sock: [> `Pull] ZMQ.Socket.t): to_mds option =
-    decode (ZMQ.Socket.recv sock)
+  let receive (sock: [> `Pull] Zmq.Socket.t): to_mds option =
+    decode (Zmq.Socket.recv sock)
 
 end
 
@@ -253,7 +255,7 @@ module DS_socket = struct
       (rng: Cryptokit.Random.rng)
       (counter: int ref)
       (sender: Node.t)
-      (sock: [> `Push] ZMQ.Socket.t)
+      (sock: [> `Push] Zmq.Socket.t)
       (m: from_ds)
     : unit =
     let translate_type: from_ds -> string = function
@@ -270,11 +272,11 @@ module DS_socket = struct
     try_send sock (translate_type m)
 
   (* send a packet that was already encoded previously *)
-  let send_as_is (sock: [> `Push] ZMQ.Socket.t) (m: string): unit =
+  let send_as_is (sock: [> `Push] Zmq.Socket.t) (m: string): unit =
     try_send sock m
 
-  let receive (sock: [> `Pull] ZMQ.Socket.t): (to_ds * string) option =
-    let raw_message = ZMQ.Socket.recv sock in
+  let receive (sock: [> `Pull] Zmq.Socket.t): (to_ds * string) option =
+    let raw_message = Zmq.Socket.recv sock in
     let decoded = decode raw_message in
     match decoded with
     | None -> None

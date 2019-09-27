@@ -6,6 +6,7 @@ module Fn = Filename
 module FU = FileUtil
 module IntMap = Types.IntMap
 module IntSet = Types.IntSet
+module Log = Dolog.Log
 module S = String
 module Node = Types.Node
 module File = Types.File
@@ -161,7 +162,7 @@ let add_file (local_node: Node.t) (src_fn: string) (dst_fn: string): ds_to_cli =
               let dest_fn = fn_to_path dst_fn in
               let dest_dir = Fn.dirname dest_fn in
               (* mkdir creates all necessary parent dirs *)
-              mkdir ~parent:true ~mode:0o700 dest_dir;
+              mkdir ~parent:true ~mode:(`Octal 0o700) dest_dir;
               cp ~follow:Follow ~force:Force ~recurse:false [src_fn] dest_fn;
               (* keep only read (and optionally exec) perms for the user *)
               if Utils.is_executable src_fn
@@ -196,7 +197,7 @@ let extract_file (src_fn: Types.filename) (dst_fn: Types.filename): ds_to_cli =
       let dest_dir = Fn.dirname dst_fn in
       let in_data_store = fn_to_path src_fn in
       (* create all necessary parent dirs *)
-      FU.mkdir ~parent:true ~mode:0o700 dest_dir;
+      FU.mkdir ~parent:true ~mode:(`Octal 0o700) dest_dir;
       (* copy out of the datastore, even directories *)
       let _ = Unix.system (sprintf "cp -a %s %s" in_data_store dst_fn) in
       Fetch_file_cmd_ack dst_fn
@@ -223,9 +224,9 @@ let retrieve_chunk (fn: string) (chunk_id: int): string =
           in
           (* WARNING: data copy here and allocation of
                       a fresh buffer each time *)
-          let buff = String.create curr_chunk_size in
+          let buff = Bytes.create curr_chunk_size in
           Utils.really_read input buff curr_chunk_size;
-          buff
+          Bytes.unsafe_to_string buff
         )
     with Not_found ->
       Utils.abort
@@ -340,7 +341,7 @@ let store_chunk local_node to_mds to_cli fn chunk_id is_last data =
       let local_file = fn_to_path fn in
       let dest_dir = Fn.dirname local_file in
       (* mkdir creates all necessary parent dirs *)
-      FU.mkdir ~parent:true ~mode:0o700 dest_dir;
+      FU.mkdir ~parent:true ~mode:(`Octal 0o700) dest_dir;
       Utils.with_out_file_descr local_file (fun out ->
           assert(Unix.(lseek out offset SEEK_SET) = offset);
           assert(Unix.write_substring out data 0 size = size)
@@ -413,7 +414,7 @@ let main () =
   if !ds_port = Utils.default then abort "-p is mandatory";
   if !chunk_size = Utils.default then abort "-cs is mandatory";
   if !machine_file = "" then abort "-m is mandatory";
-  let ctx = ZMQ.Context.create () in
+  let ctx = Zmq.Context.create () in
   let hostname = Utils.hostname () in
   let skey, ckey, int2node, local_node', mds_node =
     Utils.data_nodes hostname (Some !ds_port) !machine_file
@@ -674,15 +675,15 @@ let main () =
       Socket_wrapper.nuke_keys ();
       Utils.nuke_CSPRNG rng;
       if !delete_datastore then delete_data_store !data_store_root;
-      ZMQ.Socket.close incoming;
-      ZMQ.Socket.close to_mds;
+      Zmq.Socket.close incoming;
+      Zmq.Socket.close to_mds;
       (match !to_cli with
-       | Some s -> ZMQ.Socket.close s;
+       | Some s -> Zmq.Socket.close s;
        | None -> () (* no CLI ever registered with us *)
       );
       let dont_warn = false in
       Utils.cleanup_data_nodes dont_warn !int2node;
-      ZMQ.Context.terminate ctx;
+      Zmq.Context.terminate ctx;
       begin match exn with
         | Types.Loop_end -> ()
         | _ -> raise exn
