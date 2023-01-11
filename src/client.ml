@@ -248,7 +248,7 @@ let read_one_command is_interactive =
         in
         []
       else
-        match String.nsplit ~by:" " command_str with
+        match String.split_on_string ~by:" " command_str with
         | [] -> [""]
         | x -> x
     in

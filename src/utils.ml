@@ -170,7 +170,7 @@ open Batteries (* everything before uses Legacy IOs (fast) *)
 
 (* returns: (hostname, ds_port, maybe_mds_port) *)
 let string_to_host_port (s: string): string * int * int option =
-  match BatString.nsplit s ~by:":" with
+  match BatString.split_on_string s ~by:":" with
   | [host; ds_port_str] ->
     (host, int_of_string ds_port_str, None)
   | [host; ds_port_str; mds_port_str] ->
