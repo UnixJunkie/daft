@@ -20,7 +20,7 @@ depends: [
   "dolog" {>= "4.0.0"}
   "batteries"
   "fileutils"
-  "zmq"
+  "zmq" {>= "5.0.0" & < "5.1.4"}
   "cryptokit"
   "base-unix"
 ]
