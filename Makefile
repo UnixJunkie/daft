@@ -1,19 +1,19 @@
 .PHONY: build install uninstall reinstall test
 
 build:
-        dune build @install -j `getconf _NPROCESSORS_ONLN`
+	dune build @install -j `getconf _NPROCESSORS_ONLN`
 
 clean:
-        rm -rf _build
+	rm -rf _build
 
 edit:
-        emacs src/*.ml TODO commands.sh &
+	emacs src/*.ml TODO commands.sh &
 
 install: build
-        dune install
+	dune install
 
 uninstall:
-        dune uninstall
+	dune uninstall
 
 reinstall: uninstall install
 
