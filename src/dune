@@ -1,6 +1,6 @@
 ;; installed executables / public targets
 (executables
-  (names daft daft_mds daft_ds)
+  (names client meta_data_server data_server)
   (public_names daft daft_mds daft_ds)
   (modules utils types socket_wrapper meta_data_server data_server colors client)
-  (libraries dolog batteries zmq cryptokit base-unix))
+  (libraries dolog batteries zmq cryptokit unix))
