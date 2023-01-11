@@ -1,27 +1,21 @@
-.PHONY: clean dist edit
-
-all: config build
-
-pbuild:
-	obuild build -j `grep -c processor /proc/cpuinfo`
+.PHONY: build install uninstall reinstall test
 
 build:
-	obuild build
-
-config:
-	obuild configure
+        dune build @install -j `getconf _NPROCESSORS_ONLN`
 
 clean:
-	obuild clean
-	\rm -rf cde-package
-
-install:
-	ln -sf ${PWD}/bin/daft_ds  ${HOME}/bin/
-	ln -sf ${PWD}/bin/daft_mds ${HOME}/bin/
-	ln -sf ${PWD}/bin/daft     ${HOME}/bin/
+        rm -rf _build
 
 edit:
-	emacs src/*.ml &
+        emacs src/*.ml TODO commands.sh &
+
+install: build
+        dune install
+
+uninstall:
+        dune uninstall
+
+reinstall: uninstall install
 
 dist:
 	cd .. && tar cvzf daft.tgz --exclude=\.git daft
